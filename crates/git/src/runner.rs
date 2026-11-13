@@ -142,10 +142,8 @@ impl Git {
         for config in FIXED_CONFIG {
             process.arg("-c").arg(config);
         }
+        self.prepare(&mut process, command, &args);
         process
-            .args(&args)
-            .current_dir(&self.dir)
-            .envs(self.env.iter().map(|(k, v): &(OsString, OsString)| (k, v)))
             .stdin(if stdin.is_some() {
                 Stdio::piped()
             } else {
@@ -188,6 +186,56 @@ impl Git {
                 Err(GitError::Failed { code, stderr })
             }
         }
+    }
+
+    /// Runs `command` with the terminal as its input and output, so that git can run an editor.
+    /// Only the command and its exit code are logged.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::Spawn`] when git cannot be started and [`GitError::Failed`] when it
+    /// exits with a code that is not a success code for `command`.
+    pub fn run_interactive(&self, command: &Command, log: &Log<'_>) -> Result<(), GitError> {
+        let args: Vec<String> = command.args();
+        let shown: String = format!("git {}", args.join(" "));
+        let mut process: process::Command = process::Command::new(&self.program);
+        for config in FIXED_CONFIG {
+            process.arg("-c").arg(config);
+        }
+        self.prepare(&mut process, command, &args);
+        let status: std::process::ExitStatus = process
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
+            .map_err(|error: std::io::Error| {
+                let error: GitError = GitError::Spawn(error.to_string());
+                log(LogLevel::Error, &format!("{shown}: {error}"));
+                error
+            })?;
+        let code: Option<i32> = status.code();
+        let succeeded: bool = code.is_some_and(|c: i32| command.success_codes().contains(&c));
+        let code_text: String = code.map_or_else(|| "signal".to_string(), |c: i32| c.to_string());
+        if succeeded {
+            log(LogLevel::Info, &format!("{shown} (exit {code_text})"));
+            Ok(())
+        } else {
+            log(LogLevel::Error, &format!("{shown} (exit {code_text})"));
+            Err(GitError::Failed {
+                code,
+                stderr: String::new(),
+            })
+        }
+    }
+
+    /// Sets the arguments, directory and environment of a git process. The command's own
+    /// environment comes first so that [`Git::with_env`] can override it.
+    fn prepare(&self, process: &mut process::Command, command: &Command, args: &[String]) {
+        process
+            .args(args)
+            .current_dir(&self.dir)
+            .envs(command.env().iter().copied())
+            .envs(self.env.iter().map(|(k, v): &(OsString, OsString)| (k, v)));
     }
 
     /// The root directory of the repository that contains the directory git runs in.
@@ -356,6 +404,27 @@ mod tests {
                 "Error: git rev-parse --show-toplevel (exit 3)",
                 "Error: out\n"
             ]
+        );
+    }
+
+    #[test]
+    fn interactive_command_stopped_by_signal_fails() {
+        let dir: TempDir = TempDir::new();
+        let program: String = fake_git(&dir, "kill -9 $$");
+        let logged: Logged = Logged::new();
+        let result: Result<(), GitError> = Git::new(dir.path())
+            .with_program(&program)
+            .run_interactive(&Command::Status, &logged.log());
+        assert_eq!(
+            result,
+            Err(GitError::Failed {
+                code: None,
+                stderr: String::new()
+            })
+        );
+        assert_eq!(
+            logged.lines(),
+            vec!["Error: git status --porcelain=v2 -z --untracked-files=all (exit signal)"]
         );
     }
 

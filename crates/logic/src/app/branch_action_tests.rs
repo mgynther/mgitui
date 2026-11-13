@@ -260,6 +260,7 @@ fn rebase_asks_for_target_with_main_and_master_first() {
                     "aaa".to_string(),
                     "dev".to_string()
                 ],
+                interactive: false,
             },
             text: String::new()
         })
@@ -292,6 +293,7 @@ fn rebase_asks_which_branch_first() {
         &Mode::Prompt(Prompt {
             kind: PromptKind::RebaseBranch {
                 branches: vec!["topic".to_string(), "other".to_string()],
+                interactive: false,
             },
             text: String::new()
         })
@@ -312,6 +314,7 @@ fn rebase_asks_which_branch_first() {
                 "dev".to_string(),
                 "topic".to_string()
             ],
+            interactive: false,
         }
     );
     typed(&mut app, &ports, "5");
@@ -365,5 +368,45 @@ fn rebase_problems() {
     assert_eq!(
         app.note(),
         &Note::Problem("Choice is not listed".to_string())
+    );
+}
+
+#[test]
+fn interactive_rebase_uses_the_same_prompts() {
+    let ports: TestPorts = rebase_ports(vec![local("topic"), local("other")]);
+    let mut app: App = loaded_app(&ports);
+    run(&mut app, &ports, &[Event::InteractiveRebase]);
+    assert!(matches!(
+        app.mode(),
+        Mode::Prompt(Prompt {
+            kind: PromptKind::RebaseBranch {
+                interactive: true,
+                ..
+            },
+            ..
+        })
+    ));
+    run(&mut app, &ports, &[Event::Input('1'), Event::InputSubmit]);
+    assert!(matches!(
+        app.mode(),
+        Mode::Prompt(Prompt {
+            kind: PromptKind::RebaseOnto {
+                interactive: true,
+                ..
+            },
+            ..
+        })
+    ));
+    run(&mut app, &ports, &[Event::Input('1'), Event::InputSubmit]);
+    assert_eq!(
+        actions(&ports),
+        vec![
+            "Info: interactive rebase topic onto main",
+            "rebase -i topic onto main"
+        ]
+    );
+    assert_eq!(
+        app.note(),
+        &Note::Info("Interactively rebased topic onto main".to_string())
     );
 }

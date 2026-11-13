@@ -65,9 +65,16 @@ pub fn restore(saved: &str) {
 }
 
 /// Switches back to raw mode and the alternate screen.
-fn resume() -> io::Result<()> {
+pub fn resume() -> io::Result<()> {
     stty(&RAW)?;
     write_out(ENTER)
+}
+
+/// Hands the terminal to `run`, such as git running Vim, and takes it back afterwards.
+pub fn hand_over(saved: &str, run: &mut dyn FnMut()) -> io::Result<()> {
+    restore(saved);
+    run();
+    resume()
 }
 
 /// Hands the terminal to Vim for editing `path` and takes it back when Vim exits.

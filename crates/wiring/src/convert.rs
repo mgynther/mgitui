@@ -34,6 +34,7 @@ pub fn event(event: ui::event::Event) -> logic::event::Event {
         U::Checkout => L::Checkout,
         U::CherryPick => L::CherryPick,
         U::Rebase => L::Rebase,
+        U::InteractiveRebase => L::InteractiveRebase,
         U::SwitchList => L::SwitchList,
         U::StartSelection => L::StartSelection,
         U::EditMessage => L::EditMessage,
@@ -138,12 +139,31 @@ fn prompt_label(prompt: &Prompt) -> String {
         PromptKind::CheckoutChoice { branches } => {
             format!("Check out ({}): ", numbered(branches))
         }
-        PromptKind::RebaseBranch { branches } => {
-            format!("Rebase which branch ({}): ", numbered(branches))
-        }
-        PromptKind::RebaseOnto { branch, onto } => {
-            format!("Rebase {branch} onto ({}): ", numbered(onto))
-        }
+        PromptKind::RebaseBranch {
+            branches,
+            interactive,
+        } => format!(
+            "{} which branch ({}): ",
+            rebase_verb(*interactive),
+            numbered(branches)
+        ),
+        PromptKind::RebaseOnto {
+            branch,
+            onto,
+            interactive,
+        } => format!(
+            "{} {branch} onto ({}): ",
+            rebase_verb(*interactive),
+            numbered(onto)
+        ),
+    }
+}
+
+fn rebase_verb(interactive: bool) -> &'static str {
+    if interactive {
+        "Interactively rebase"
+    } else {
+        "Rebase"
     }
 }
 

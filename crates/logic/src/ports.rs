@@ -166,12 +166,13 @@ pub trait Ports {
     /// Fails when git fails, for example on a conflict.
     fn cherry_pick(&self, hash: &str) -> Result<(), Failed>;
 
-    /// Checks out `branch` and rebases it onto `onto`.
+    /// Checks out `branch` and rebases it onto `onto`. An interactive rebase lets the user edit
+    /// the todo list in Vim.
     ///
     /// # Errors
     ///
     /// Fails when git fails, for example on a conflict.
-    fn rebase(&self, branch: &str, onto: &str) -> Result<(), Failed>;
+    fn rebase(&self, branch: &str, onto: &str, interactive: bool) -> Result<(), Failed>;
 
     /// Checks out a local branch.
     ///

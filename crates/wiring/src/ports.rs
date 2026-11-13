@@ -4,7 +4,7 @@ use logic::log::LogLevel;
 use logic::model::{ChangeKind, ChangedFile, Commit, FileDiff, Refs, Side, WorkStatus};
 use logic::ports::{BranchName, CommitMessage, Failed};
 
-use crate::editor::{self, Editor};
+use crate::editor::{self, Editor, Handoff};
 use crate::log::LogBuffer;
 use crate::model;
 
@@ -16,6 +16,8 @@ pub struct SessionPorts<'a> {
     pub git: &'a git::Git,
     /// Runs Vim on a file.
     pub editor: &'a Editor,
+    /// Hands the terminal to git when git runs Vim itself.
+    pub handoff: &'a Handoff<'a>,
 }
 
 impl SessionPorts<'_> {
@@ -162,10 +164,28 @@ impl logic::ports::Ports for SessionPorts<'_> {
             .map_err(|_| Failed)
     }
 
-    fn rebase(&self, branch: &str, onto: &str) -> Result<(), Failed> {
-        self.git
-            .rebase(branch, onto, &self.log_git())
-            .map_err(|_| Failed)
+    fn rebase(&self, branch: &str, onto: &str, interactive: bool) -> Result<(), Failed> {
+        if !interactive {
+            return self
+                .git
+                .rebase(branch, onto, &self.log_git())
+                .map_err(|_| Failed);
+        }
+        let mut result: Result<(), Failed> = Err(Failed);
+        let handed: std::io::Result<()> = (self.handoff)(&mut || {
+            result = self
+                .git
+                .rebase_interactive(branch, onto, &self.log_git())
+                .map_err(|_| Failed);
+        });
+        if let Err(error) = handed {
+            self.log.wiring(
+                LogLevel::Error,
+                &format!("handing the terminal to git failed: {error}"),
+            );
+            return Err(Failed);
+        }
+        result
     }
 
     fn checkout(&self, branch: &str) -> Result<(), Failed> {

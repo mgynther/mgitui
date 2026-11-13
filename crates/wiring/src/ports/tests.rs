@@ -5,6 +5,15 @@ use logic::log::{Layer, LogEntry, LogLevel};
 use logic::model::{ChangeKind, ChangedFile, FileDiff, LineKind, Side, WorkStatus};
 use logic::ports::{CommitMessage, Failed, Ports, SearchText};
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "it has the signature of a terminal handoff"
+)]
+fn run_here(run: &mut dyn FnMut()) -> std::io::Result<()> {
+    run();
+    Ok(())
+}
+
 fn append_line(path: &std::path::Path) -> std::io::Result<()> {
     let old: String = std::fs::read_to_string(path).unwrap();
     std::fs::write(path, format!("{old}line\n"))
@@ -17,6 +26,7 @@ fn with_ports(dir: &std::path::Path, test: impl Fn(&SessionPorts<'_>, &LogBuffer
         log: &log,
         git: &git,
         editor: &append_line,
+        handoff: &run_here,
     };
     test(&ports, &log);
 }
@@ -100,6 +110,7 @@ fn git_failures_become_failed() {
         log: &log,
         git: &git,
         editor: &append_line,
+        handoff: &run_here,
     };
     assert_eq!(ports.status(), Err(Failed));
     assert_eq!(
@@ -125,7 +136,8 @@ fn git_failures_become_failed() {
     );
     assert_eq!(ports.checkout("b"), Err(Failed));
     assert_eq!(ports.cherry_pick("h"), Err(Failed));
-    assert_eq!(ports.rebase("b", "main"), Err(Failed));
+    assert_eq!(ports.rebase("b", "main", false), Err(Failed));
+    assert_eq!(ports.rebase("b", "main", true), Err(Failed));
     assert_eq!(ports.commit_files("h"), Err(Failed));
     assert_eq!(
         ports.commit_file_diff("h", &file("x", ChangeKind::Modified)),
@@ -282,4 +294,57 @@ fn branch_validation_creation_and_checkout() {
             .count();
         assert_eq!(validation_errors, 2);
     });
+}
+
+#[test]
+fn interactive_rebase_hands_the_terminal_to_git() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    git_ok(dir.path(), &["commit", "-q", "--allow-empty", "-m", "base"]);
+    git_ok(dir.path(), &["switch", "-q", "-c", "topic"]);
+    git_ok(dir.path(), &["commit", "-q", "--allow-empty", "-m", "one"]);
+    git_ok(dir.path(), &["commit", "-q", "--allow-empty", "-m", "two"]);
+    git_ok(dir.path(), &["switch", "-q", "main"]);
+    git_ok(
+        dir.path(),
+        &["commit", "-q", "--allow-empty", "-m", "main work"],
+    );
+    let log: LogBuffer = LogBuffer::new(fixed_clock);
+    let git: git::Git = git::Git::new(dir.path())
+        .with_env("GIT_SEQUENCE_EDITOR", "sed -i 2s/^pick/fixup/")
+        .with_env("GIT_EDITOR", "true");
+    let handed: std::cell::Cell<usize> = std::cell::Cell::new(0);
+    let counting = |run: &mut dyn FnMut()| -> std::io::Result<()> {
+        handed.set(handed.get() + 1);
+        run();
+        Ok(())
+    };
+    let ports: SessionPorts<'_> = SessionPorts {
+        log: &log,
+        git: &git,
+        editor: &append_line,
+        handoff: &counting,
+    };
+    assert_eq!(ports.rebase("topic", "main", true), Ok(()));
+    assert_eq!(handed.get(), 1);
+    assert_eq!(
+        git_ok(dir.path(), &["log", "--format=%s", "topic"]),
+        "one\nmain work\nbase\n"
+    );
+    assert_eq!(ports.rebase("main", "topic", false), Ok(()));
+    let broken =
+        |_: &mut dyn FnMut()| -> std::io::Result<()> { Err(std::io::Error::other("no tty")) };
+    let failing: SessionPorts<'_> = SessionPorts {
+        log: &log,
+        git: &git,
+        editor: &append_line,
+        handoff: &broken,
+    };
+    assert_eq!(failing.rebase("topic", "main", true), Err(Failed));
+    assert!(
+        log.drain()
+            .iter()
+            .any(|e: &LogEntry| e.layer == Layer::Wiring
+                && e.message == "handing the terminal to git failed: no tty")
+    );
 }

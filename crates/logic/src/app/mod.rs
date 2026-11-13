@@ -65,6 +65,8 @@ pub enum PromptKind {
     RebaseBranch {
         /// The local branches of the selected commit.
         branches: Vec<String>,
+        /// Whether the rebase is interactive.
+        interactive: bool,
     },
     /// The number of the branch to rebase onto.
     RebaseOnto {
@@ -72,6 +74,8 @@ pub enum PromptKind {
         branch: String,
         /// The branches to choose from.
         onto: Vec<String>,
+        /// Whether the rebase is interactive.
+        interactive: bool,
     },
 }
 
@@ -265,7 +269,8 @@ impl App {
                     Event::CreateBranch => self.start_create_branch(),
                     Event::Checkout => self.start_checkout(ports),
                     Event::CherryPick => self.cherry_pick(ports),
-                    Event::Rebase => self.start_rebase(ports),
+                    Event::Rebase => self.start_rebase(false, ports),
+                    Event::InteractiveRebase => self.start_rebase(true, ports),
                     _ => self.handle_branches(event, ports),
                 },
             },
@@ -299,14 +304,21 @@ impl App {
                     self.checkout(&branch, ports);
                 }
             }
-            PromptKind::RebaseBranch { branches } => {
+            PromptKind::RebaseBranch {
+                branches,
+                interactive,
+            } => {
                 if let Some(branch) = self.choose(prompt, branches, ports) {
-                    self.ask_rebase_onto(branch);
+                    self.ask_rebase_onto(branch, *interactive);
                 }
             }
-            PromptKind::RebaseOnto { branch, onto } => {
+            PromptKind::RebaseOnto {
+                branch,
+                onto,
+                interactive,
+            } => {
                 if let Some(target) = self.choose(prompt, onto, ports) {
-                    self.rebase(branch, &target, ports);
+                    self.rebase(branch, &target, *interactive, ports);
                 }
             }
             PromptKind::Search => match ports.validate_search(&prompt.text) {

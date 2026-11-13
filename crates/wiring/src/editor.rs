@@ -9,6 +9,10 @@ static NEXT_FILE: AtomicUsize = AtomicUsize::new(0);
 /// Runs an editor on a file and returns when the editor exits.
 pub type Editor = dyn Fn(&Path) -> io::Result<()>;
 
+/// Hands the terminal to a program run by the given function, such as git running Vim, and
+/// takes it back afterwards.
+pub type Handoff<'a> = dyn Fn(&mut dyn FnMut()) -> io::Result<()> + 'a;
+
 /// A file removed when dropped.
 struct TempFile(PathBuf);
 

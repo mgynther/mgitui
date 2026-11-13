@@ -8,6 +8,15 @@ const SIZE: Size = Size {
     height: 24,
 };
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "it has the signature of a terminal handoff"
+)]
+fn run_here(run: &mut dyn FnMut()) -> std::io::Result<()> {
+    run();
+    Ok(())
+}
+
 fn session_in(dir: &TempDir) -> Session {
     let log: LogBuffer = LogBuffer::new(fixed_clock);
     log.wiring(logic::log::LogLevel::Info, "started");
@@ -21,7 +30,7 @@ fn session_in(dir: &TempDir) -> Session {
         };
         std::fs::write(path, new)
     };
-    let mut session: Session = Session::new(git, log, Box::new(editor));
+    let mut session: Session = Session::new(git, log, Box::new(editor), Box::new(run_here));
     session.resize(SIZE);
     session
 }
@@ -200,7 +209,12 @@ fn branches_view_shows_graph_details_and_panes() {
     git_ok(dir.path(), &["commit", "-q", "-m", "second"]);
     let log: LogBuffer = LogBuffer::new(fixed_clock);
     let git: git::Git = git::Git::new(dir.path()).with_env("TZ", "UTC");
-    let mut s: Session = Session::new(git, log, Box::new(|_: &std::path::Path| Ok(())));
+    let mut s: Session = Session::new(
+        git,
+        log,
+        Box::new(|_: &std::path::Path| Ok(())),
+        Box::new(run_here),
+    );
     s.resize(SIZE);
     let screen: ui::buffer::Buffer = s.render(SIZE);
     assert!(
@@ -397,6 +411,46 @@ fn rebase_branch_under_cursor() {
     assert_eq!(
         s.render(SIZE).row_text(23).trim_end(),
         "Rebased topic onto main"
+    );
+    assert_eq!(
+        git_ok(dir.path(), &["log", "--format=%s", "topic"]),
+        "topic work\nmain work\nbase\n"
+    );
+}
+
+#[test]
+fn interactive_rebase_prompt() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    git_ok(dir.path(), &["commit", "-q", "--allow-empty", "-m", "base"]);
+    git_ok(dir.path(), &["switch", "-q", "-c", "topic"]);
+    git_ok(
+        dir.path(),
+        &["commit", "-q", "--allow-empty", "-m", "topic work"],
+    );
+    git_ok(dir.path(), &["switch", "-q", "main"]);
+    git_ok(
+        dir.path(),
+        &["commit", "-q", "--allow-empty", "-m", "main work"],
+    );
+    let log: LogBuffer = LogBuffer::new(fixed_clock);
+    let git: git::Git = git::Git::new(dir.path()).with_env("GIT_SEQUENCE_EDITOR", "true");
+    let mut s: Session = Session::new(
+        git,
+        log,
+        Box::new(|_: &std::path::Path| Ok(())),
+        Box::new(run_here),
+    );
+    s.resize(SIZE);
+    s.input(b"/topic work\ri");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "Interactively rebase topic onto (1 main):"
+    );
+    s.input(b"1\r");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "Interactively rebased topic onto main"
     );
     assert_eq!(
         git_ok(dir.path(), &["log", "--format=%s", "topic"]),

@@ -99,7 +99,12 @@ impl logic::ports::Ports for NoPorts {
         Err(logic::ports::Failed)
     }
 
-    fn rebase(&self, _branch: &str, _onto: &str) -> Result<(), logic::ports::Failed> {
+    fn rebase(
+        &self,
+        _branch: &str,
+        _onto: &str,
+        _interactive: bool,
+    ) -> Result<(), logic::ports::Failed> {
         Err(logic::ports::Failed)
     }
 
@@ -129,7 +134,7 @@ impl logic::ports::Ports for NoPorts {
 
 #[test]
 fn every_event_converts() {
-    let cases: [(U, L); 28] = [
+    let cases: [(U, L); 29] = [
         (U::SwitchView(UV::Log), L::SwitchView(LV::Log)),
         (U::Quit, L::Quit),
         (U::ConfirmQuit, L::ConfirmQuit),
@@ -149,6 +154,7 @@ fn every_event_converts() {
         (U::Checkout, L::Checkout),
         (U::CherryPick, L::CherryPick),
         (U::Rebase, L::Rebase),
+        (U::InteractiveRebase, L::InteractiveRebase),
         (U::SwitchList, L::SwitchList),
         (U::StartSelection, L::StartSelection),
         (U::EditMessage, L::EditMessage),

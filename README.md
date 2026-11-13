@@ -115,6 +115,7 @@ The code is split into one crate per layer under `crates/`: `git`, `logic`, `ui`
 | h | Branches | check out the commit's local branch |
 | p | Branches | cherry-pick the selected commit onto the checked out branch |
 | b | Branches | rebase a branch of the selected commit onto another branch |
+| i | Branches | the same as b, interactively: git opens Vim for the todo list |
 | s | Diff file lists | switch between unstaged and staged |
 | Enter | Diff file list | stage or unstage the whole file |
 | space, j / k, Enter | Diff file diff | select lines, stage or unstage them |
@@ -132,5 +133,6 @@ The terminal handling and starting Vim are not covered by automated tests. After
 3. Resize the terminal: the view is redrawn; below 80x24 the "terminal too small" message is shown.
 4. In the Diff view press e: Vim opens on the commit message, and after `:wq` the message is shown in the box and the screen is redrawn.
 5. Quit Vim with `:q!`: the message is unchanged.
-6. Press q then y: the terminal is restored, the cursor is visible and typed keys are echoed again.
-7. Outside a git repository `mgitui` prints an error and exits with status 1.
+6. In the Branches view press i on a branch and choose a branch to rebase onto: git opens Vim with the todo list, and after `:wq` the app comes back with the rebased graph.
+7. Press q then y: the terminal is restored, the cursor is visible and typed keys are echoed again.
+8. Outside a git repository `mgitui` prints an error and exits with status 1.

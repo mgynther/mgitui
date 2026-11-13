@@ -38,8 +38,10 @@ fn run(git: git::Git, log: LogBuffer) -> io::Result<()> {
         terminal::restore(&for_panic);
         default_hook(info);
     }));
+    let for_handoff: String = saved.clone();
     let editor = move |path: &Path| terminal::run_vim(&saved, path);
-    let mut session: Session = Session::new(git, log, Box::new(editor));
+    let handoff = move |run: &mut dyn FnMut()| terminal::hand_over(&for_handoff, run);
+    let mut session: Session = Session::new(git, log, Box::new(editor), Box::new(handoff));
     let result: io::Result<()> = event_loop(&terminal, &mut session);
     terminal.leave();
     result

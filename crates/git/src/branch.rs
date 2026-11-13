@@ -48,6 +48,26 @@ impl Git {
         Ok(())
     }
 
+    /// Checks out `branch` and rebases it onto `onto` interactively. Git runs Vim on the
+    /// terminal for the todo list and messages, so the caller must hand the terminal over. A
+    /// conflict leaves the rebase in progress for the user to resolve.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails, for example on a conflict or when the todo list is emptied.
+    pub fn rebase_interactive(
+        &self,
+        branch: &str,
+        onto: &str,
+        log: &Log<'_>,
+    ) -> Result<(), GitError> {
+        let command: Command = Command::RebaseInteractive {
+            onto: onto.to_string(),
+            branch: branch.to_string(),
+        };
+        self.run_interactive(&command, log)
+    }
+
     /// Checks out `branch` and rebases it onto `onto`. A conflict leaves the rebase in
     /// progress for the user to resolve.
     ///
@@ -161,5 +181,42 @@ mod tests {
             Err(GitError::Failed { .. })
         ));
         assert!(repo.path().join(".git/rebase-merge").exists());
+    }
+
+    #[test]
+    fn interactive_rebase_with_scripted_editors() {
+        let repo: TestRepo = TestRepo::new();
+        repo.git_ok(&["commit", "-q", "--allow-empty", "-m", "base"]);
+        repo.git_ok(&["switch", "-q", "-c", "topic"]);
+        repo.git_ok(&["commit", "-q", "--allow-empty", "-m", "one"]);
+        repo.git_ok(&["commit", "-q", "--allow-empty", "-m", "two"]);
+        repo.git_ok(&["switch", "-q", "main"]);
+        repo.git_ok(&["commit", "-q", "--allow-empty", "-m", "main work"]);
+        let logged: Logged = Logged::new();
+        let squash: crate::runner::Git = repo
+            .git()
+            .with_env("GIT_SEQUENCE_EDITOR", "sed -i 2s/^pick/fixup/")
+            .with_env("GIT_EDITOR", "true");
+        squash
+            .rebase_interactive("topic", "main", &logged.log())
+            .unwrap();
+        assert_eq!(
+            repo.git_ok(&["log", "--format=%s", "topic"]),
+            "one\nmain work\nbase\n"
+        );
+        assert_eq!(
+            logged.lines(),
+            vec!["Info: git rebase -i main topic (exit 0)"]
+        );
+        let emptied: crate::runner::Git = repo.git().with_env("GIT_SEQUENCE_EDITOR", "sed -i d");
+        assert!(matches!(
+            emptied.rebase_interactive("main", "topic", &logged.log()),
+            Err(GitError::Failed { .. })
+        ));
+        let missing: crate::runner::Git = repo.git().with_program("/nonexistent/git");
+        assert!(matches!(
+            missing.rebase_interactive("topic", "main", &logged.log()),
+            Err(GitError::Spawn(_))
+        ));
     }
 }

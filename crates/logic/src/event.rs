@@ -52,6 +52,8 @@ pub enum Event {
     CherryPick,
     /// Rebase a branch of the selected commit onto another branch.
     Rebase,
+    /// Interactively rebase a branch of the selected commit onto another branch.
+    InteractiveRebase,
     /// Switch between the unstaged and staged lists.
     SwitchList,
     /// Start selecting lines.

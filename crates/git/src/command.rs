@@ -89,6 +89,14 @@ pub enum Command {
         /// The branch to rebase.
         branch: String,
     },
+    /// `git rebase -i <onto> <branch>`: rebases interactively, with git running Vim for the
+    /// todo list and messages. Run with [`crate::Git::run_interactive`].
+    RebaseInteractive {
+        /// The branch to rebase onto.
+        onto: String,
+        /// The branch to rebase.
+        branch: String,
+    },
     /// `git switch <branch>`: checks out a local branch.
     Switch {
         /// The branch name.
@@ -152,6 +160,7 @@ impl Command {
             Command::Switch { .. } => &["switch"],
             Command::CherryPick { .. } => &["cherry-pick"],
             Command::Rebase { .. } => &["rebase"],
+            Command::RebaseInteractive { .. } => &["rebase", "-i"],
             Command::Refs => &[
                 "for-each-ref",
                 "--format=%(HEAD)%00%(objectname)%00%(*objectname)%00%(refname)",
@@ -183,7 +192,7 @@ impl Command {
             }
             Command::Switch { branch } => args.push(branch.clone()),
             Command::CherryPick { hash } => args.push(hash.clone()),
-            Command::Rebase { onto, branch } => {
+            Command::Rebase { onto, branch } | Command::RebaseInteractive { onto, branch } => {
                 args.push(onto.clone());
                 args.push(branch.clone());
             }
@@ -201,6 +210,18 @@ impl Command {
             | Command::Refs => {}
         }
         args
+    }
+
+    /// Environment variables this command needs. They can be overridden with
+    /// [`crate::Git::with_env`].
+    #[must_use]
+    pub fn env(&self) -> &'static [(&'static str, &'static str)] {
+        match self {
+            Command::RebaseInteractive { .. } => {
+                &[("GIT_SEQUENCE_EDITOR", "vim"), ("GIT_EDITOR", "vim")]
+            }
+            _ => &[],
+        }
     }
 
     /// Exit codes that mean success for this command.
@@ -343,6 +364,16 @@ mod tests {
             }),
             "rebase main topic"
         );
+        let interactive: Command = Command::RebaseInteractive {
+            onto: "main".to_string(),
+            branch: "topic".to_string(),
+        };
+        assert_eq!(args(&interactive), "rebase -i main topic");
+        assert_eq!(
+            interactive.env(),
+            &[("GIT_SEQUENCE_EDITOR", "vim"), ("GIT_EDITOR", "vim")]
+        );
+        assert_eq!(Command::Status.env(), &[]);
     }
 
     #[test]

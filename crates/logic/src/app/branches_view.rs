@@ -376,7 +376,7 @@ impl App {
         }
     }
 
-    pub(super) fn start_rebase(&mut self, ports: &dyn Ports) {
+    pub(super) fn start_rebase(&mut self, interactive: bool, ports: &dyn Ports) {
         let branches: Vec<String> = self.local_branches();
         match branches.as_slice() {
             [] => {
@@ -384,14 +384,17 @@ impl App {
                 ports.log(LogLevel::Error, message);
                 self.note = Note::Problem(message.to_string());
             }
-            [branch] => self.ask_rebase_onto(branch.clone()),
-            _ => self.open_prompt(PromptKind::RebaseBranch { branches }),
+            [branch] => self.ask_rebase_onto(branch.clone(), interactive),
+            _ => self.open_prompt(PromptKind::RebaseBranch {
+                branches,
+                interactive,
+            }),
         }
     }
 
     /// Asks which branch to rebase `branch` onto: every other local branch, `main` and
     /// `master` first.
-    pub(super) fn ask_rebase_onto(&mut self, branch: String) {
+    pub(super) fn ask_rebase_onto(&mut self, branch: String, interactive: bool) {
         let mut onto: Vec<String> = self
             .branches
             .labels
@@ -406,15 +409,33 @@ impl App {
         if onto.is_empty() {
             self.note = Note::Info("No other local branch to rebase onto".to_string());
         } else {
-            self.open_prompt(PromptKind::RebaseOnto { branch, onto });
+            self.open_prompt(PromptKind::RebaseOnto {
+                branch,
+                onto,
+                interactive,
+            });
         }
     }
 
-    pub(super) fn rebase(&mut self, branch: &str, onto: &str, ports: &dyn Ports) {
-        ports.log(LogLevel::Info, &format!("rebase {branch} onto {onto}"));
-        let result: Result<(), Failed> = ports.rebase(branch, onto);
+    pub(super) fn rebase(
+        &mut self,
+        branch: &str,
+        onto: &str,
+        interactive: bool,
+        ports: &dyn Ports,
+    ) {
+        let action: &str = if interactive {
+            "interactive rebase"
+        } else {
+            "rebase"
+        };
+        ports.log(LogLevel::Info, &format!("{action} {branch} onto {onto}"));
+        let result: Result<(), Failed> = ports.rebase(branch, onto, interactive);
         self.refresh(ports);
         self.note = match result {
+            Ok(()) if interactive => {
+                Note::Info(format!("Interactively rebased {branch} onto {onto}"))
+            }
             Ok(()) => Note::Info(format!("Rebased {branch} onto {onto}")),
             Err(Failed) => Note::Problem(
                 "Rebase failed, see the Log view; resolve it outside mgitui".to_string(),

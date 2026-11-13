@@ -3,7 +3,7 @@
 use logic::app::App;
 
 use crate::convert;
-use crate::editor::Editor;
+use crate::editor::{Editor, Handoff};
 use crate::log::LogBuffer;
 use crate::ports::SessionPorts;
 
@@ -13,18 +13,26 @@ pub struct Session {
     git: git::Git,
     log: LogBuffer,
     editor: Box<Editor>,
+    handoff: Box<Handoff<'static>>,
 }
 
 impl Session {
     /// Starts the application for the repository `git` runs in, editing commit messages with
-    /// `editor`. Entries already in `log` are moved into the application log.
+    /// `editor` and handing the terminal to git with `handoff` when git runs Vim. Entries
+    /// already in `log` are moved into the application log.
     #[must_use]
-    pub fn new(git: git::Git, log: LogBuffer, editor: Box<Editor>) -> Self {
+    pub fn new(
+        git: git::Git,
+        log: LogBuffer,
+        editor: Box<Editor>,
+        handoff: Box<Handoff<'static>>,
+    ) -> Self {
         let mut session: Session = Session {
             app: App::new(),
             git,
             log,
             editor,
+            handoff,
         };
         session.handle(logic::event::Event::Reload);
         session
@@ -49,6 +57,7 @@ impl Session {
             log: &self.log,
             git: &self.git,
             editor: self.editor.as_ref(),
+            handoff: self.handoff.as_ref(),
         };
         self.app.handle(event, &ports);
         self.collect_log();

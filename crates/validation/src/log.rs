@@ -14,4 +14,4 @@ pub enum LogLevel {
 }
 
 /// The logging function this layer uses.
-pub type Log = dyn Fn(LogLevel, &str);
+pub type Log<'a> = dyn Fn(LogLevel, &str) + 'a;

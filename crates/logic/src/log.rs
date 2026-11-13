@@ -39,7 +39,7 @@ pub enum Layer {
 }
 
 /// The logging function the logic layer uses.
-pub type Log = dyn Fn(LogLevel, &str);
+pub type Log<'a> = dyn Fn(LogLevel, &str) + 'a;
 
 /// One line in the log.
 #[derive(Debug, Clone, PartialEq, Eq)]

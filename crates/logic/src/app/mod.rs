@@ -4,7 +4,7 @@ mod branches_view;
 mod diff_view;
 mod log_view;
 
-pub use branches_view::{BranchesState, CHUNK};
+pub use branches_view::{BranchesPane, BranchesState, CHUNK};
 pub use diff_view::{DiffPane, DiffState};
 
 #[cfg(test)]
@@ -67,6 +67,10 @@ pub enum Note {
 pub struct Viewports {
     /// Rows of the commit graph.
     pub branches_graph: usize,
+    /// Rows of the file list in the Branches view.
+    pub branches_files: usize,
+    /// Rows of the file diff in the Branches view.
+    pub branches_diff: usize,
     /// Rows of the log list.
     pub log: usize,
     /// Rows of the unstaged file list.

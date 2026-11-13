@@ -100,7 +100,7 @@ pub fn branches_layout(size: Size) -> BranchesLayout {
     let bottom_y: usize = body.y + graph_height;
     let bottom_height: usize = body.height - graph_height;
     let left_width: usize = size.width * 2 / 3;
-    let info_height: usize = bottom_height / 3;
+    let info_height: usize = bottom_height / 2;
     BranchesLayout {
         graph: Rect {
             height: graph_height,
@@ -236,13 +236,13 @@ mod tests {
                     x: 0,
                     y: 16,
                     width: 60,
-                    height: 5
+                    height: 7
                 },
                 file_diff: Rect {
                     x: 0,
-                    y: 21,
+                    y: 23,
                     width: 60,
-                    height: 10
+                    height: 8
                 },
                 files: Rect {
                     x: 61,

@@ -2,8 +2,9 @@
 
 use crate::buffer::Buffer;
 use crate::event::ViewId;
-use crate::layout::{self, MIN_SIZE, Rect, Size};
+use crate::layout::{MIN_SIZE, Rect, Size};
 use crate::style::{Color, Style};
+use crate::views::branches::BranchesView;
 use crate::views::diff::DiffView;
 use crate::views::log::LogView;
 
@@ -51,7 +52,7 @@ pub enum Status {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Body {
     /// The Branches view.
-    Branches,
+    Branches(BranchesView),
     /// The Diff view.
     Diff(DiffView),
     /// The Log view.
@@ -73,14 +74,7 @@ pub fn render(screen: &Screen, size: Size) -> Buffer {
     draw_tabs(&mut buffer, screen.tabs);
     draw_status(&mut buffer, &screen.status, size);
     match &screen.body {
-        Body::Branches => {
-            let panes: layout::BranchesLayout = layout::branches_layout(size);
-            draw_title(&mut buffer, panes.graph, "Commits", true);
-            draw_title(&mut buffer, panes.info, "Commit", false);
-            draw_title(&mut buffer, panes.file_diff, "Diff", false);
-            draw_title(&mut buffer, panes.files, "Files", false);
-            draw_separator(&mut buffer, panes.files);
-        }
+        Body::Branches(view) => crate::views::branches::render(&mut buffer, view, size),
         Body::Diff(view) => crate::views::diff::render(&mut buffer, view, size),
         Body::Log(view) => crate::views::log::render(&mut buffer, view, size),
     }
@@ -151,8 +145,20 @@ mod tests {
     use crate::event::ViewId;
     use crate::layout::{Rect, Size};
     use crate::style::{Color, Style};
+    use crate::views::branches::{BranchesFocus, BranchesView};
     use crate::views::diff::{DiffFocus, DiffView};
     use crate::views::log::LogView;
+
+    fn empty_branches() -> BranchesView {
+        BranchesView {
+            focus: BranchesFocus::Graph,
+            rows: vec![],
+            info: vec![],
+            files: vec![],
+            diff_title: "Diff".to_string(),
+            diff: vec![],
+        }
+    }
 
     fn empty_diff() -> DiffView {
         DiffView {
@@ -271,7 +277,11 @@ mod tests {
     #[test]
     fn view_panes_have_titles() {
         let branches: Buffer = render(
-            &screen(ViewId::Branches, Status::Empty, Body::Branches),
+            &screen(
+                ViewId::Branches,
+                Status::Empty,
+                Body::Branches(empty_branches()),
+            ),
             SIZE,
         );
         assert!(branches.row_text(1).starts_with("─ Commits ─"));

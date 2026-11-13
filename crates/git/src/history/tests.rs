@@ -1,5 +1,6 @@
-use super::{Commit, Ref, RefKind, parse_log, parse_refs};
+use super::{Commit, Ref, RefKind, parse_log, parse_name_status, parse_refs};
 use crate::runner::GitError;
+use crate::status::{ChangeKind, FileChange};
 use crate::test_repo::{Logged, TestRepo};
 
 #[test]
@@ -100,4 +101,59 @@ fn history_failures() {
     assert!(git.log(0, 1, &logged.log()).is_err());
     assert!(git.refs(&logged.log()).is_err());
     assert!(git.head(&logged.log()).is_err());
+}
+
+#[test]
+fn parses_name_status() {
+    let change = |path: &str, original: Option<&str>, kind: ChangeKind| FileChange {
+        path: path.to_string(),
+        original_path: original.map(str::to_string),
+        kind,
+        mode_changed: false,
+    };
+    assert_eq!(
+        parse_name_status("M\0a\0A\0b\0D\0c\0R100\0old\0new\0C75\0x\0y\0T\0l\0").unwrap(),
+        vec![
+            change("a", None, ChangeKind::Modified),
+            change("b", None, ChangeKind::Added),
+            change("c", None, ChangeKind::Deleted),
+            change("new", Some("old"), ChangeKind::Renamed),
+            change("y", Some("x"), ChangeKind::Copied),
+            change("l", None, ChangeKind::TypeChanged),
+        ]
+    );
+    for bad in ["X\0a\0", "M\0", "R100\0old\0"] {
+        assert!(
+            matches!(parse_name_status(bad), Err(GitError::Parse(_))),
+            "{bad:?}"
+        );
+    }
+}
+
+#[test]
+fn commit_details_of_real_repository() {
+    let repo: TestRepo = TestRepo::new();
+    repo.write("a.txt", "a\n");
+    repo.git_ok(&["add", "."]);
+    repo.git_ok(&["commit", "-q", "-m", "first\n\nbody"]);
+    repo.git_ok(&["mv", "a.txt", "b.txt"]);
+    repo.git_ok(&["commit", "-q", "-m", "rename"]);
+    let logged: Logged = Logged::new();
+    let head: String = repo.git().head(&logged.log()).unwrap().unwrap();
+    let first: String = repo.git_ok(&["rev-parse", "HEAD~1"]).trim().to_string();
+    assert_eq!(
+        repo.git().commit_message(&first, &logged.log()).unwrap(),
+        "first\n\nbody\n\n"
+    );
+    let files: Vec<FileChange> = repo.git().commit_files(&head, &logged.log()).unwrap();
+    assert_eq!(files[0].kind, ChangeKind::Renamed);
+    let diff = repo
+        .git()
+        .commit_file_diff(&first, &["a.txt".to_string()], &logged.log())
+        .unwrap();
+    assert_eq!(diff.hunks[0].lines[0].text, "a");
+    let git: crate::runner::Git = repo.git().with_program("/nonexistent/git");
+    assert!(git.commit_message(&head, &logged.log()).is_err());
+    assert!(git.commit_files(&head, &logged.log()).is_err());
+    assert!(git.commit_file_diff(&head, &[], &logged.log()).is_err());
 }

@@ -1,6 +1,6 @@
 use super::{
-    diff_row_kind, event, file_label, input_mode, layer_name, log_view, logic_view, screen,
-    ui_level, ui_view, viewports,
+    diff_row_kind, event, file_label, graph_cell, input_mode, label_view, layer_name, log_view,
+    logic_view, screen, ui_level, ui_view, viewports,
 };
 use logic::app::{App, Mode, Viewports};
 use logic::event::Event as L;
@@ -76,6 +76,25 @@ impl logic::ports::Ports for NoPorts {
     }
 
     fn refs(&self) -> Result<logic::model::Refs, logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
+    fn commit_message(&self, _hash: &str) -> Result<String, logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
+    fn commit_files(
+        &self,
+        _hash: &str,
+    ) -> Result<Vec<logic::model::ChangedFile>, logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
+    fn commit_file_diff(
+        &self,
+        _hash: &str,
+        _file: &logic::model::ChangedFile,
+    ) -> Result<logic::model::FileDiff, logic::ports::Failed> {
         Err(logic::ports::Failed)
     }
 }
@@ -172,6 +191,8 @@ fn viewports_follow_layout() {
         viewports(size),
         Viewports {
             branches_graph: 10,
+            branches_files: 10,
+            branches_diff: 5,
             log: 21,
             diff_unstaged: 10,
             diff_staged: 10,
@@ -185,7 +206,7 @@ fn startup_screen() {
     let s: ui::screen::Screen = screen(&App::new());
     assert_eq!(s.tabs.active, UV::Branches);
     assert_eq!(s.status, ui::screen::Status::Empty);
-    assert_eq!(s.body, ui::screen::Body::Branches);
+    assert!(matches!(s.body, ui::screen::Body::Branches(_)));
 }
 
 #[test]
@@ -283,4 +304,62 @@ fn diff_row_kinds() {
     for (from, to) in cases {
         assert_eq!(diff_row_kind(from), to);
     }
+}
+
+#[test]
+fn graph_cells_and_labels() {
+    use logic::graph::{Cell, CommitSide, Shape};
+    use logic::model::Label;
+    use ui::views::branches::LabelView;
+    use ui::views::branches::{CommitSide as S, GraphShape as G};
+    let cases: [(Shape, G); 11] = [
+        (Shape::Empty, G::Empty),
+        (Shape::Commit, G::Commit),
+        (Shape::Vertical, G::Vertical),
+        (Shape::Horizontal, G::Horizontal),
+        (Shape::Crossing, G::Crossing),
+        (Shape::Join(CommitSide::Left), G::Join(S::Left)),
+        (Shape::Join(CommitSide::Right), G::Join(S::Right)),
+        (Shape::Fork(CommitSide::Left), G::Fork(S::Left)),
+        (Shape::Fork(CommitSide::Right), G::Fork(S::Right)),
+        (Shape::Tee(CommitSide::Left), G::Tee(S::Left)),
+        (Shape::Tee(CommitSide::Right), G::Tee(S::Right)),
+    ];
+    for (shape, expected) in cases {
+        let converted: ui::views::branches::GraphCell = graph_cell(&Cell {
+            shape,
+            lane: 3,
+            link_right: Some(4),
+        });
+        assert_eq!(
+            (converted.shape, converted.lane, converted.link_right),
+            (expected, 3, Some(4))
+        );
+    }
+    assert_eq!(
+        label_view(&Label::Local {
+            name: "m".to_string(),
+            head: true
+        }),
+        LabelView::Local {
+            name: "m".to_string(),
+            head: true
+        }
+    );
+    assert_eq!(
+        label_view(&Label::Remote {
+            remote: "o".to_string(),
+            branch: "m".to_string()
+        }),
+        LabelView::Remote {
+            remote: "o".to_string(),
+            branch: "m".to_string()
+        }
+    );
+    assert_eq!(
+        label_view(&Label::Tag {
+            name: "v".to_string()
+        }),
+        LabelView::Tag("v".to_string())
+    );
 }

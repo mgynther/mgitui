@@ -6,7 +6,7 @@ use super::{App, Note};
 use crate::cursor::Cursor;
 use crate::event::Event;
 use crate::graph::{GraphBuilder, GraphRow};
-use crate::model::{Commit, Label, Refs};
+use crate::model::{ChangedFile, Commit, DiffRow, FileDiff, Label, Refs, diff_rows};
 use crate::ports::{Failed, Ports};
 use crate::search::{self, Direction, Found};
 
@@ -16,9 +16,28 @@ pub const CHUNK: usize = 2000;
 /// More commits are loaded when the selection gets this close to the last loaded commit.
 const LOAD_MARGIN: usize = 100;
 
+/// Which pane of the Branches view has focus.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum BranchesPane {
+    /// The commit graph.
+    #[default]
+    Graph,
+    /// The files of the selected commit.
+    Files,
+    /// The diff of the selected file.
+    FileDiff,
+}
+
 /// The state of the Branches view.
 #[derive(Debug, Clone, Default)]
 pub struct BranchesState {
+    pane: BranchesPane,
+    details_for: Option<String>,
+    message: String,
+    files: Vec<ChangedFile>,
+    file_cursor: Cursor,
+    diff_rows: Vec<DiffRow>,
+    diff_cursor: Cursor,
     commits: Vec<Commit>,
     graph: GraphBuilder,
     rows: Vec<GraphRow>,
@@ -70,6 +89,48 @@ impl BranchesState {
     pub fn selected(&self) -> Option<&Commit> {
         self.commits.get(self.cursor.selected())
     }
+
+    /// The focused pane.
+    #[must_use]
+    pub fn pane(&self) -> BranchesPane {
+        self.pane
+    }
+
+    /// The full message of the selected commit.
+    #[must_use]
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    /// The files changed by the selected commit.
+    #[must_use]
+    pub fn files(&self) -> &[ChangedFile] {
+        &self.files
+    }
+
+    /// The selection in the file list.
+    #[must_use]
+    pub fn file_cursor(&self) -> Cursor {
+        self.file_cursor
+    }
+
+    /// The selected file.
+    #[must_use]
+    pub fn selected_file(&self) -> Option<&ChangedFile> {
+        self.files.get(self.file_cursor.selected())
+    }
+
+    /// The rows of the selected file's diff.
+    #[must_use]
+    pub fn diff_rows(&self) -> &[DiffRow] {
+        &self.diff_rows
+    }
+
+    /// The cursor in the file diff.
+    #[must_use]
+    pub fn diff_cursor(&self) -> Cursor {
+        self.diff_cursor
+    }
 }
 
 impl App {
@@ -111,6 +172,49 @@ impl App {
         self.branches
             .cursor
             .select(index, len, self.viewports.branches_graph);
+        self.load_details(ports);
+    }
+
+    /// Loads the message and files of the selected commit, unless they are already loaded.
+    fn load_details(&mut self, ports: &dyn Ports) {
+        let hash: Option<String> = self.branches.selected().map(|c: &Commit| c.hash.clone());
+        if hash == self.branches.details_for {
+            return;
+        }
+        self.branches.details_for.clone_from(&hash);
+        self.branches.file_cursor = Cursor::default();
+        let details: Result<(String, Vec<ChangedFile>), Failed> = match &hash {
+            None => Ok((String::new(), Vec::new())),
+            Some(hash) => ports
+                .commit_message(hash)
+                .and_then(|message: String| ports.commit_files(hash).map(|files| (message, files))),
+        };
+        let (message, files): (String, Vec<ChangedFile>) = details.unwrap_or_else(|Failed| {
+            self.note = Note::Problem("Loading the commit failed, see the Log view".to_string());
+            (String::new(), Vec::new())
+        });
+        self.branches.message = message;
+        self.branches.files = files;
+        self.load_commit_file_diff(ports);
+    }
+
+    fn load_commit_file_diff(&mut self, ports: &dyn Ports) {
+        self.branches.diff_cursor = Cursor::default();
+        let diff: Option<Result<FileDiff, Failed>> = match (
+            self.branches.details_for.as_deref(),
+            self.branches.selected_file(),
+        ) {
+            (Some(hash), Some(file)) => Some(ports.commit_file_diff(hash, file)),
+            _ => None,
+        };
+        self.branches.diff_rows = match diff {
+            None => Vec::new(),
+            Some(Ok(diff)) => diff_rows(&diff),
+            Some(Err(Failed)) => {
+                self.note = Note::Problem("Loading the diff failed, see the Log view".to_string());
+                Vec::new()
+            }
+        };
     }
 
     /// Loads the next chunk of commits when the selection is near the last loaded commit.
@@ -140,17 +244,52 @@ impl App {
     }
 
     pub(super) fn clamp_branch_cursors(&mut self) {
-        let len: usize = self.branches.commits.len();
+        let commits: usize = self.branches.commits.len();
         self.branches
             .cursor
-            .clamp(len, self.viewports.branches_graph);
+            .clamp(commits, self.viewports.branches_graph);
+        let files: usize = self.branches.files.len();
+        self.branches
+            .file_cursor
+            .clamp(files, self.viewports.branches_files);
+        let rows: usize = self.branches.diff_rows.len();
+        self.branches
+            .diff_cursor
+            .clamp(rows, self.viewports.branches_diff);
     }
 
     pub(super) fn handle_branches(&mut self, event: Event, ports: &dyn Ports) {
-        let len: usize = self.branches.commits.len();
-        let height: usize = self.viewports.branches_graph;
-        super::diff_view::move_cursor(&mut self.branches.cursor, event, len, height);
-        self.load_more_if_needed(ports);
+        let move_cursor = super::diff_view::move_cursor;
+        match (self.branches.pane, event) {
+            (_, Event::NextPane) => {
+                self.branches.pane = match self.branches.pane {
+                    BranchesPane::Graph => BranchesPane::Files,
+                    BranchesPane::Files => BranchesPane::FileDiff,
+                    BranchesPane::FileDiff => BranchesPane::Graph,
+                };
+            }
+            (BranchesPane::Graph, _) => {
+                let len: usize = self.branches.commits.len();
+                let height: usize = self.viewports.branches_graph;
+                move_cursor(&mut self.branches.cursor, event, len, height);
+                self.load_more_if_needed(ports);
+                self.load_details(ports);
+            }
+            (BranchesPane::Files, _) => {
+                let before: usize = self.branches.file_cursor.selected();
+                let len: usize = self.branches.files.len();
+                let height: usize = self.viewports.branches_files;
+                move_cursor(&mut self.branches.file_cursor, event, len, height);
+                if self.branches.file_cursor.selected() != before {
+                    self.load_commit_file_diff(ports);
+                }
+            }
+            (BranchesPane::FileDiff, _) => {
+                let len: usize = self.branches.diff_rows.len();
+                let height: usize = self.viewports.branches_diff;
+                move_cursor(&mut self.branches.diff_cursor, event, len, height);
+            }
+        }
     }
 
     pub(super) fn search_branches(
@@ -177,7 +316,9 @@ impl App {
             self.branches
                 .cursor
                 .select(index, len, self.viewports.branches_graph);
+            self.branches.pane = BranchesPane::Graph;
             self.load_more_if_needed(ports);
+            self.load_details(ports);
         }
         found
     }

@@ -1,4 +1,4 @@
-use super::{App, CHUNK, Note, Viewports};
+use super::{App, BranchesPane, CHUNK, Note, Viewports};
 use crate::event::Event;
 use crate::model::{Label, Refs};
 use crate::test_ports::{TestPorts, linear_history};
@@ -67,9 +67,15 @@ fn more_commits_load_near_the_bottom() {
     assert_eq!(app.branches().commits().len(), CHUNK);
     assert!(!app.branches().all_loaded());
     run(&mut app, &ports, &[Event::MoveDown]);
-    assert_eq!(ports.calls(), Vec::<String>::new());
+    assert!(
+        !ports
+            .calls()
+            .iter()
+            .any(|c: &String| c.starts_with("commits"))
+    );
+    ports.clear();
     run(&mut app, &ports, &[Event::Bottom]);
-    assert_eq!(ports.calls(), vec![format!("commits {CHUNK} {CHUNK}")]);
+    assert_eq!(ports.calls()[0], format!("commits {CHUNK} {CHUNK}"));
     assert_eq!(app.branches().commits().len(), CHUNK + 50);
     assert_eq!(app.branches().rows().len(), CHUNK + 50);
     assert!(app.branches().all_loaded());
@@ -159,4 +165,92 @@ fn resize_clamps_the_commit_selection() {
         ..Viewports::default()
     });
     assert_eq!(app.branches().cursor().offset(), 25);
+}
+
+#[test]
+fn details_of_the_selected_commit() {
+    let ports: TestPorts = ports(3);
+    let mut app: App = app(&ports);
+    assert_eq!(app.branches().message(), "Message of c2\n\nBody\n");
+    assert_eq!(app.branches().files().len(), 2);
+    assert_eq!(app.branches().diff_rows()[1].text, "c2");
+    run(&mut app, &ports, &[Event::MoveDown]);
+    assert_eq!(
+        ports.calls(),
+        vec!["message c1", "files c1", "show c1 c1.txt"]
+    );
+    ports.clear();
+    run(&mut app, &ports, &[Event::MoveDown, Event::MoveDown]);
+    assert_eq!(
+        ports.calls(),
+        vec!["message c0", "files c0", "show c0 c0.txt"]
+    );
+}
+
+#[test]
+fn panes_cycle_and_move_separately() {
+    let ports: TestPorts = ports(3);
+    let mut app: App = app(&ports);
+    assert_eq!(app.branches().pane(), BranchesPane::Graph);
+    run(&mut app, &ports, &[Event::NextPane]);
+    assert_eq!(app.branches().pane(), BranchesPane::Files);
+    ports.clear();
+    run(&mut app, &ports, &[Event::MoveDown, Event::MoveDown]);
+    assert_eq!(ports.calls(), vec!["show c2 other.txt"]);
+    assert_eq!(
+        app.branches().selected_file().map(|f| f.path.clone()),
+        Some("other.txt".to_string())
+    );
+    run(&mut app, &ports, &[Event::NextPane, Event::Bottom]);
+    assert_eq!(app.branches().pane(), BranchesPane::FileDiff);
+    assert_eq!(app.branches().diff_cursor().selected(), 4);
+    assert_eq!(app.branches().file_cursor().selected(), 1);
+    run(&mut app, &ports, &[Event::NextPane]);
+    assert_eq!(app.branches().pane(), BranchesPane::Graph);
+    run(
+        &mut app,
+        &ports,
+        &[
+            Event::NextPane,
+            Event::StartSearch,
+            Event::Input('1'),
+            Event::InputSubmit,
+        ],
+    );
+    assert_eq!(app.branches().pane(), BranchesPane::Graph);
+    assert_eq!(app.branches().file_cursor().selected(), 0);
+    app.set_viewports(Viewports {
+        branches_graph: 1,
+        branches_files: 1,
+        branches_diff: 1,
+        ..Viewports::default()
+    });
+    assert_eq!(app.branches().cursor().offset(), 1);
+}
+
+#[test]
+fn detail_failures_and_empty_history() {
+    let failing: TestPorts = TestPorts {
+        details_fail: true,
+        ..ports(2)
+    };
+    let mut app: App = app(&failing);
+    assert_eq!(app.branches().files(), &[]);
+    run(&mut app, &failing, &[Event::MoveDown]);
+    assert_eq!(
+        app.note(),
+        &Note::Problem("Loading the commit failed, see the Log view".to_string())
+    );
+    let ports: TestPorts = ports(2);
+    run(&mut app, &ports, &[Event::MoveUp]);
+    assert_eq!(app.branches().files().len(), 2);
+    run(&mut app, &failing, &[Event::NextPane, Event::MoveDown]);
+    assert_eq!(
+        app.note(),
+        &Note::Problem("Loading the diff failed, see the Log view".to_string())
+    );
+    *ports.history.borrow_mut() = Some(Vec::new());
+    run(&mut app, &ports, &[Event::Reload]);
+    assert_eq!(app.branches().message(), "");
+    assert_eq!(app.branches().diff_rows(), &[]);
 }

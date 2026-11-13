@@ -111,4 +111,25 @@ pub trait Ports {
     ///
     /// Fails when git fails.
     fn refs(&self) -> Result<Refs, Failed>;
+
+    /// The full message of a commit.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn commit_message(&self, hash: &str) -> Result<String, Failed>;
+
+    /// The files a commit changed, compared with its first parent.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn commit_files(&self, hash: &str) -> Result<Vec<ChangedFile>, Failed>;
+
+    /// The diff of one file of a commit, compared with its first parent.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn commit_file_diff(&self, hash: &str, file: &ChangedFile) -> Result<FileDiff, Failed>;
 }

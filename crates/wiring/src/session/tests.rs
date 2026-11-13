@@ -185,3 +185,72 @@ fn edit_message_commit_and_amend() {
     assert!(after.row_text(15).contains("Commit message"));
     assert!(!after.row_text(16).contains("commit"));
 }
+
+#[test]
+fn branches_view_shows_graph_details_and_panes() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    std::fs::write(dir.path().join("a.txt"), "a\n").unwrap();
+    git_ok(dir.path(), &["add", "."]);
+    git_ok(dir.path(), &["commit", "-q", "-m", "first\n\nbody text"]);
+    git_ok(dir.path(), &["tag", "v1"]);
+    git_ok(dir.path(), &["checkout", "-q", "-b", "feature"]);
+    std::fs::write(dir.path().join("b.txt"), "b\n").unwrap();
+    git_ok(dir.path(), &["add", "."]);
+    git_ok(dir.path(), &["commit", "-q", "-m", "second"]);
+    let log: LogBuffer = LogBuffer::new(fixed_clock);
+    let git: git::Git = git::Git::new(dir.path()).with_env("TZ", "UTC");
+    let mut s: Session = Session::new(git, log, Box::new(|_: &std::path::Path| Ok(())));
+    s.resize(SIZE);
+    let screen: ui::buffer::Buffer = s.render(SIZE);
+    assert!(
+        screen.row_text(2).starts_with("◉  [feature] second"),
+        "{}",
+        screen.row_text(2)
+    );
+    assert!(
+        screen
+            .row_text(2)
+            .ends_with("Ada Author         2025-01-02 03:04")
+    );
+    assert!(
+        screen.row_text(3).starts_with("●  [main] <v1> first"),
+        "{}",
+        screen.row_text(3)
+    );
+    assert!(
+        screen.row_text(13).starts_with("commit "),
+        "{}",
+        screen.row_text(13)
+    );
+    assert!(screen.row_text(13).contains("│A b.txt"));
+    s.input(b"j");
+    let screen: ui::buffer::Buffer = s.render(SIZE);
+    assert!(
+        screen
+            .row_text(14)
+            .starts_with("Author: Ada Author  Date: 2025-01-02 03:04")
+    );
+    assert!(
+        screen.row_text(15).starts_with("first"),
+        "{}",
+        screen.row_text(15)
+    );
+    assert!(screen.row_text(13).contains("│A a.txt"));
+    s.input(b"w");
+    assert!(s.render(SIZE).cell(55, 13).unwrap().style.reverse);
+    s.input(b"w");
+    let screen: ui::buffer::Buffer = s.render(SIZE);
+    assert!(
+        screen.row_text(17).contains("Diff a.txt"),
+        "{}",
+        screen.row_text(17)
+    );
+    assert!(
+        screen.row_text(18).starts_with("▶@@"),
+        "{}",
+        screen.row_text(18)
+    );
+    s.input(b"w/sec\r");
+    assert!(s.render(SIZE).row_text(13).contains("│A b.txt"));
+}

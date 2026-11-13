@@ -137,6 +137,32 @@ impl logic::ports::Ports for SessionPorts<'_> {
             })
             .map_err(|_| Failed)
     }
+
+    fn commit_message(&self, hash: &str) -> Result<String, Failed> {
+        self.git
+            .commit_message(hash, &self.log_git())
+            .map_err(|_| Failed)
+    }
+
+    fn commit_files(&self, hash: &str) -> Result<Vec<ChangedFile>, Failed> {
+        self.git
+            .commit_files(hash, &self.log_git())
+            .map(|files: Vec<git::FileChange>| {
+                model::work_status(git::Status {
+                    staged: files,
+                    unstaged: Vec::new(),
+                })
+                .staged
+            })
+            .map_err(|_| Failed)
+    }
+
+    fn commit_file_diff(&self, hash: &str, file: &ChangedFile) -> Result<FileDiff, Failed> {
+        self.git
+            .commit_file_diff(hash, &diff_paths(file, Side::Staged), &self.log_git())
+            .map(model::file_diff)
+            .map_err(|_| Failed)
+    }
 }
 
 #[cfg(test)]

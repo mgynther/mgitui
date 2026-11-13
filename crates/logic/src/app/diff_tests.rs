@@ -6,6 +6,8 @@ use crate::test_ports::{TestPorts, modified};
 fn viewports() -> Viewports {
     Viewports {
         branches_graph: 5,
+        branches_files: 5,
+        branches_diff: 5,
         log: 5,
         diff_unstaged: 2,
         diff_staged: 2,

@@ -118,6 +118,12 @@ fn git_failures_become_failed() {
     assert_eq!(ports.has_commits(), Err(Failed));
     assert_eq!(ports.commits(0, 1), Err(Failed));
     assert_eq!(ports.refs(), Err(Failed));
+    assert_eq!(ports.commit_message("h"), Err(Failed));
+    assert_eq!(ports.commit_files("h"), Err(Failed));
+    assert_eq!(
+        ports.commit_file_diff("h", &file("x", ChangeKind::Modified)),
+        Err(Failed)
+    );
     assert_eq!(ports.last_commit_message(), Err(Failed));
     assert_eq!(ports.edit_message("x"), Err(Failed));
     assert_eq!(
@@ -148,6 +154,11 @@ fn staging_a_renamed_file_back_and_forth() {
     git_ok(dir.path(), &["commit", "-q", "-m", "init"]);
     git_ok(dir.path(), &["mv", "a.txt", "b.txt"]);
     with_ports(dir.path(), |ports: &SessionPorts<'_>, _log: &LogBuffer| {
+        let first: String = ports.commits(0, 1).unwrap()[0].hash.clone();
+        let files: Vec<ChangedFile> = ports.commit_files(&first).unwrap();
+        assert_eq!(files[0].kind, ChangeKind::Added);
+        let shown: FileDiff = ports.commit_file_diff(&first, &files[0]).unwrap();
+        assert_eq!(shown.hunks[0].lines[0].text, "a");
         let renamed: ChangedFile = ports.status().unwrap().staged[0].clone();
         ports.unstage_file(&renamed).unwrap();
         let status: WorkStatus = ports.status().unwrap();
@@ -208,6 +219,11 @@ fn history_and_refs() {
         let refs: logic::model::Refs = ports.refs().unwrap();
         assert_eq!(refs.head, Some(commits[0].hash.clone()));
         assert_eq!(refs.labels.len(), 2);
+        assert_eq!(
+            ports.commit_message(&commits[0].hash),
+            Ok("one\n\n".to_string())
+        );
+        assert_eq!(ports.commit_files(&commits[0].hash), Ok(vec![]));
     });
 }
 
@@ -218,5 +234,11 @@ fn refs_fail_when_head_fails() {
     std::fs::write(dir.path().join(".git/HEAD"), "garbage\n").unwrap();
     with_ports(dir.path(), |ports: &SessionPorts<'_>, _log: &LogBuffer| {
         assert_eq!(ports.refs(), Err(Failed));
+        assert_eq!(ports.commit_message("h"), Err(Failed));
+        assert_eq!(ports.commit_files("h"), Err(Failed));
+        assert_eq!(
+            ports.commit_file_diff("h", &file("x", ChangeKind::Modified)),
+            Err(Failed)
+        );
     });
 }

@@ -1,9 +1,13 @@
 //! Conversions between the types of the logic and ui layers.
 
-use logic::app::{App, DiffPane, DiffState, Mode, Note, Prompt, PromptKind, Viewports};
+use logic::app::{
+    App, BranchesPane, BranchesState, DiffPane, DiffState, Mode, Note, Prompt, PromptKind,
+    Viewports,
+};
 use logic::cursor::Cursor;
+use logic::graph::{Cell, CommitSide, Shape};
 use logic::log::{Layer, LogEntry, LogLevel};
-use logic::model::{ChangeKind, ChangedFile, DiffRow, LineKind, RowKind, Side};
+use logic::model::{ChangeKind, ChangedFile, Commit, DiffRow, Label, LineKind, RowKind, Side};
 
 /// The logic event for a ui event.
 #[must_use]
@@ -74,8 +78,11 @@ pub fn input_mode(mode: &Mode) -> ui::event::InputMode {
 #[must_use]
 pub fn viewports(size: ui::layout::Size) -> Viewports {
     let diff: ui::layout::DiffLayout = ui::layout::diff_layout(size);
+    let branches: ui::layout::BranchesLayout = ui::layout::branches_layout(size);
     Viewports {
-        branches_graph: ui::layout::branches_layout(size).graph.content().height,
+        branches_graph: branches.graph.content().height,
+        branches_files: branches.files.content().height,
+        branches_diff: branches.file_diff.content().height,
         log: ui::layout::log_layout(size).list.content().height,
         diff_unstaged: diff.unstaged.content().height,
         diff_staged: diff.staged.content().height,
@@ -94,7 +101,7 @@ pub fn screen(app: &App) -> ui::screen::Screen {
         },
         status: status(app),
         body: match app.view() {
-            logic::event::ViewId::Branches => ui::screen::Body::Branches,
+            logic::event::ViewId::Branches => ui::screen::Body::Branches(branches_view(app)),
             logic::event::ViewId::Diff => ui::screen::Body::Diff(diff_view(app)),
             logic::event::ViewId::Log => ui::screen::Body::Log(log_view(app)),
         },
@@ -143,6 +150,107 @@ fn log_view(app: &App) -> ui::views::log::LogView {
         )
         .collect();
     ui::views::log::LogView { rows }
+}
+
+fn branches_view(app: &App) -> ui::views::branches::BranchesView {
+    use ui::views::branches::{BranchesFocus, BranchesView, CommitRow};
+    let branches: &BranchesState = app.branches();
+    let viewports: Viewports = app.viewports();
+    let cursor: Cursor = branches.cursor();
+    let rows: Vec<CommitRow> = branches
+        .commits()
+        .iter()
+        .zip(branches.rows())
+        .enumerate()
+        .skip(cursor.offset())
+        .take(viewports.branches_graph)
+        .map(
+            |(index, (commit, row)): (usize, (&Commit, &logic::graph::GraphRow))| CommitRow {
+                cells: row.cells.iter().map(graph_cell).collect(),
+                labels: branches
+                    .labels(&commit.hash)
+                    .iter()
+                    .map(label_view)
+                    .collect(),
+                subject: commit.subject.clone(),
+                author: commit.author.clone(),
+                date: commit.date.clone(),
+                selected: index == cursor.selected(),
+                head: branches.head() == Some(commit.hash.as_str()),
+            },
+        )
+        .collect();
+    let info: Vec<String> = branches
+        .selected()
+        .map_or_else(Vec::new, |commit: &Commit| {
+            let mut lines: Vec<String> = vec![
+                format!("commit {}", commit.hash),
+                format!("Author: {}  Date: {}", commit.author, commit.date),
+            ];
+            lines.extend(branches.message().lines().map(str::to_string));
+            lines
+        });
+    BranchesView {
+        focus: match branches.pane() {
+            BranchesPane::Graph => BranchesFocus::Graph,
+            BranchesPane::Files => BranchesFocus::Files,
+            BranchesPane::FileDiff => BranchesFocus::FileDiff,
+        },
+        rows,
+        info,
+        files: file_rows(
+            branches.files(),
+            branches.file_cursor(),
+            viewports.branches_files,
+        ),
+        diff_title: branches.selected_file().map_or_else(
+            || "Diff".to_string(),
+            |f: &ChangedFile| format!("Diff {}", f.path),
+        ),
+        diff: diff_rows(
+            branches.diff_rows(),
+            branches.diff_cursor(),
+            None,
+            viewports.branches_diff,
+        ),
+    }
+}
+
+fn graph_cell(cell: &Cell) -> ui::views::branches::GraphCell {
+    use ui::views::branches::{CommitSide as S, GraphShape as G};
+    let side = |side: CommitSide| match side {
+        CommitSide::Left => S::Left,
+        CommitSide::Right => S::Right,
+    };
+    ui::views::branches::GraphCell {
+        shape: match cell.shape {
+            Shape::Empty => G::Empty,
+            Shape::Commit => G::Commit,
+            Shape::Vertical => G::Vertical,
+            Shape::Horizontal => G::Horizontal,
+            Shape::Crossing => G::Crossing,
+            Shape::Join(s) => G::Join(side(s)),
+            Shape::Fork(s) => G::Fork(side(s)),
+            Shape::Tee(s) => G::Tee(side(s)),
+        },
+        lane: cell.lane,
+        link_right: cell.link_right,
+    }
+}
+
+fn label_view(label: &Label) -> ui::views::branches::LabelView {
+    use ui::views::branches::LabelView;
+    match label {
+        Label::Local { name, head } => LabelView::Local {
+            name: name.clone(),
+            head: *head,
+        },
+        Label::Remote { remote, branch } => LabelView::Remote {
+            remote: remote.clone(),
+            branch: branch.clone(),
+        },
+        Label::Tag { name } => LabelView::Tag(name.clone()),
+    }
 }
 
 fn diff_view(app: &App) -> ui::views::diff::DiffView {

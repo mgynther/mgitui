@@ -53,6 +53,23 @@ pub enum Command {
     },
     /// `git for-each-ref`: all branches and tags with the commits they point to.
     Refs,
+    /// `git show -s --format=%B`: the full message of a commit.
+    CommitMessage {
+        /// The commit hash.
+        hash: String,
+    },
+    /// `git show --name-status`: the files a commit changed, against its first parent.
+    CommitFiles {
+        /// The commit hash.
+        hash: String,
+    },
+    /// `git show` of some paths: a commit's diff of one file, against its first parent.
+    CommitFileDiff {
+        /// The commit hash.
+        hash: String,
+        /// The path, or the original and new path of a rename.
+        paths: Vec<String>,
+    },
     /// `git commit -F <file>`: commits with the message in a file.
     Commit {
         /// The file that contains the message.
@@ -91,6 +108,22 @@ impl Command {
                 "--date=format-local:%Y-%m-%d %H:%M",
                 "--format=%H%x1f%P%x1f%an%x1f%ad%x1f%s",
             ],
+            Command::CommitMessage { .. } => &["show", "-s", "--format=%B"],
+            Command::CommitFiles { .. } => &[
+                "show",
+                "--format=",
+                "--name-status",
+                "-z",
+                "--diff-merges=first-parent",
+                "-M",
+            ],
+            Command::CommitFileDiff { .. } => &[
+                "show",
+                "--format=",
+                "--no-ext-diff",
+                "--diff-merges=first-parent",
+                "-M",
+            ],
             Command::Refs => &[
                 "for-each-ref",
                 "--format=%(HEAD)%00%(objectname)%00%(*objectname)%00%(refname)",
@@ -113,6 +146,14 @@ impl Command {
             | Command::RemoveCached { paths } => args.extend(paths.iter().cloned()),
             Command::DiffUntracked { path } => args.push(path.clone()),
             Command::Commit { message_file, .. } => args.push(message_file.clone()),
+            Command::CommitMessage { hash } | Command::CommitFiles { hash } => {
+                args.push(hash.clone());
+            }
+            Command::CommitFileDiff { hash, paths } => {
+                args.push(hash.clone());
+                args.push("--".to_string());
+                args.extend(paths.iter().cloned());
+            }
             Command::ShowToplevel
             | Command::Status
             | Command::HasHead
@@ -210,6 +251,26 @@ mod tests {
              --format=%H%x1f%P%x1f%an%x1f%ad%x1f%s --skip=10 --max-count=5"
         );
         assert!(args(&Command::Refs).starts_with("for-each-ref --format=%(HEAD)"));
+    }
+
+    #[test]
+    fn commit_detail_arguments() {
+        let hash: String = "abc".to_string();
+        assert_eq!(
+            args(&Command::CommitMessage { hash: hash.clone() }),
+            "show -s --format=%B abc"
+        );
+        assert_eq!(
+            args(&Command::CommitFiles { hash: hash.clone() }),
+            "show --format= --name-status -z --diff-merges=first-parent -M abc"
+        );
+        assert_eq!(
+            args(&Command::CommitFileDiff {
+                hash,
+                paths: vec!["o".to_string(), "n".to_string()]
+            }),
+            "show --format= --no-ext-diff --diff-merges=first-parent -M abc -- o n"
+        );
     }
 
     #[test]

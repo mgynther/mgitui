@@ -1,8 +1,10 @@
 //! Reading the commit history and refs.
 
 use crate::command::Command;
+use crate::diff::{FileDiff, parse_diff};
 use crate::log::Log;
 use crate::runner::{Git, GitError, Output};
+use crate::status::{ChangeKind, FileChange};
 
 /// A commit in the history.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,6 +79,88 @@ impl Git {
         let hash: &str = output.stdout.trim();
         Ok((output.code == 0 && !hash.is_empty()).then(|| hash.to_string()))
     }
+}
+
+impl Git {
+    /// The full message of a commit.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    pub fn commit_message(&self, hash: &str, log: &Log<'_>) -> Result<String, GitError> {
+        let command: Command = Command::CommitMessage {
+            hash: hash.to_string(),
+        };
+        Ok(self.run(&command, None, log)?.stdout)
+    }
+
+    /// The files a commit changed, compared with its first parent.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails or its output cannot be parsed.
+    pub fn commit_files(&self, hash: &str, log: &Log<'_>) -> Result<Vec<FileChange>, GitError> {
+        let command: Command = Command::CommitFiles {
+            hash: hash.to_string(),
+        };
+        parse_name_status(&self.run(&command, None, log)?.stdout)
+    }
+
+    /// The diff of one file of a commit, compared with its first parent. `paths` is the path,
+    /// or the original and new path of a rename.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    pub fn commit_file_diff(
+        &self,
+        hash: &str,
+        paths: &[String],
+        log: &Log<'_>,
+    ) -> Result<FileDiff, GitError> {
+        let command: Command = Command::CommitFileDiff {
+            hash: hash.to_string(),
+            paths: paths.to_vec(),
+        };
+        Ok(parse_diff(&self.run(&command, None, log)?.stdout))
+    }
+}
+
+/// Parses `--name-status -z` output: a status, then one path, or two for renames and copies.
+///
+/// # Errors
+///
+/// Returns [`GitError::Parse`] for unknown statuses or missing paths.
+pub fn parse_name_status(output: &str) -> Result<Vec<FileChange>, GitError> {
+    let mut changes: Vec<FileChange> = Vec::new();
+    let mut tokens = output.split('\0').filter(|t: &&str| !t.is_empty());
+    while let Some(status) = tokens.next() {
+        let error = || GitError::Parse(format!("unexpected name status {status:?}"));
+        let kind: ChangeKind = match status.chars().next() {
+            Some('M') => ChangeKind::Modified,
+            Some('A') => ChangeKind::Added,
+            Some('D') => ChangeKind::Deleted,
+            Some('R') => ChangeKind::Renamed,
+            Some('C') => ChangeKind::Copied,
+            Some('T') => ChangeKind::TypeChanged,
+            _ => return Err(error()),
+        };
+        let first: &str = tokens.next().ok_or_else(error)?;
+        let (path, original_path): (String, Option<String>) =
+            if matches!(kind, ChangeKind::Renamed | ChangeKind::Copied) {
+                let second: &str = tokens.next().ok_or_else(error)?;
+                (second.to_string(), Some(first.to_string()))
+            } else {
+                (first.to_string(), None)
+            };
+        changes.push(FileChange {
+            path,
+            original_path,
+            kind,
+            mode_changed: false,
+        });
+    }
+    Ok(changes)
 }
 
 /// Parses `git log -z` output in the format of [`Command::Log`].

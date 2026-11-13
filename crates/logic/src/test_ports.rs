@@ -9,6 +9,10 @@ use crate::model::{
 use crate::ports::{CommitMessage, Failed, Ports, SearchText};
 
 /// Records calls as text and answers from its fields.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "a test double with one switch per failing port"
+)]
 pub struct TestPorts {
     /// Calls and log messages, in order.
     pub calls: RefCell<Vec<String>>,
@@ -32,6 +36,8 @@ pub struct TestPorts {
     pub history: RefCell<Option<Vec<Commit>>>,
     /// The answer to `refs`; `None` fails.
     pub refs: RefCell<Option<Refs>>,
+    /// Whether loading commit details fails.
+    pub details_fail: bool,
 }
 
 impl TestPorts {
@@ -48,6 +54,7 @@ impl TestPorts {
             commit_fails: false,
             history: RefCell::new(Some(Vec::new())),
             refs: RefCell::new(Some(Refs::default())),
+            details_fail: false,
         }
     }
 
@@ -59,6 +66,14 @@ impl TestPorts {
             staged: staged.iter().map(|p: &&str| modified(p)).collect(),
         });
         ports
+    }
+
+    fn details<T>(&self, value: T) -> Result<T, Failed> {
+        if self.details_fail {
+            Err(Failed)
+        } else {
+            Ok(value)
+        }
     }
 
     fn record(&self, call: String) -> Result<(), Failed> {
@@ -222,5 +237,25 @@ impl Ports for TestPorts {
     fn refs(&self) -> Result<Refs, Failed> {
         self.calls.borrow_mut().push("refs".to_string());
         self.refs.borrow().clone().ok_or(Failed)
+    }
+
+    fn commit_message(&self, hash: &str) -> Result<String, Failed> {
+        self.calls.borrow_mut().push(format!("message {hash}"));
+        self.details(format!("Message of {hash}\n\nBody\n"))
+    }
+
+    fn commit_files(&self, hash: &str) -> Result<Vec<ChangedFile>, Failed> {
+        self.calls.borrow_mut().push(format!("files {hash}"));
+        self.details(vec![
+            modified(&format!("{hash}.txt")),
+            modified("other.txt"),
+        ])
+    }
+
+    fn commit_file_diff(&self, hash: &str, file: &ChangedFile) -> Result<FileDiff, Failed> {
+        self.calls
+            .borrow_mut()
+            .push(format!("show {hash} {}", file.path));
+        self.details(diff_of(&format!("{hash}|{}|x|y", file.path)))
     }
 }

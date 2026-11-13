@@ -117,14 +117,14 @@ fn unfocused_selection_is_bold_and_other_panes_are_drawn() {
     assert!(!buffer.cell(3, 2).unwrap().style.reverse);
     assert!(buffer.row_text(3).starts_with("●  [dev] Subject"));
     assert!(!buffer.cell(3, 3).unwrap().style.bold);
-    assert!(buffer.row_text(15).starts_with("─ Commit ─"));
-    assert!(buffer.row_text(16).starts_with("commit abc"));
-    assert!(buffer.row_text(15).contains("│─ Files ─"));
-    assert!(buffer.row_text(16).contains("│M a.txt"));
-    assert!(buffer.row_text(22).starts_with("─ Diff a.txt ─"));
-    assert!(buffer.row_text(23).starts_with(" +new"));
+    assert!(buffer.row_text(10).starts_with("─ Commit ─"));
+    assert!(buffer.row_text(11).starts_with("commit abc"));
+    assert!(buffer.row_text(10).contains("│─ Files ─"));
+    assert!(buffer.row_text(11).contains("│M a.txt"));
+    assert!(buffer.row_text(19).starts_with("─ Diff a.txt ─"));
+    assert!(buffer.row_text(20).starts_with(" +new"));
     let diff_focus: Buffer = draw(&view(BranchesFocus::FileDiff, vec![]));
-    assert!(diff_focus.row_text(23).starts_with("▶+new"));
+    assert!(diff_focus.row_text(20).starts_with("▶+new"));
 }
 
 #[test]

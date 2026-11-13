@@ -96,7 +96,7 @@ pub struct LogLayout {
 #[must_use]
 pub fn branches_layout(size: Size) -> BranchesLayout {
     let body: Rect = body(size);
-    let graph_height: usize = body.height / 2;
+    let graph_height: usize = body.height / 3;
     let bottom_y: usize = body.y + graph_height;
     let bottom_height: usize = body.height - graph_height;
     let left_width: usize = size.width * 2 / 3;
@@ -230,25 +230,25 @@ mod tests {
                     x: 0,
                     y: 1,
                     width: 90,
-                    height: 15
+                    height: 10
                 },
                 info: Rect {
                     x: 0,
-                    y: 16,
+                    y: 11,
                     width: 60,
-                    height: 7
+                    height: 10
                 },
                 file_diff: Rect {
                     x: 0,
-                    y: 23,
+                    y: 21,
                     width: 60,
-                    height: 8
+                    height: 10
                 },
                 files: Rect {
                     x: 61,
-                    y: 16,
+                    y: 11,
                     width: 29,
-                    height: 15
+                    height: 20
                 },
             }
         );

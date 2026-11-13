@@ -233,40 +233,40 @@ fn branches_view_shows_graph_details_and_panes() {
         screen.row_text(3)
     );
     assert!(
-        screen.row_text(13).starts_with("commit "),
+        screen.row_text(9).starts_with("commit "),
         "{}",
-        screen.row_text(13)
+        screen.row_text(9)
     );
-    assert!(screen.row_text(13).contains("│A b.txt"));
+    assert!(screen.row_text(9).contains("│A b.txt"));
     s.input(b"j");
     let screen: ui::buffer::Buffer = s.render(SIZE);
     assert!(
         screen
-            .row_text(14)
+            .row_text(10)
             .starts_with("Author: Ada Author  Date: 2025-01-02 03:04")
     );
     assert!(
-        screen.row_text(15).starts_with("first"),
+        screen.row_text(11).starts_with("first"),
         "{}",
-        screen.row_text(15)
+        screen.row_text(11)
     );
-    assert!(screen.row_text(13).contains("│A a.txt"));
+    assert!(screen.row_text(9).contains("│A a.txt"));
     s.input(b"w");
-    assert!(s.render(SIZE).cell(55, 13).unwrap().style.reverse);
+    assert!(s.render(SIZE).cell(55, 9).unwrap().style.reverse);
     s.input(b"w");
     let screen: ui::buffer::Buffer = s.render(SIZE);
     assert!(
-        screen.row_text(17).contains("Diff a.txt"),
+        screen.row_text(15).contains("Diff a.txt"),
         "{}",
-        screen.row_text(17)
+        screen.row_text(15)
     );
     assert!(
-        screen.row_text(18).starts_with("▶@@"),
+        screen.row_text(16).starts_with("▶@@"),
         "{}",
-        screen.row_text(18)
+        screen.row_text(16)
     );
     s.input(b"w/sec\r");
-    assert!(s.render(SIZE).row_text(13).contains("│A b.txt"));
+    assert!(s.render(SIZE).row_text(9).contains("│A b.txt"));
 }
 
 #[test]

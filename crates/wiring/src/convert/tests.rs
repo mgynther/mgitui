@@ -226,9 +226,9 @@ fn viewports_follow_layout() {
     assert_eq!(
         viewports(size),
         Viewports {
-            branches_graph: 10,
-            branches_files: 10,
-            branches_diff: 5,
+            branches_graph: 6,
+            branches_files: 14,
+            branches_diff: 7,
             log: 21,
             diff_unstaged: 10,
             diff_staged: 10,

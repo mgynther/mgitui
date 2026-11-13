@@ -311,7 +311,7 @@ mod tests {
             SIZE,
         );
         assert!(branches.row_text(1).starts_with("─ Commits ─"));
-        assert!(branches.row_text(12).contains(" Files "));
+        assert!(branches.row_text(8).contains(" Files "));
         let diff: Buffer = render(
             &screen(ViewId::Diff, Status::Empty, Body::Diff(empty_diff())),
             SIZE,

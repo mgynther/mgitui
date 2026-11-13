@@ -49,7 +49,11 @@ fn event_loop(terminal: &Terminal, session: &mut Session) -> io::Result<()> {
     let mut dirty: bool = true;
     while !session.should_quit() {
         let size: ui::layout::Size = terminal.size()?;
-        if dirty || drawn != Some(size) {
+        if drawn != Some(size) {
+            session.resize(size);
+            dirty = true;
+        }
+        if dirty {
             terminal.draw(&session.render(size).to_ansi())?;
             drawn = Some(size);
             dirty = false;

@@ -4,6 +4,7 @@ use crate::buffer::Buffer;
 use crate::event::ViewId;
 use crate::layout::{self, MIN_SIZE, Rect, Size};
 use crate::style::{Color, Style};
+use crate::views::log::LogView;
 
 /// Everything drawn on the screen.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,7 +54,7 @@ pub enum Body {
     /// The Diff view.
     Diff,
     /// The Log view.
-    Log,
+    Log(LogView),
 }
 
 /// Draws `screen` into a buffer of `size`.
@@ -70,7 +71,7 @@ pub fn render(screen: &Screen, size: Size) -> Buffer {
     }
     draw_tabs(&mut buffer, screen.tabs);
     draw_status(&mut buffer, &screen.status, size);
-    match screen.body {
+    match &screen.body {
         Body::Branches => {
             let panes: layout::BranchesLayout = layout::branches_layout(size);
             draw_title(&mut buffer, panes.graph, "Commits", true);
@@ -88,9 +89,7 @@ pub fn render(screen: &Screen, size: Size) -> Buffer {
             draw_separator(&mut buffer, panes.file_diff);
             draw_separator(&mut buffer, panes.message);
         }
-        Body::Log => {
-            draw_title(&mut buffer, layout::log_layout(size).list, "Log", true);
-        }
+        Body::Log(view) => crate::views::log::render(&mut buffer, view, size),
     }
     buffer
 }
@@ -159,6 +158,7 @@ mod tests {
     use crate::event::ViewId;
     use crate::layout::{Rect, Size};
     use crate::style::{Color, Style};
+    use crate::views::log::LogView;
 
     const SIZE: Size = Size {
         width: 80,
@@ -180,7 +180,11 @@ mod tests {
     #[test]
     fn too_small_shows_message_only() {
         let buffer: Buffer = render(
-            &screen(ViewId::Log, Status::Empty, Body::Log),
+            &screen(
+                ViewId::Log,
+                Status::Empty,
+                Body::Log(LogView { rows: vec![] }),
+            ),
             Size {
                 width: 40,
                 height: 5,
@@ -209,7 +213,11 @@ mod tests {
 
     #[test]
     fn red_log_tab() {
-        let mut s: Screen = screen(ViewId::Log, Status::Empty, Body::Log);
+        let mut s: Screen = screen(
+            ViewId::Log,
+            Status::Empty,
+            Body::Log(LogView { rows: vec![] }),
+        );
         s.tabs.log_has_problems = true;
         let buffer: Buffer = render(&s, SIZE);
         assert_eq!(buffer.cell(25, 0).unwrap().style.fg, Color::Red);
@@ -218,12 +226,20 @@ mod tests {
     #[test]
     fn status_line_variants() {
         let note: Buffer = render(
-            &screen(ViewId::Log, Status::Note("hello".to_string()), Body::Log),
+            &screen(
+                ViewId::Log,
+                Status::Note("hello".to_string()),
+                Body::Log(LogView { rows: vec![] }),
+            ),
             SIZE,
         );
         assert_eq!(note.row_text(23).trim_end(), "hello");
         let problem: Buffer = render(
-            &screen(ViewId::Log, Status::Problem("bad".to_string()), Body::Log),
+            &screen(
+                ViewId::Log,
+                Status::Problem("bad".to_string()),
+                Body::Log(LogView { rows: vec![] }),
+            ),
             SIZE,
         );
         assert_eq!(problem.cell(0, 23).unwrap().style.fg, Color::Red);
@@ -234,7 +250,7 @@ mod tests {
                     label: "/".to_string(),
                     text: "abc".to_string(),
                 },
-                Body::Log,
+                Body::Log(LogView { rows: vec![] }),
             ),
             SIZE,
         );
@@ -253,7 +269,14 @@ mod tests {
         let diff: Buffer = render(&screen(ViewId::Diff, Status::Empty, Body::Diff), SIZE);
         assert!(diff.row_text(1).starts_with("─ Unstaged ─"));
         assert!(diff.row_text(1).contains("│─ Diff ─"));
-        let log: Buffer = render(&screen(ViewId::Log, Status::Empty, Body::Log), SIZE);
+        let log: Buffer = render(
+            &screen(
+                ViewId::Log,
+                Status::Empty,
+                Body::Log(LogView { rows: vec![] }),
+            ),
+            SIZE,
+        );
         assert!(log.row_text(1).starts_with("─ Log ─"));
     }
 

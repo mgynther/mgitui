@@ -45,6 +45,11 @@ impl Session {
         self.collect_log();
     }
 
+    /// Adapts the list sizes to a terminal of `size`.
+    pub fn resize(&mut self, size: ui::layout::Size) {
+        self.app.set_viewports(convert::viewports(size));
+    }
+
     /// Draws the current state.
     #[must_use]
     pub fn render(&self, size: ui::layout::Size) -> ui::buffer::Buffer {
@@ -102,5 +107,22 @@ mod tests {
         assert!(screen.row_text(1).starts_with("─ Log ─"));
         s.input(b"x\x1bOQ");
         assert!(s.render(SIZE).row_text(1).starts_with("─ Unstaged ─"));
+    }
+
+    #[test]
+    fn log_view_search_with_validation() {
+        let mut s: Session = session();
+        s.resize(SIZE);
+        s.input(b"\x1bOR/");
+        assert_eq!(s.render(SIZE).row_text(23).trim_end(), "/");
+        s.input(b"\r");
+        let screen: ui::buffer::Buffer = s.render(SIZE);
+        assert_eq!(screen.row_text(23).trim_end(), "search text is empty");
+        assert!(screen.row_text(2).contains("wiring     Info  started"));
+        assert!(
+            screen
+                .row_text(3)
+                .contains("validation Error search text is empty")
+        );
     }
 }

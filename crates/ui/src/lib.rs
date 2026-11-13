@@ -8,3 +8,4 @@ pub mod log;
 pub mod screen;
 pub mod style;
 pub mod time;
+pub mod views;

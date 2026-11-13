@@ -71,6 +71,7 @@ fn more_commits_load_near_the_bottom() {
     run(&mut app, &ports, &[Event::Bottom]);
     assert_eq!(ports.calls(), vec![format!("commits {CHUNK} {CHUNK}")]);
     assert_eq!(app.branches().commits().len(), CHUNK + 50);
+    assert_eq!(app.branches().rows().len(), CHUNK + 50);
     assert!(app.branches().all_loaded());
     assert_eq!(app.branches().cursor().selected(), CHUNK - 1);
     run(

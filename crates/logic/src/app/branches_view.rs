@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use super::{App, Note};
 use crate::cursor::Cursor;
 use crate::event::Event;
+use crate::graph::{GraphBuilder, GraphRow};
 use crate::model::{Commit, Label, Refs};
 use crate::ports::{Failed, Ports};
 use crate::search::{self, Direction, Found};
@@ -19,6 +20,8 @@ const LOAD_MARGIN: usize = 100;
 #[derive(Debug, Clone, Default)]
 pub struct BranchesState {
     commits: Vec<Commit>,
+    graph: GraphBuilder,
+    rows: Vec<GraphRow>,
     all_loaded: bool,
     labels: HashMap<String, Vec<Label>>,
     head: Option<String>,
@@ -30,6 +33,12 @@ impl BranchesState {
     #[must_use]
     pub fn commits(&self) -> &[Commit] {
         &self.commits
+    }
+
+    /// The graph row of each loaded commit.
+    #[must_use]
+    pub fn rows(&self) -> &[GraphRow] {
+        &self.rows
     }
 
     /// Whether every commit is loaded.
@@ -86,7 +95,10 @@ impl App {
         }
         self.branches.head = refs.head;
         self.branches.all_loaded = commits.len() < count;
-        self.branches.commits = commits;
+        self.branches.graph = GraphBuilder::default();
+        self.branches.rows = Vec::new();
+        self.branches.commits = Vec::new();
+        self.add_commits(commits);
         let index: usize = selected
             .and_then(|hash: String| {
                 self.branches
@@ -110,12 +122,20 @@ impl App {
         match ports.commits(len, CHUNK) {
             Ok(more) => {
                 self.branches.all_loaded = more.len() < CHUNK;
-                self.branches.commits.extend(more);
+                self.add_commits(more);
             }
             Err(Failed) => {
                 self.note =
                     Note::Problem("Loading more commits failed, see the Log view".to_string());
             }
+        }
+    }
+
+    fn add_commits(&mut self, commits: Vec<Commit>) {
+        for commit in commits {
+            let row: GraphRow = self.branches.graph.push(&commit);
+            self.branches.rows.push(row);
+            self.branches.commits.push(commit);
         }
     }
 

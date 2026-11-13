@@ -4,6 +4,7 @@
 pub mod app;
 pub mod cursor;
 pub mod event;
+pub mod graph;
 pub mod log;
 pub mod model;
 pub mod patch;

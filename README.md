@@ -100,3 +100,35 @@ cargo install --path crates/wiring
 `./check.sh` runs all checks in order: build, tests with 100% coverage, lint and format.
 
 The code is split into one crate per layer under `crates/`: `git`, `logic`, `ui`, `validation` and `wiring`. Only `wiring` depends on the other crates, so each layer can be built and tested on its own, for example `cargo test -p logic`.
+
+## Keys
+
+| Key | Where | Action |
+|---|---|---|
+| F1 / F2 / F3 | everywhere | Branches / Diff / Log view |
+| q | everywhere | quit (asks `Quit? y/n`) |
+| r | everywhere | reload from git |
+| j / k / g / G | lists and diffs | down / up / top / bottom |
+| / then n / m | lists | search, next / previous match |
+| w | Branches, Diff | next pane |
+| c | Branches | create a branch at the selected commit |
+| h | Branches | check out the commit's local branch |
+| s | Diff file lists | switch between unstaged and staged |
+| Enter | Diff file list | stage or unstage the whole file |
+| space, j / k, Enter | Diff file diff | select lines, stage or unstage them |
+| Esc | Diff file diff | clear the line selection |
+| e | Diff | edit the commit message in Vim |
+| c | Diff | commit |
+| a | Diff | toggle amending the last commit |
+
+## Manual checks
+
+The terminal handling and starting Vim are not covered by automated tests. After changing `crates/wiring/src/main.rs` or `crates/wiring/src/terminal.rs`, check by hand:
+
+1. Start `mgitui` in a repository: the Branches view is shown and the terminal is in raw mode (typed keys are not echoed).
+2. F1, F2 and F3 switch views, also in a different terminal emulator and in the Linux console if available.
+3. Resize the terminal: the view is redrawn; below 80x24 the "terminal too small" message is shown.
+4. In the Diff view press e: Vim opens on the commit message, and after `:wq` the message is shown in the box and the screen is redrawn.
+5. Quit Vim with `:q!`: the message is unchanged.
+6. Press q then y: the terminal is restored, the cursor is visible and typed keys are echoed again.
+7. Outside a git repository `mgitui` prints an error and exits with status 1.

@@ -299,3 +299,45 @@ fn create_and_check_out_branches() {
     assert_eq!(s.render(SIZE).row_text(23).trim_end(), "Checked out old");
     assert_eq!(git_ok(dir.path(), &["branch", "--show-current"]), "old\n");
 }
+
+#[test]
+fn empty_repository_and_small_terminal() {
+    let (_dir, mut s): (TempDir, Session) = session();
+    let screen: ui::buffer::Buffer = s.render(SIZE);
+    assert!(screen.row_text(1).starts_with("─ Commits ─"));
+    assert_eq!(screen.row_text(2).trim_end(), "");
+    s.input(b"jGgwjhc\x1b");
+    s.input(b"\x1bOQ");
+    assert!(s.render(SIZE).row_text(2).contains("No changes"));
+    s.input(b"\re a");
+    let screen: ui::buffer::Buffer = s.render(SIZE);
+    assert_eq!(
+        screen.row_text(23).trim_end(),
+        "Nothing to amend: there are no commits yet"
+    );
+    assert_eq!(screen.cell(25, 0).unwrap().style.fg, ui::style::Color::Red);
+    s.input(b"\x1bOR");
+    let log: ui::buffer::Buffer = s.render(SIZE);
+    let lines: Vec<String> = (2..23).map(|y: usize| log.row_text(y)).collect();
+    assert!(
+        lines
+            .iter()
+            .any(|l: &String| l.contains("logic      Warn  Nothing to amend"))
+    );
+    s.input(b"\x1bOP");
+    assert_eq!(
+        s.render(SIZE).cell(25, 0).unwrap().style.fg,
+        ui::style::Color::Default
+    );
+    let small: Size = Size {
+        width: 60,
+        height: 20,
+    };
+    s.resize(small);
+    assert_eq!(
+        s.render(small).row_text(0).trim_end(),
+        "terminal too small (needs 80x24)"
+    );
+    s.resize(SIZE);
+    assert!(s.render(SIZE).row_text(0).starts_with(" F1 Branches "));
+}

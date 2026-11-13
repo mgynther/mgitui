@@ -506,7 +506,7 @@ fn delete_branches_that_are_not_checked_out() {
     git_ok(dir.path(), &["commit", "-q", "--allow-empty", "-m", "base"]);
     git_ok(dir.path(), &["branch", "done"]);
     git_ok(dir.path(), &["branch", "kept"]);
-    git_ok(dir.path(), &["switch", "-q", "-c", "unmerged"]);
+    git_ok(dir.path(), &["switch", "-q", "-c", "squashed"]);
     git_ok(dir.path(), &["commit", "-q", "--allow-empty", "-m", "work"]);
     git_ok(dir.path(), &["switch", "-q", "main"]);
     let mut s: Session = session_in(&dir);
@@ -518,9 +518,16 @@ fn delete_branches_that_are_not_checked_out() {
     s.input(b"1\r");
     assert_eq!(
         s.render(SIZE).row_text(23).trim_end(),
+        "Delete branch done even if it is not merged? y/n"
+    );
+    s.input(b"y");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
         "Deleted branch done"
     );
-    s.input(b"d");
+    s.input(b"dn");
+    assert_eq!(s.render(SIZE).row_text(23).trim_end(), "");
+    s.input(b"dy");
     assert_eq!(
         s.render(SIZE).row_text(23).trim_end(),
         "Deleted branch kept"
@@ -530,13 +537,13 @@ fn delete_branches_that_are_not_checked_out() {
         s.render(SIZE).row_text(23).trim_end(),
         "The checked out branch cannot be deleted"
     );
-    s.input(b"/work\rd");
+    s.input(b"/work\rdy");
     assert_eq!(
         s.render(SIZE).row_text(23).trim_end(),
-        "Deleting the branch failed, see the Log view"
+        "Deleted branch squashed"
     );
     assert_eq!(
         git_ok(dir.path(), &["branch", "--format=%(refname:short)"]),
-        "main\nunmerged\n"
+        "main\n"
     );
 }

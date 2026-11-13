@@ -77,7 +77,7 @@ pub enum Command {
         /// The commit the branch points to.
         at: String,
     },
-    /// `git branch -d <name>`: deletes a local branch, refusing branches that are not merged.
+    /// `git branch -D <name>`: deletes a local branch, also when it is not merged.
     DeleteBranch {
         /// The branch name.
         name: String,
@@ -164,7 +164,7 @@ impl Command {
             Command::CreateBranch { .. } => &["branch"],
             Command::Switch { .. } => &["switch"],
             Command::CherryPick { .. } => &["cherry-pick"],
-            Command::DeleteBranch { .. } => &["branch", "-d"],
+            Command::DeleteBranch { .. } => &["branch", "-D"],
             Command::Rebase { .. } => &["rebase"],
             Command::RebaseInteractive { .. } => &["rebase", "-i"],
             Command::Refs => &[
@@ -368,7 +368,7 @@ mod tests {
             args(&Command::DeleteBranch {
                 name: "old".to_string()
             }),
-            "branch -d old"
+            "branch -D old"
         );
         assert_eq!(
             args(&Command::Rebase {

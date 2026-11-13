@@ -2,7 +2,7 @@ use super::{
     diff_row_kind, event, file_label, graph_cell, input_mode, label_view, layer_name, log_view,
     logic_view, screen, ui_level, ui_view, viewports,
 };
-use logic::app::{App, Mode, Viewports};
+use logic::app::{App, Confirmation, Mode, Viewports};
 use logic::event::Event as L;
 use logic::event::ViewId as LV;
 use logic::log::{Layer, LogEntry, LogLevel};
@@ -141,8 +141,8 @@ fn every_event_converts() {
     let cases: [(U, L); 30] = [
         (U::SwitchView(UV::Log), L::SwitchView(LV::Log)),
         (U::Quit, L::Quit),
-        (U::ConfirmQuit, L::ConfirmQuit),
-        (U::CancelQuit, L::CancelQuit),
+        (U::Yes, L::Yes),
+        (U::No, L::No),
         (U::Reload, L::Reload),
         (U::MoveDown, L::MoveDown),
         (U::MoveUp, L::MoveUp),
@@ -194,8 +194,8 @@ fn modes_convert() {
     app.handle(L::StartSearch, &NoPorts);
     assert_eq!(input_mode(app.mode()), ui::event::InputMode::Text);
     assert_eq!(
-        input_mode(&Mode::QuitConfirm),
-        ui::event::InputMode::QuitConfirm
+        input_mode(&Mode::Confirm(Confirmation::Quit)),
+        ui::event::InputMode::Confirm
     );
 }
 

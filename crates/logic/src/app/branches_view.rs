@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use super::{App, Mode, Note, Prompt, PromptKind};
+use super::{App, Confirmation, Mode, Note, Prompt, PromptKind};
 use crate::cursor::Cursor;
 use crate::event::Event;
 use crate::graph::{GraphBuilder, GraphRow};
@@ -401,9 +401,14 @@ impl App {
                 ports.log(LogLevel::Error, message);
                 self.note = Note::Problem(message.to_string());
             }
-            [branch] => self.delete_branch(&branch.clone(), ports),
+            [branch] => self.confirm_delete_branch(branch.clone()),
             _ => self.open_prompt(PromptKind::DeleteBranch { branches }),
         }
+    }
+
+    /// Asks for confirmation before deleting `branch`: it is deleted also when not merged.
+    pub(super) fn confirm_delete_branch(&mut self, name: String) {
+        self.mode = Mode::Confirm(Confirmation::DeleteBranch { name });
     }
 
     pub(super) fn delete_branch(&mut self, branch: &str, ports: &dyn Ports) {

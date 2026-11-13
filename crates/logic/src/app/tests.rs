@@ -1,4 +1,4 @@
-use super::{App, Mode, Note, Prompt, PromptKind, Viewports};
+use super::{App, Confirmation, Mode, Note, Prompt, PromptKind, Viewports};
 use crate::event::{Event, ViewId};
 use crate::log::{Layer, LogEntry, LogLevel};
 use crate::ports::Ports;
@@ -50,11 +50,11 @@ fn starts_in_branches_view() {
 fn quit_needs_confirmation() {
     let mut app: App = App::new();
     run(&mut app, &[Event::Quit]);
-    assert_eq!(app.mode(), &Mode::QuitConfirm);
-    run(&mut app, &[Event::CancelQuit]);
+    assert_eq!(app.mode(), &Mode::Confirm(Confirmation::Quit));
+    run(&mut app, &[Event::No]);
     assert_eq!(app.mode(), &Mode::Normal);
     assert!(!app.should_quit());
-    run(&mut app, &[Event::Quit, Event::ConfirmQuit]);
+    run(&mut app, &[Event::Quit, Event::Yes]);
     assert!(app.should_quit());
 }
 

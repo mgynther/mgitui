@@ -19,11 +19,11 @@ impl Git {
         Ok(())
     }
 
-    /// Deletes local branch `name`. Git refuses branches that are not merged.
+    /// Deletes local branch `name`, also when it is not merged, as after a squash merge.
     ///
     /// # Errors
     ///
-    /// Fails when git fails, for example when the branch is not merged or is checked out.
+    /// Fails when git fails, for example when the branch is checked out.
     pub fn delete_branch(&self, name: &str, log: &Log<'_>) -> Result<(), GitError> {
         let command: Command = Command::DeleteBranch {
             name: name.to_string(),
@@ -234,7 +234,7 @@ mod tests {
     }
 
     #[test]
-    fn delete_merged_branch_only() {
+    fn delete_merged_and_unmerged_branches() {
         let repo: TestRepo = TestRepo::new();
         repo.git_ok(&["commit", "-q", "--allow-empty", "-m", "base"]);
         repo.git_ok(&["branch", "merged"]);
@@ -243,13 +243,14 @@ mod tests {
         repo.git_ok(&["switch", "-q", "main"]);
         let logged: Logged = Logged::new();
         repo.git().delete_branch("merged", &logged.log()).unwrap();
+        repo.git().delete_branch("unmerged", &logged.log()).unwrap();
         assert!(matches!(
-            repo.git().delete_branch("unmerged", &logged.log()),
+            repo.git().delete_branch("main", &logged.log()),
             Err(GitError::Failed { .. })
         ));
         assert_eq!(
             repo.git_ok(&["branch", "--format=%(refname:short)"]),
-            "main\nunmerged\n"
+            "main\n"
         );
     }
 }

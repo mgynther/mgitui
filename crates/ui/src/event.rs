@@ -20,8 +20,8 @@ pub enum InputMode {
     Normal,
     /// Keys are typed into a prompt.
     Text,
-    /// The quit prompt is shown.
-    QuitConfirm,
+    /// A y/n confirmation is shown.
+    Confirm,
 }
 
 /// Something the user asked for.
@@ -31,10 +31,10 @@ pub enum Event {
     SwitchView(ViewId),
     /// Ask whether to quit.
     Quit,
-    /// Quit for real.
-    ConfirmQuit,
-    /// Do not quit.
-    CancelQuit,
+    /// Answer yes to a y/n confirmation.
+    Yes,
+    /// Answer no to a y/n confirmation.
+    No,
     /// Reload everything from git.
     Reload,
     /// Move the selection down.
@@ -94,10 +94,10 @@ pub enum Event {
 pub fn event_for(key: Key, view: ViewId, mode: InputMode) -> Option<Event> {
     match mode {
         InputMode::Text => text_event(key),
-        InputMode::QuitConfirm => Some(if key == Key::Char('y') {
-            Event::ConfirmQuit
+        InputMode::Confirm => Some(if key == Key::Char('y') {
+            Event::Yes
         } else {
-            Event::CancelQuit
+            Event::No
         }),
         InputMode::Normal => common_event(key).or_else(|| view_event(key, view)),
     }
@@ -237,16 +237,16 @@ mod tests {
     #[test]
     fn quit_prompt_keys() {
         assert_eq!(
-            event_for(Key::Char('y'), ViewId::Log, InputMode::QuitConfirm),
-            Some(Event::ConfirmQuit)
+            event_for(Key::Char('y'), ViewId::Log, InputMode::Confirm),
+            Some(Event::Yes)
         );
         assert_eq!(
-            event_for(Key::Char('n'), ViewId::Log, InputMode::QuitConfirm),
-            Some(Event::CancelQuit)
+            event_for(Key::Char('n'), ViewId::Log, InputMode::Confirm),
+            Some(Event::No)
         );
         assert_eq!(
-            event_for(Key::Esc, ViewId::Log, InputMode::QuitConfirm),
-            Some(Event::CancelQuit)
+            event_for(Key::Esc, ViewId::Log, InputMode::Confirm),
+            Some(Event::No)
         );
     }
 }

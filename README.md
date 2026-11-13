@@ -114,7 +114,7 @@ The code is split into one crate per layer under `crates/`: `git`, `logic`, `ui`
 | c | Branches | create a branch at the selected commit |
 | h | Branches | check out the commit's local branch |
 | p | Branches | cherry-pick the selected commit onto the checked out branch |
-| d | Branches | delete a merged local branch of the selected commit that is not checked out |
+| d | Branches | delete a local branch of the selected commit that is not checked out, after confirming with y (also when not merged) |
 | b | Branches | rebase a branch of the selected commit onto another local branch or remote main/master |
 | i | Branches | the same as b, interactively: git opens Vim for the todo list |
 | s | Diff file lists | switch between unstaged and staged |

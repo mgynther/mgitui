@@ -18,10 +18,10 @@ pub enum Event {
     SwitchView(ViewId),
     /// Ask whether to quit.
     Quit,
-    /// Quit for real.
-    ConfirmQuit,
-    /// Do not quit.
-    CancelQuit,
+    /// Answer yes to a y/n confirmation.
+    Yes,
+    /// Answer no to a y/n confirmation.
+    No,
     /// Reload everything from git.
     Reload,
     /// Move the selection down.

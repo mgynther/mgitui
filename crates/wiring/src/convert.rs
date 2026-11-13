@@ -1,8 +1,8 @@
 //! Conversions between the types of the logic and ui layers.
 
 use logic::app::{
-    App, BranchesPane, BranchesState, DiffPane, DiffState, Mode, Note, Prompt, PromptKind,
-    Viewports,
+    App, BranchesPane, BranchesState, Confirmation, DiffPane, DiffState, Mode, Note, Prompt,
+    PromptKind, Viewports,
 };
 use logic::cursor::Cursor;
 use logic::graph::{Cell, CommitSide, Shape};
@@ -17,8 +17,8 @@ pub fn event(event: ui::event::Event) -> logic::event::Event {
     match event {
         U::SwitchView(view) => L::SwitchView(logic_view(view)),
         U::Quit => L::Quit,
-        U::ConfirmQuit => L::ConfirmQuit,
-        U::CancelQuit => L::CancelQuit,
+        U::Yes => L::Yes,
+        U::No => L::No,
         U::Reload => L::Reload,
         U::MoveDown => L::MoveDown,
         U::MoveUp => L::MoveUp,
@@ -73,7 +73,7 @@ pub fn ui_view(view: logic::event::ViewId) -> ui::event::ViewId {
 pub fn input_mode(mode: &Mode) -> ui::event::InputMode {
     match mode {
         Mode::Normal => ui::event::InputMode::Normal,
-        Mode::QuitConfirm => ui::event::InputMode::QuitConfirm,
+        Mode::Confirm(_) => ui::event::InputMode::Confirm,
         Mode::Prompt(_) => ui::event::InputMode::Text,
     }
 }
@@ -114,8 +114,13 @@ pub fn screen(app: &App) -> ui::screen::Screen {
 
 fn status(app: &App) -> ui::screen::Status {
     match (app.mode(), app.note()) {
-        (Mode::QuitConfirm, _) => ui::screen::Status::Prompt {
-            label: "Quit? y/n".to_string(),
+        (Mode::Confirm(confirmation), _) => ui::screen::Status::Prompt {
+            label: match confirmation {
+                Confirmation::Quit => "Quit? y/n".to_string(),
+                Confirmation::DeleteBranch { name } => {
+                    format!("Delete branch {name} even if it is not merged? y/n")
+                }
+            },
             text: String::new(),
             problem: None,
         },

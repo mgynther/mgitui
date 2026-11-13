@@ -1,4 +1,4 @@
-use super::{App, Mode, Note, Prompt, PromptKind};
+use super::{App, Confirmation, Mode, Note, Prompt, PromptKind};
 use crate::event::Event;
 use crate::model::{Label, Refs};
 use crate::test_ports::{TestPorts, linear_history};
@@ -497,6 +497,17 @@ fn delete_the_only_branch_that_is_not_checked_out() {
     let mut app: App = loaded_app(&ports);
     run(&mut app, &ports, &[Event::DeleteBranch]);
     assert_eq!(
+        app.mode(),
+        &Mode::Confirm(Confirmation::DeleteBranch {
+            name: "old".to_string()
+        })
+    );
+    assert_eq!(actions(&ports), Vec::<String>::new());
+    run(&mut app, &ports, &[Event::No]);
+    assert_eq!(app.mode(), &Mode::Normal);
+    assert_eq!(actions(&ports), Vec::<String>::new());
+    run(&mut app, &ports, &[Event::DeleteBranch, Event::Yes]);
+    assert_eq!(
         actions(&ports),
         vec!["Info: delete branch old", "delete old"]
     );
@@ -517,7 +528,11 @@ fn delete_asks_which_branch() {
             text: String::new()
         })
     );
-    run(&mut app, &ports, &[Event::Input('2'), Event::InputSubmit]);
+    run(
+        &mut app,
+        &ports,
+        &[Event::Input('2'), Event::InputSubmit, Event::Yes],
+    );
     assert_eq!(actions(&ports), vec!["Info: delete branch b", "delete b"]);
     run(
         &mut app,
@@ -550,7 +565,11 @@ fn delete_problems() {
         ..labelled_ports(vec![local("old")])
     };
     let mut failing_app: App = loaded_app(&failing);
-    run(&mut failing_app, &failing, &[Event::DeleteBranch]);
+    run(
+        &mut failing_app,
+        &failing,
+        &[Event::DeleteBranch, Event::Yes],
+    );
     assert_eq!(
         failing_app.note(),
         &Note::Problem("Deleting the branch failed, see the Log view".to_string())

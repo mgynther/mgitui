@@ -31,10 +31,22 @@ use crate::search::{Direction, Found};
 pub enum Mode {
     /// Keys are commands.
     Normal,
-    /// The quit prompt is shown.
-    QuitConfirm,
+    /// A y/n confirmation is shown.
+    Confirm(Confirmation),
     /// Keys are typed into a prompt.
     Prompt(Prompt),
+}
+
+/// What a y/n confirmation is about.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Confirmation {
+    /// Quitting the application.
+    Quit,
+    /// Deleting a local branch, also when it is not merged.
+    DeleteBranch {
+        /// The branch name.
+        name: String,
+    },
 }
 
 /// A text prompt in the status line.
@@ -235,11 +247,14 @@ impl App {
     pub fn handle(&mut self, event: Event, ports: &dyn Ports) {
         self.note = Note::None;
         match &mut self.mode {
-            Mode::QuitConfirm => {
-                if event == Event::ConfirmQuit {
-                    self.quit = true;
-                } else {
-                    self.mode = Mode::Normal;
+            Mode::Confirm(confirmation) => {
+                let confirmation: Confirmation = confirmation.clone();
+                self.mode = Mode::Normal;
+                if event == Event::Yes {
+                    match confirmation {
+                        Confirmation::Quit => self.quit = true,
+                        Confirmation::DeleteBranch { name } => self.delete_branch(&name, ports),
+                    }
                 }
             }
             Mode::Prompt(prompt) => match event {
@@ -261,7 +276,7 @@ impl App {
 
     fn handle_normal(&mut self, event: Event, ports: &dyn Ports) {
         match event {
-            Event::Quit => self.mode = Mode::QuitConfirm,
+            Event::Quit => self.mode = Mode::Confirm(Confirmation::Quit),
             Event::SwitchView(view) => self.switch_view(view),
             Event::Reload => self.reload(ports),
             Event::StartSearch => self.open_prompt(PromptKind::Search),
@@ -312,7 +327,7 @@ impl App {
             }
             PromptKind::DeleteBranch { branches } => {
                 if let Some(branch) = self.choose(prompt, branches, ports) {
-                    self.delete_branch(&branch, ports);
+                    self.confirm_delete_branch(branch);
                 }
             }
             PromptKind::RebaseBranch {

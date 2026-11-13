@@ -166,6 +166,13 @@ pub trait Ports {
     /// Fails when git fails, for example when the branch is not merged.
     fn delete_branch(&self, name: &str) -> Result<(), Failed>;
 
+    /// Fetches all remotes with `git remote update`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails, for example when a remote cannot be reached.
+    fn remote_update(&self) -> Result<(), Failed>;
+
     /// Cherry-picks a commit onto the checked out branch.
     ///
     /// # Errors

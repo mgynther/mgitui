@@ -25,6 +25,20 @@ impl SessionPorts<'_> {
         |level: validation::log::LogLevel, message: &str| self.log.validation(level, message)
     }
 
+    /// Runs `run` with the terminal handed over, for git commands that may use the terminal.
+    fn with_terminal(&self, run: &mut dyn FnMut() -> Result<(), Failed>) -> Result<(), Failed> {
+        let mut result: Result<(), Failed> = Err(Failed);
+        let handed: std::io::Result<()> = (self.handoff)(&mut || result = run());
+        if let Err(error) = handed {
+            self.log.wiring(
+                LogLevel::Error,
+                &format!("handing the terminal to git failed: {error}"),
+            );
+            return Err(Failed);
+        }
+        result
+    }
+
     fn log_git(&self) -> impl Fn(git::log::LogLevel, &str) + '_ {
         |level: git::log::LogLevel, message: &str| self.log.git(level, message)
     }
@@ -164,6 +178,10 @@ impl logic::ports::Ports for SessionPorts<'_> {
             .map_err(|_| Failed)
     }
 
+    fn remote_update(&self) -> Result<(), Failed> {
+        self.with_terminal(&mut || self.git.remote_update(&self.log_git()).map_err(|_| Failed))
+    }
+
     fn cherry_pick(&self, hash: &str) -> Result<(), Failed> {
         self.git
             .cherry_pick(hash, &self.log_git())
@@ -177,21 +195,11 @@ impl logic::ports::Ports for SessionPorts<'_> {
                 .rebase(branch, onto, &self.log_git())
                 .map_err(|_| Failed);
         }
-        let mut result: Result<(), Failed> = Err(Failed);
-        let handed: std::io::Result<()> = (self.handoff)(&mut || {
-            result = self
-                .git
+        self.with_terminal(&mut || {
+            self.git
                 .rebase_interactive(branch, onto, &self.log_git())
-                .map_err(|_| Failed);
-        });
-        if let Err(error) = handed {
-            self.log.wiring(
-                LogLevel::Error,
-                &format!("handing the terminal to git failed: {error}"),
-            );
-            return Err(Failed);
-        }
-        result
+                .map_err(|_| Failed)
+        })
     }
 
     fn checkout(&self, branch: &str) -> Result<(), Failed> {

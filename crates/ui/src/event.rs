@@ -63,6 +63,8 @@ pub enum Event {
     Checkout,
     /// Cherry-pick the selected commit onto the checked out branch.
     CherryPick,
+    /// Fetch all remotes with `git remote update`.
+    RemoteUpdate,
     /// Delete a local branch of the selected commit that is not checked out.
     DeleteBranch,
     /// Rebase a branch of the selected commit onto another branch.
@@ -139,6 +141,7 @@ fn view_event(key: Key, view: ViewId) -> Option<Event> {
         (ViewId::Branches, Key::Char('c')) => Some(Event::CreateBranch),
         (ViewId::Branches, Key::Char('h')) => Some(Event::Checkout),
         (ViewId::Branches, Key::Char('p')) => Some(Event::CherryPick),
+        (ViewId::Branches, Key::Char('u')) => Some(Event::RemoteUpdate),
         (ViewId::Branches, Key::Char('d')) => Some(Event::DeleteBranch),
         (ViewId::Branches, Key::Char('b')) => Some(Event::Rebase),
         (ViewId::Branches, Key::Char('i')) => Some(Event::InteractiveRebase),
@@ -184,7 +187,7 @@ mod tests {
 
     #[test]
     fn view_specific_keys() {
-        let cases: [(ViewId, Key, Option<Event>); 19] = [
+        let cases: [(ViewId, Key, Option<Event>); 20] = [
             (ViewId::Branches, Key::Char('w'), Some(Event::NextPane)),
             (ViewId::Diff, Key::Char('w'), Some(Event::NextPane)),
             (ViewId::Log, Key::Char('w'), None),
@@ -193,6 +196,7 @@ mod tests {
             (ViewId::Branches, Key::Char('c'), Some(Event::CreateBranch)),
             (ViewId::Branches, Key::Char('h'), Some(Event::Checkout)),
             (ViewId::Branches, Key::Char('p'), Some(Event::CherryPick)),
+            (ViewId::Branches, Key::Char('u'), Some(Event::RemoteUpdate)),
             (ViewId::Branches, Key::Char('d'), Some(Event::DeleteBranch)),
             (ViewId::Branches, Key::Char('b'), Some(Event::Rebase)),
             (

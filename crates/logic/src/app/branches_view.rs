@@ -517,6 +517,16 @@ impl App {
         };
     }
 
+    pub(super) fn remote_update(&mut self, ports: &dyn Ports) {
+        ports.log(LogLevel::Info, "remote update");
+        let result: Result<(), Failed> = ports.remote_update();
+        self.refresh(ports);
+        self.note = match result {
+            Ok(()) => Note::Info("Updated remotes".to_string()),
+            Err(Failed) => Note::Problem("Remote update failed, see the Log view".to_string()),
+        };
+    }
+
     pub(super) fn cherry_pick(&mut self, ports: &dyn Ports) {
         let Some(hash) = self.branches.selected().map(|c: &Commit| c.hash.clone()) else {
             self.note = Note::Info("No commit selected".to_string());

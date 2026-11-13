@@ -32,6 +32,17 @@ impl Git {
         Ok(())
     }
 
+    /// Fetches all remotes. Git and ssh ask for passwords on the terminal, so the caller must
+    /// hand the terminal over; the output is still captured and logged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails, for example when a remote cannot be reached.
+    pub fn remote_update(&self, log: &Log<'_>) -> Result<(), GitError> {
+        self.run(&Command::RemoteUpdate, None, log)?;
+        Ok(())
+    }
+
     /// Checks out local branch `branch`.
     ///
     /// # Errors
@@ -252,5 +263,26 @@ mod tests {
             repo.git_ok(&["branch", "--format=%(refname:short)"]),
             "main\n"
         );
+    }
+
+    #[test]
+    fn remote_update_fetches_all_remotes() {
+        let upstream: TestRepo = TestRepo::new();
+        upstream.git_ok(&["commit", "-q", "--allow-empty", "-m", "upstream work"]);
+        let repo: TestRepo = TestRepo::new();
+        let url: String = upstream.path().to_string_lossy().into_owned();
+        repo.git_ok(&["remote", "add", "origin", &url]);
+        let logged: Logged = Logged::new();
+        repo.git().remote_update(&logged.log()).unwrap();
+        assert_eq!(
+            repo.git_ok(&["log", "--format=%s", "origin/main"]),
+            "upstream work\n"
+        );
+        assert_eq!(logged.lines()[0], "Info: git remote update (exit 0)");
+        repo.git_ok(&["remote", "set-url", "origin", "/nonexistent/repo"]);
+        assert!(matches!(
+            repo.git().remote_update(&logged.log()),
+            Err(GitError::Failed { .. })
+        ));
     }
 }

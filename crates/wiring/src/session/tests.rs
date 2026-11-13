@@ -547,3 +547,28 @@ fn delete_branches_that_are_not_checked_out() {
         "main\n"
     );
 }
+
+#[test]
+fn remote_update_shows_fetched_branches() {
+    let upstream: TempDir = TempDir::new();
+    init_repo(upstream.path());
+    git_ok(
+        upstream.path(),
+        &["commit", "-q", "--allow-empty", "-m", "upstream work"],
+    );
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    let url: String = upstream.path().to_string_lossy().into_owned();
+    git_ok(dir.path(), &["remote", "add", "origin", &url]);
+    let mut s: Session = session_in(&dir);
+    s.input(b"u");
+    let screen: ui::buffer::Buffer = s.render(SIZE);
+    assert_eq!(screen.row_text(23).trim_end(), "Updated remotes");
+    assert!(
+        screen
+            .row_text(2)
+            .starts_with("●  [origin/main] upstream work"),
+        "{}",
+        screen.row_text(2)
+    );
+}

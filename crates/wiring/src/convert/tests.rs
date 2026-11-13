@@ -99,6 +99,10 @@ impl logic::ports::Ports for NoPorts {
         Err(logic::ports::Failed)
     }
 
+    fn remote_update(&self) -> Result<(), logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
     fn cherry_pick(&self, _hash: &str) -> Result<(), logic::ports::Failed> {
         Err(logic::ports::Failed)
     }
@@ -138,7 +142,7 @@ impl logic::ports::Ports for NoPorts {
 
 #[test]
 fn every_event_converts() {
-    let cases: [(U, L); 30] = [
+    let cases: [(U, L); 31] = [
         (U::SwitchView(UV::Log), L::SwitchView(LV::Log)),
         (U::Quit, L::Quit),
         (U::Yes, L::Yes),
@@ -157,6 +161,7 @@ fn every_event_converts() {
         (U::CreateBranch, L::CreateBranch),
         (U::Checkout, L::Checkout),
         (U::CherryPick, L::CherryPick),
+        (U::RemoteUpdate, L::RemoteUpdate),
         (U::DeleteBranch, L::DeleteBranch),
         (U::Rebase, L::Rebase),
         (U::InteractiveRebase, L::InteractiveRebase),

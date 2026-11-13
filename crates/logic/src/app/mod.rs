@@ -289,6 +289,7 @@ impl App {
                     Event::CreateBranch => self.start_create_branch(),
                     Event::Checkout => self.start_checkout(ports),
                     Event::CherryPick => self.cherry_pick(ports),
+                    Event::RemoteUpdate => self.remote_update(ports),
                     Event::DeleteBranch => self.start_delete_branch(ports),
                     Event::Rebase => self.start_rebase(false, ports),
                     Event::InteractiveRebase => self.start_rebase(true, ports),

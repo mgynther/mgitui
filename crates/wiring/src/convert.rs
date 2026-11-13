@@ -33,6 +33,7 @@ pub fn event(event: ui::event::Event) -> logic::event::Event {
         U::CreateBranch => L::CreateBranch,
         U::Checkout => L::Checkout,
         U::CherryPick => L::CherryPick,
+        U::RemoteUpdate => L::RemoteUpdate,
         U::DeleteBranch => L::DeleteBranch,
         U::Rebase => L::Rebase,
         U::InteractiveRebase => L::InteractiveRebase,

@@ -49,6 +49,7 @@ fn actions(ports: &TestPorts) -> Vec<String> {
                 || c.starts_with("checkout")
                 || c.starts_with("cherry-pick")
                 || c.starts_with("delete")
+                || c.starts_with("remote")
                 || c.starts_with("rebase")
                 || c.contains(": ")
         })
@@ -573,5 +574,27 @@ fn delete_problems() {
     assert_eq!(
         failing_app.note(),
         &Note::Problem("Deleting the branch failed, see the Log view".to_string())
+    );
+}
+
+#[test]
+fn remote_update_fetches_and_reloads() {
+    let ports: TestPorts = labelled_ports(vec![]);
+    let mut app: App = loaded_app(&ports);
+    run(&mut app, &ports, &[Event::RemoteUpdate]);
+    assert_eq!(
+        actions(&ports),
+        vec!["Info: remote update", "remote update"]
+    );
+    assert!(ports.calls().contains(&"refs".to_string()));
+    assert_eq!(app.note(), &Note::Info("Updated remotes".to_string()));
+    let failing: TestPorts = TestPorts {
+        branch_fails: true,
+        ..labelled_ports(vec![])
+    };
+    run(&mut app, &failing, &[Event::RemoteUpdate]);
+    assert_eq!(
+        app.note(),
+        &Note::Problem("Remote update failed, see the Log view".to_string())
     );
 }

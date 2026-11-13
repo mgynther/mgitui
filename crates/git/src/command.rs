@@ -82,6 +82,8 @@ pub enum Command {
         /// The branch name.
         name: String,
     },
+    /// `git remote update`: fetches all remotes.
+    RemoteUpdate,
     /// `git cherry-pick <commit>`: applies a commit onto the checked out branch.
     CherryPick {
         /// The commit hash.
@@ -164,6 +166,7 @@ impl Command {
             Command::CreateBranch { .. } => &["branch"],
             Command::Switch { .. } => &["switch"],
             Command::CherryPick { .. } => &["cherry-pick"],
+            Command::RemoteUpdate => &["remote", "update"],
             Command::DeleteBranch { .. } => &["branch", "-D"],
             Command::Rebase { .. } => &["rebase"],
             Command::RebaseInteractive { .. } => &["rebase", "-i"],
@@ -214,7 +217,8 @@ impl Command {
             | Command::ApplyCached { .. }
             | Command::LastMessage
             | Command::Log { .. }
-            | Command::Refs => {}
+            | Command::Refs
+            | Command::RemoteUpdate => {}
         }
         args
     }
@@ -364,6 +368,7 @@ mod tests {
             }),
             "cherry-pick abc"
         );
+        assert_eq!(args(&Command::RemoteUpdate), "remote update");
         assert_eq!(
             args(&Command::DeleteBranch {
                 name: "old".to_string()

@@ -45,6 +45,8 @@ pub enum Status {
         label: String,
         /// The typed text.
         text: String,
+        /// A problem with the last submitted text, shown in red after the prompt.
+        problem: Option<String>,
     },
 }
 
@@ -102,10 +104,19 @@ fn draw_status(buffer: &mut Buffer, status: &Status, size: Size) {
         Status::Empty => 0,
         Status::Note(text) => buffer.put_str(0, y, text, Style::PLAIN, size.width),
         Status::Problem(text) => buffer.put_str(0, y, text, Style::fg(Color::Red), size.width),
-        Status::Prompt { label, text } => {
+        Status::Prompt {
+            label,
+            text,
+            problem,
+        } => {
             let used: usize = buffer.put_str(0, y, label, Style::PLAIN.bold(), size.width);
             let typed: usize = buffer.put_str(used, y, text, Style::PLAIN, size.width - used);
-            buffer.put_str(used + typed, y, " ", Style::PLAIN.reversed_if(true), 1)
+            let x: usize = used + typed;
+            let cursor: usize = buffer.put_str(x, y, " ", Style::PLAIN.reversed_if(true), 1);
+            problem.as_ref().map_or(0, |problem: &String| {
+                let shown: String = format!("  {problem}");
+                buffer.put_str(x + cursor, y, &shown, Style::fg(Color::Red), size.width)
+            })
         }
     };
 }
@@ -265,6 +276,7 @@ mod tests {
                 Status::Prompt {
                     label: "/".to_string(),
                     text: "abc".to_string(),
+                    problem: None,
                 },
                 Body::Log(LogView { rows: vec![] }),
             ),
@@ -272,6 +284,20 @@ mod tests {
         );
         assert_eq!(prompt.row_text(23).trim_end(), "/abc");
         assert!(prompt.cell(4, 23).unwrap().style.reverse);
+        let with_problem: Buffer = render(
+            &screen(
+                ViewId::Log,
+                Status::Prompt {
+                    label: "> ".to_string(),
+                    text: "7".to_string(),
+                    problem: Some("bad".to_string()),
+                },
+                Body::Log(LogView { rows: vec![] }),
+            ),
+            SIZE,
+        );
+        assert_eq!(with_problem.row_text(23).trim_end(), "> 7   bad");
+        assert_eq!(with_problem.cell(6, 23).unwrap().style.fg, Color::Red);
     }
 
     #[test]

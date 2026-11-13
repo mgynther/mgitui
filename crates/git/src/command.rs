@@ -70,6 +70,18 @@ pub enum Command {
         /// The path, or the original and new path of a rename.
         paths: Vec<String>,
     },
+    /// `git branch <name> <commit>`: creates a branch without checking it out.
+    CreateBranch {
+        /// The new branch name.
+        name: String,
+        /// The commit the branch points to.
+        at: String,
+    },
+    /// `git switch <branch>`: checks out a local branch.
+    Switch {
+        /// The branch name.
+        branch: String,
+    },
     /// `git commit -F <file>`: commits with the message in a file.
     Commit {
         /// The file that contains the message.
@@ -124,6 +136,8 @@ impl Command {
                 "--diff-merges=first-parent",
                 "-M",
             ],
+            Command::CreateBranch { .. } => &["branch"],
+            Command::Switch { .. } => &["switch"],
             Command::Refs => &[
                 "for-each-ref",
                 "--format=%(HEAD)%00%(objectname)%00%(*objectname)%00%(refname)",
@@ -149,6 +163,11 @@ impl Command {
             Command::CommitMessage { hash } | Command::CommitFiles { hash } => {
                 args.push(hash.clone());
             }
+            Command::CreateBranch { name, at } => {
+                args.push(name.clone());
+                args.push(at.clone());
+            }
+            Command::Switch { branch } => args.push(branch.clone()),
             Command::CommitFileDiff { hash, paths } => {
                 args.push(hash.clone());
                 args.push("--".to_string());
@@ -270,6 +289,23 @@ mod tests {
                 paths: vec!["o".to_string(), "n".to_string()]
             }),
             "show --format= --no-ext-diff --diff-merges=first-parent -M abc -- o n"
+        );
+    }
+
+    #[test]
+    fn branch_arguments() {
+        assert_eq!(
+            args(&Command::CreateBranch {
+                name: "feature".to_string(),
+                at: "abc".to_string()
+            }),
+            "branch feature abc"
+        );
+        assert_eq!(
+            args(&Command::Switch {
+                branch: "main".to_string()
+            }),
+            "switch main"
         );
     }
 

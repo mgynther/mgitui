@@ -119,6 +119,11 @@ fn git_failures_become_failed() {
     assert_eq!(ports.commits(0, 1), Err(Failed));
     assert_eq!(ports.refs(), Err(Failed));
     assert_eq!(ports.commit_message("h"), Err(Failed));
+    assert_eq!(
+        ports.create_branch(&logic::ports::BranchName("b".to_string()), "h"),
+        Err(Failed)
+    );
+    assert_eq!(ports.checkout("b"), Err(Failed));
     assert_eq!(ports.commit_files("h"), Err(Failed));
     assert_eq!(
         ports.commit_file_diff("h", &file("x", ChangeKind::Modified)),
@@ -235,10 +240,44 @@ fn refs_fail_when_head_fails() {
     with_ports(dir.path(), |ports: &SessionPorts<'_>, _log: &LogBuffer| {
         assert_eq!(ports.refs(), Err(Failed));
         assert_eq!(ports.commit_message("h"), Err(Failed));
+        assert_eq!(
+            ports.create_branch(&logic::ports::BranchName("b".to_string()), "h"),
+            Err(Failed)
+        );
+        assert_eq!(ports.checkout("b"), Err(Failed));
         assert_eq!(ports.commit_files("h"), Err(Failed));
         assert_eq!(
             ports.commit_file_diff("h", &file("x", ChangeKind::Modified)),
             Err(Failed)
         );
+    });
+}
+
+#[test]
+fn branch_validation_creation_and_checkout() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    git_ok(dir.path(), &["commit", "-q", "--allow-empty", "-m", "one"]);
+    with_ports(dir.path(), |ports: &SessionPorts<'_>, log: &LogBuffer| {
+        assert_eq!(
+            ports.validate_branch_name("a..b"),
+            Err("invalid branch name: it contains '..'".to_string())
+        );
+        assert_eq!(ports.validate_checkout_choice("2", 3), Ok(1));
+        assert_eq!(
+            ports.validate_checkout_choice("9", 3),
+            Err("choice must be a number from 1 to 3".to_string())
+        );
+        let name: logic::ports::BranchName = ports.validate_branch_name("topic").unwrap();
+        let head: String = ports.commits(0, 1).unwrap()[0].hash.clone();
+        ports.create_branch(&name, &head).unwrap();
+        ports.checkout("topic").unwrap();
+        assert_eq!(git_ok(dir.path(), &["branch", "--show-current"]), "topic\n");
+        let validation_errors: usize = log
+            .drain()
+            .iter()
+            .filter(|e: &&LogEntry| e.layer == Layer::Validation)
+            .count();
+        assert_eq!(validation_errors, 2);
     });
 }

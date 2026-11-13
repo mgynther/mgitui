@@ -7,6 +7,10 @@ use crate::model::{ChangedFile, Commit, FileDiff, Refs, Side, WorkStatus};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SearchText(pub String);
 
+/// A branch name that passed validation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BranchName(pub String);
+
 /// A commit message that passed validation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommitMessage(pub String);
@@ -132,4 +136,33 @@ pub trait Ports {
     ///
     /// Fails when git fails.
     fn commit_file_diff(&self, hash: &str, file: &ChangedFile) -> Result<FileDiff, Failed>;
+
+    /// Validates a branch name typed by the user.
+    ///
+    /// # Errors
+    ///
+    /// Returns a short description when the name is not valid.
+    fn validate_branch_name(&self, input: &str) -> Result<BranchName, String>;
+
+    /// Validates a number typed to choose one of `count` listed items. Returns the zero-based
+    /// index of the item.
+    ///
+    /// # Errors
+    ///
+    /// Returns a short description when the input is not one of the listed numbers.
+    fn validate_checkout_choice(&self, input: &str, count: usize) -> Result<usize, String>;
+
+    /// Creates a branch at a commit without checking it out.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn create_branch(&self, name: &BranchName, at: &str) -> Result<(), Failed>;
+
+    /// Checks out a local branch.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails, for example with local changes in the way.
+    fn checkout(&self, branch: &str) -> Result<(), Failed>;
 }

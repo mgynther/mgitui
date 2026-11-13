@@ -6,7 +6,7 @@ use crate::log::LogLevel;
 use crate::model::{
     ChangeKind, ChangedFile, Commit, DiffLine, FileDiff, Hunk, LineKind, Refs, Side, WorkStatus,
 };
-use crate::ports::{CommitMessage, Failed, Ports, SearchText};
+use crate::ports::{BranchName, CommitMessage, Failed, Ports, SearchText};
 
 /// Records calls as text and answers from its fields.
 #[expect(
@@ -38,6 +38,8 @@ pub struct TestPorts {
     pub refs: RefCell<Option<Refs>>,
     /// Whether loading commit details fails.
     pub details_fail: bool,
+    /// Whether creating branches and checking out fail.
+    pub branch_fails: bool,
 }
 
 impl TestPorts {
@@ -55,6 +57,7 @@ impl TestPorts {
             history: RefCell::new(Some(Vec::new())),
             refs: RefCell::new(Some(Refs::default())),
             details_fail: false,
+            branch_fails: false,
         }
     }
 
@@ -66,6 +69,15 @@ impl TestPorts {
             staged: staged.iter().map(|p: &&str| modified(p)).collect(),
         });
         ports
+    }
+
+    fn branch_result(&self, call: String) -> Result<(), Failed> {
+        self.calls.borrow_mut().push(call);
+        if self.branch_fails {
+            Err(Failed)
+        } else {
+            Ok(())
+        }
     }
 
     fn details<T>(&self, value: T) -> Result<T, Failed> {
@@ -250,6 +262,31 @@ impl Ports for TestPorts {
             modified(&format!("{hash}.txt")),
             modified("other.txt"),
         ])
+    }
+
+    fn validate_branch_name(&self, input: &str) -> Result<BranchName, String> {
+        if input.is_empty() || input.contains(' ') {
+            Err("invalid branch name".to_string())
+        } else {
+            Ok(BranchName(input.to_string()))
+        }
+    }
+
+    fn validate_checkout_choice(&self, input: &str, count: usize) -> Result<usize, String> {
+        match input.parse::<usize>() {
+            // A broken validator, to check that logic does not trust it blindly.
+            Ok(99) => Ok(98),
+            Ok(n) if n >= 1 && n <= count => Ok(n - 1),
+            _ => Err(format!("choice must be a number from 1 to {count}")),
+        }
+    }
+
+    fn create_branch(&self, name: &BranchName, at: &str) -> Result<(), Failed> {
+        self.branch_result(format!("create {} at {at}", name.0))
+    }
+
+    fn checkout(&self, branch: &str) -> Result<(), Failed> {
+        self.branch_result(format!("checkout {branch}"))
     }
 
     fn commit_file_diff(&self, hash: &str, file: &ChangedFile) -> Result<FileDiff, Failed> {

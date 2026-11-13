@@ -2,7 +2,7 @@
 
 use logic::log::LogLevel;
 use logic::model::{ChangeKind, ChangedFile, Commit, FileDiff, Refs, Side, WorkStatus};
-use logic::ports::{CommitMessage, Failed};
+use logic::ports::{BranchName, CommitMessage, Failed};
 
 use crate::editor::{self, Editor};
 use crate::log::LogBuffer;
@@ -136,6 +136,28 @@ impl logic::ports::Ports for SessionPorts<'_> {
                     .map(|head: Option<String>| model::refs(refs, head))
             })
             .map_err(|_| Failed)
+    }
+
+    fn validate_branch_name(&self, input: &str) -> Result<BranchName, String> {
+        validation::branch_name(input, &self.log_validation())
+            .map(|name: validation::BranchName| BranchName(name.as_str().to_string()))
+            .map_err(|error: validation::ValidationError| error.to_string())
+    }
+
+    fn validate_checkout_choice(&self, input: &str, count: usize) -> Result<usize, String> {
+        validation::checkout_choice(input, count, &self.log_validation())
+            .map(validation::CheckoutChoice::index)
+            .map_err(|error: validation::ValidationError| error.to_string())
+    }
+
+    fn create_branch(&self, name: &BranchName, at: &str) -> Result<(), Failed> {
+        self.git
+            .create_branch(&name.0, at, &self.log_git())
+            .map_err(|_| Failed)
+    }
+
+    fn checkout(&self, branch: &str) -> Result<(), Failed> {
+        self.git.switch(branch, &self.log_git()).map_err(|_| Failed)
     }
 
     fn commit_message(&self, hash: &str) -> Result<String, Failed> {

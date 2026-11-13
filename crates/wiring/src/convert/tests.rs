@@ -79,6 +79,26 @@ impl logic::ports::Ports for NoPorts {
         Err(logic::ports::Failed)
     }
 
+    fn validate_branch_name(&self, _input: &str) -> Result<logic::ports::BranchName, String> {
+        Err(String::new())
+    }
+
+    fn validate_checkout_choice(&self, _input: &str, _count: usize) -> Result<usize, String> {
+        Err(String::new())
+    }
+
+    fn create_branch(
+        &self,
+        _name: &logic::ports::BranchName,
+        _at: &str,
+    ) -> Result<(), logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
+    fn checkout(&self, _branch: &str) -> Result<(), logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
     fn commit_message(&self, _hash: &str) -> Result<String, logic::ports::Failed> {
         Err(logic::ports::Failed)
     }
@@ -232,7 +252,8 @@ fn log_screen_shows_visible_rows_and_status() {
         prompt.status,
         ui::screen::Status::Prompt {
             label: "/".to_string(),
-            text: "a".to_string()
+            text: "a".to_string(),
+            problem: None,
         }
     );
     assert!(matches!(prompt.body, ui::screen::Body::Log(_)));

@@ -8,6 +8,8 @@ pub use branches_view::{BranchesPane, BranchesState, CHUNK};
 pub use diff_view::{DiffPane, DiffState};
 
 #[cfg(test)]
+mod branch_action_tests;
+#[cfg(test)]
 mod branches_tests;
 #[cfg(test)]
 mod commit_tests;
@@ -49,6 +51,16 @@ pub struct Prompt {
 pub enum PromptKind {
     /// A search in the active view.
     Search,
+    /// The name of a new branch at a commit.
+    BranchName {
+        /// The commit hash.
+        at: String,
+    },
+    /// The number of the branch to check out.
+    CheckoutChoice {
+        /// The local branches to choose from.
+        branches: Vec<String>,
+    },
 }
 
 /// A short message for the status line.
@@ -237,7 +249,11 @@ impl App {
             _ => match self.view {
                 ViewId::Log => self.handle_log(event),
                 ViewId::Diff => self.handle_diff(event, ports),
-                ViewId::Branches => self.handle_branches(event, ports),
+                ViewId::Branches => match event {
+                    Event::CreateBranch => self.start_create_branch(),
+                    Event::Checkout => self.start_checkout(ports),
+                    _ => self.handle_branches(event, ports),
+                },
             },
         }
     }
@@ -262,7 +278,11 @@ impl App {
     }
 
     fn submit(&mut self, prompt: &Prompt, ports: &dyn Ports) {
-        match prompt.kind {
+        match &prompt.kind {
+            PromptKind::BranchName { at } => self.create_branch(&prompt.text, at, ports),
+            PromptKind::CheckoutChoice { branches } => {
+                self.choose_checkout(prompt, branches, ports);
+            }
             PromptKind::Search => match ports.validate_search(&prompt.text) {
                 Ok(term) => {
                     self.terms.set(self.view, term.clone());

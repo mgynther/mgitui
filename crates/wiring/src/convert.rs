@@ -113,10 +113,15 @@ fn status(app: &App) -> ui::screen::Status {
         (Mode::QuitConfirm, _) => ui::screen::Status::Prompt {
             label: "Quit? y/n".to_string(),
             text: String::new(),
+            problem: None,
         },
-        (Mode::Prompt(prompt), _) => ui::screen::Status::Prompt {
+        (Mode::Prompt(prompt), note) => ui::screen::Status::Prompt {
             label: prompt_label(prompt),
             text: prompt.text.clone(),
+            problem: match note {
+                Note::Problem(problem) => Some(problem.clone()),
+                Note::None | Note::Info(_) => None,
+            },
         },
         (Mode::Normal, Note::None) => ui::screen::Status::Empty,
         (Mode::Normal, Note::Info(text)) => ui::screen::Status::Note(text.clone()),
@@ -125,8 +130,17 @@ fn status(app: &App) -> ui::screen::Status {
 }
 
 fn prompt_label(prompt: &Prompt) -> String {
-    match prompt.kind {
+    match &prompt.kind {
         PromptKind::Search => "/".to_string(),
+        PromptKind::BranchName { .. } => "New branch name: ".to_string(),
+        PromptKind::CheckoutChoice { branches } => {
+            let choices: Vec<String> = branches
+                .iter()
+                .enumerate()
+                .map(|(index, branch): (usize, &String)| format!("{} {branch}", index + 1))
+                .collect();
+            format!("Check out ({}): ", choices.join(", "))
+        }
     }
 }
 

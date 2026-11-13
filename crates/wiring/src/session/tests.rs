@@ -254,3 +254,48 @@ fn branches_view_shows_graph_details_and_panes() {
     s.input(b"w/sec\r");
     assert!(s.render(SIZE).row_text(13).contains("│A b.txt"));
 }
+
+#[test]
+fn create_and_check_out_branches() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    git_ok(dir.path(), &["commit", "-q", "--allow-empty", "-m", "one"]);
+    git_ok(dir.path(), &["commit", "-q", "--allow-empty", "-m", "two"]);
+    let mut s: Session = session_in(&dir);
+    s.input(b"jc");
+    assert_eq!(s.render(SIZE).row_text(23).trim_end(), "New branch name:");
+    s.input(b"bad name\r");
+    assert!(
+        s.render(SIZE)
+            .row_text(23)
+            .starts_with("invalid branch name: it contains")
+    );
+    s.input(b"cold\r");
+    assert_eq!(s.render(SIZE).row_text(23).trim_end(), "Created branch old");
+    assert!(s.render(SIZE).row_text(3).contains("[old] one"));
+    s.input(b"h");
+    assert_eq!(git_ok(dir.path(), &["branch", "--show-current"]), "old\n");
+    s.input(b"kcnew\rh");
+    assert!(
+        s.render(SIZE)
+            .row_text(23)
+            .starts_with("Check out (1 main, 2 new):")
+    );
+    s.input(b"7\r");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "Check out (1 main, 2 new): 7   choice must be a number from 1 to 2"
+    );
+    s.input(b"x");
+    let prompt: String = s.render(SIZE).row_text(23);
+    assert_eq!(
+        prompt.trim_end(),
+        "Check out (1 main, 2 new): 7x",
+        "{prompt}"
+    );
+    s.input(b"\x7f\x7f2\r");
+    assert_eq!(git_ok(dir.path(), &["branch", "--show-current"]), "new\n");
+    s.input(b"jjh");
+    assert_eq!(s.render(SIZE).row_text(23).trim_end(), "Checked out old");
+    assert_eq!(git_ok(dir.path(), &["branch", "--show-current"]), "old\n");
+}

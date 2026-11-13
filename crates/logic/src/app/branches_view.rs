@@ -2,12 +2,13 @@
 
 use std::collections::HashMap;
 
-use super::{App, Note};
+use super::{App, Mode, Note, Prompt, PromptKind};
 use crate::cursor::Cursor;
 use crate::event::Event;
 use crate::graph::{GraphBuilder, GraphRow};
+use crate::log::LogLevel;
 use crate::model::{ChangedFile, Commit, DiffRow, FileDiff, Label, Refs, diff_rows};
-use crate::ports::{Failed, Ports};
+use crate::ports::{BranchName, Failed, Ports};
 use crate::search::{self, Direction, Found};
 
 /// Commits are loaded in chunks of this size.
@@ -290,6 +291,93 @@ impl App {
                 move_cursor(&mut self.branches.diff_cursor, event, len, height);
             }
         }
+    }
+
+    pub(super) fn start_create_branch(&mut self) {
+        match self.branches.selected() {
+            Some(commit) => {
+                let at: String = commit.hash.clone();
+                self.open_prompt(PromptKind::BranchName { at });
+            }
+            None => self.note = Note::Info("No commit selected".to_string()),
+        }
+    }
+
+    pub(super) fn create_branch(&mut self, input: &str, at: &str, ports: &dyn Ports) {
+        let name: BranchName = match ports.validate_branch_name(input) {
+            Ok(name) => name,
+            Err(problem) => {
+                self.note = Note::Problem(problem);
+                return;
+            }
+        };
+        let short: &str = at.get(..7).unwrap_or(at);
+        ports.log(
+            LogLevel::Info,
+            &format!("create branch {} at {short}", name.0),
+        );
+        let result: Result<(), Failed> = ports.create_branch(&name, at);
+        self.refresh(ports);
+        self.note = match result {
+            Ok(()) => Note::Info(format!("Created branch {}", name.0)),
+            Err(Failed) => {
+                Note::Problem("Creating the branch failed, see the Log view".to_string())
+            }
+        };
+    }
+
+    /// The local branches of the selected commit.
+    fn local_branches(&self) -> Vec<String> {
+        self.branches
+            .selected()
+            .map_or(&[][..], |c: &Commit| self.branches.labels(&c.hash))
+            .iter()
+            .filter_map(|label: &Label| match label {
+                Label::Local { name, .. } => Some(name.clone()),
+                Label::Remote { .. } | Label::Tag { .. } => None,
+            })
+            .collect()
+    }
+
+    pub(super) fn start_checkout(&mut self, ports: &dyn Ports) {
+        let branches: Vec<String> = self.local_branches();
+        match branches.as_slice() {
+            [] => {
+                let message: &str = "No local branch at this commit to check out";
+                ports.log(LogLevel::Error, message);
+                self.note = Note::Problem(message.to_string());
+            }
+            [branch] => self.checkout(&branch.clone(), ports),
+            _ => self.open_prompt(PromptKind::CheckoutChoice { branches }),
+        }
+    }
+
+    pub(super) fn choose_checkout(
+        &mut self,
+        prompt: &Prompt,
+        branches: &[String],
+        ports: &dyn Ports,
+    ) {
+        match ports.validate_checkout_choice(&prompt.text, branches.len()) {
+            Ok(index) => match branches.get(index) {
+                Some(branch) => self.checkout(&branch.clone(), ports),
+                None => self.note = Note::Problem("Choice is not listed".to_string()),
+            },
+            Err(problem) => {
+                self.note = Note::Problem(problem);
+                self.mode = Mode::Prompt(prompt.clone());
+            }
+        }
+    }
+
+    fn checkout(&mut self, branch: &str, ports: &dyn Ports) {
+        ports.log(LogLevel::Info, &format!("check out {branch}"));
+        let result: Result<(), Failed> = ports.checkout(branch);
+        self.refresh(ports);
+        self.note = match result {
+            Ok(()) => Note::Info(format!("Checked out {branch}")),
+            Err(Failed) => Note::Problem("Checkout failed, see the Log view".to_string()),
+        };
     }
 
     pub(super) fn search_branches(

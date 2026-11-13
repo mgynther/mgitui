@@ -2,6 +2,7 @@
 
 pub mod log;
 
+mod branch;
 mod command;
 mod commit;
 mod diff;

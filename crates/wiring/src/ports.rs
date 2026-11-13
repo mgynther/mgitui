@@ -162,6 +162,12 @@ impl logic::ports::Ports for SessionPorts<'_> {
             .map_err(|_| Failed)
     }
 
+    fn rebase(&self, branch: &str, onto: &str) -> Result<(), Failed> {
+        self.git
+            .rebase(branch, onto, &self.log_git())
+            .map_err(|_| Failed)
+    }
+
     fn checkout(&self, branch: &str) -> Result<(), Failed> {
         self.git.switch(branch, &self.log_git()).map_err(|_| Failed)
     }

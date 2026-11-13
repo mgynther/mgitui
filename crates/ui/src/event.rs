@@ -63,6 +63,8 @@ pub enum Event {
     Checkout,
     /// Cherry-pick the selected commit onto the checked out branch.
     CherryPick,
+    /// Rebase a branch of the selected commit onto another branch.
+    Rebase,
     /// Switch between the unstaged and staged lists.
     SwitchList,
     /// Start selecting lines.
@@ -133,6 +135,7 @@ fn view_event(key: Key, view: ViewId) -> Option<Event> {
         (ViewId::Branches, Key::Char('c')) => Some(Event::CreateBranch),
         (ViewId::Branches, Key::Char('h')) => Some(Event::Checkout),
         (ViewId::Branches, Key::Char('p')) => Some(Event::CherryPick),
+        (ViewId::Branches, Key::Char('b')) => Some(Event::Rebase),
         (ViewId::Diff, Key::Char('s')) => Some(Event::SwitchList),
         (ViewId::Diff, Key::Char(' ')) => Some(Event::StartSelection),
         (ViewId::Diff, Key::Char('e')) => Some(Event::EditMessage),
@@ -175,7 +178,7 @@ mod tests {
 
     #[test]
     fn view_specific_keys() {
-        let cases: [(ViewId, Key, Option<Event>); 16] = [
+        let cases: [(ViewId, Key, Option<Event>); 17] = [
             (ViewId::Branches, Key::Char('w'), Some(Event::NextPane)),
             (ViewId::Diff, Key::Char('w'), Some(Event::NextPane)),
             (ViewId::Log, Key::Char('w'), None),
@@ -184,6 +187,7 @@ mod tests {
             (ViewId::Branches, Key::Char('c'), Some(Event::CreateBranch)),
             (ViewId::Branches, Key::Char('h'), Some(Event::Checkout)),
             (ViewId::Branches, Key::Char('p'), Some(Event::CherryPick)),
+            (ViewId::Branches, Key::Char('b'), Some(Event::Rebase)),
             (ViewId::Diff, Key::Char('p'), None),
             (ViewId::Diff, Key::Char('s'), Some(Event::SwitchList)),
             (ViewId::Diff, Key::Char(' '), Some(Event::StartSelection)),

@@ -125,6 +125,7 @@ fn git_failures_become_failed() {
     );
     assert_eq!(ports.checkout("b"), Err(Failed));
     assert_eq!(ports.cherry_pick("h"), Err(Failed));
+    assert_eq!(ports.rebase("b", "main"), Err(Failed));
     assert_eq!(ports.commit_files("h"), Err(Failed));
     assert_eq!(
         ports.commit_file_diff("h", &file("x", ChangeKind::Modified)),

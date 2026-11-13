@@ -166,6 +166,13 @@ pub trait Ports {
     /// Fails when git fails, for example on a conflict.
     fn cherry_pick(&self, hash: &str) -> Result<(), Failed>;
 
+    /// Checks out `branch` and rebases it onto `onto`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails, for example on a conflict.
+    fn rebase(&self, branch: &str, onto: &str) -> Result<(), Failed>;
+
     /// Checks out a local branch.
     ///
     /// # Errors

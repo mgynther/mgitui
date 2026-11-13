@@ -61,6 +61,18 @@ pub enum PromptKind {
         /// The local branches to choose from.
         branches: Vec<String>,
     },
+    /// The number of the branch to rebase.
+    RebaseBranch {
+        /// The local branches of the selected commit.
+        branches: Vec<String>,
+    },
+    /// The number of the branch to rebase onto.
+    RebaseOnto {
+        /// The branch being rebased.
+        branch: String,
+        /// The branches to choose from.
+        onto: Vec<String>,
+    },
 }
 
 /// A short message for the status line.
@@ -253,6 +265,7 @@ impl App {
                     Event::CreateBranch => self.start_create_branch(),
                     Event::Checkout => self.start_checkout(ports),
                     Event::CherryPick => self.cherry_pick(ports),
+                    Event::Rebase => self.start_rebase(ports),
                     _ => self.handle_branches(event, ports),
                 },
             },
@@ -282,7 +295,19 @@ impl App {
         match &prompt.kind {
             PromptKind::BranchName { at } => self.create_branch(&prompt.text, at, ports),
             PromptKind::CheckoutChoice { branches } => {
-                self.choose_checkout(prompt, branches, ports);
+                if let Some(branch) = self.choose(prompt, branches, ports) {
+                    self.checkout(&branch, ports);
+                }
+            }
+            PromptKind::RebaseBranch { branches } => {
+                if let Some(branch) = self.choose(prompt, branches, ports) {
+                    self.ask_rebase_onto(branch);
+                }
+            }
+            PromptKind::RebaseOnto { branch, onto } => {
+                if let Some(target) = self.choose(prompt, onto, ports) {
+                    self.rebase(branch, &target, ports);
+                }
             }
             PromptKind::Search => match ports.validate_search(&prompt.text) {
                 Ok(term) => {

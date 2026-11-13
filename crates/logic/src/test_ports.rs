@@ -289,6 +289,10 @@ impl Ports for TestPorts {
         self.branch_result(format!("cherry-pick {hash}"))
     }
 
+    fn rebase(&self, branch: &str, onto: &str) -> Result<(), Failed> {
+        self.branch_result(format!("rebase {branch} onto {onto}"))
+    }
+
     fn checkout(&self, branch: &str) -> Result<(), Failed> {
         self.branch_result(format!("checkout {branch}"))
     }

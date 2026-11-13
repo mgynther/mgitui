@@ -352,25 +352,77 @@ impl App {
         }
     }
 
-    pub(super) fn choose_checkout(
+    /// The item chosen in a numbered prompt. An invalid number keeps the prompt open with the
+    /// problem shown.
+    pub(super) fn choose(
         &mut self,
         prompt: &Prompt,
-        branches: &[String],
+        items: &[String],
         ports: &dyn Ports,
-    ) {
-        match ports.validate_checkout_choice(&prompt.text, branches.len()) {
-            Ok(index) => match branches.get(index) {
-                Some(branch) => self.checkout(&branch.clone(), ports),
-                None => self.note = Note::Problem("Choice is not listed".to_string()),
-            },
+    ) -> Option<String> {
+        match ports.validate_checkout_choice(&prompt.text, items.len()) {
+            Ok(index) => {
+                let item: Option<String> = items.get(index).cloned();
+                if item.is_none() {
+                    self.note = Note::Problem("Choice is not listed".to_string());
+                }
+                item
+            }
             Err(problem) => {
                 self.note = Note::Problem(problem);
                 self.mode = Mode::Prompt(prompt.clone());
+                None
             }
         }
     }
 
-    fn checkout(&mut self, branch: &str, ports: &dyn Ports) {
+    pub(super) fn start_rebase(&mut self, ports: &dyn Ports) {
+        let branches: Vec<String> = self.local_branches();
+        match branches.as_slice() {
+            [] => {
+                let message: &str = "No local branch at this commit to rebase";
+                ports.log(LogLevel::Error, message);
+                self.note = Note::Problem(message.to_string());
+            }
+            [branch] => self.ask_rebase_onto(branch.clone()),
+            _ => self.open_prompt(PromptKind::RebaseBranch { branches }),
+        }
+    }
+
+    /// Asks which branch to rebase `branch` onto: every other local branch, `main` and
+    /// `master` first.
+    pub(super) fn ask_rebase_onto(&mut self, branch: String) {
+        let mut onto: Vec<String> = self
+            .branches
+            .labels
+            .values()
+            .flatten()
+            .filter_map(|label: &Label| match label {
+                Label::Local { name, .. } if *name != branch => Some(name.clone()),
+                Label::Local { .. } | Label::Remote { .. } | Label::Tag { .. } => None,
+            })
+            .collect();
+        onto.sort_by_key(|name: &String| (name != "main", name != "master", name.clone()));
+        if onto.is_empty() {
+            self.note = Note::Info("No other local branch to rebase onto".to_string());
+        } else {
+            self.open_prompt(PromptKind::RebaseOnto { branch, onto });
+        }
+    }
+
+    pub(super) fn rebase(&mut self, branch: &str, onto: &str, ports: &dyn Ports) {
+        ports.log(LogLevel::Info, &format!("rebase {branch} onto {onto}"));
+        let result: Result<(), Failed> = ports.rebase(branch, onto);
+        self.refresh(ports);
+        self.note = match result {
+            Ok(()) => Note::Info(format!("Rebased {branch} onto {onto}")),
+            Err(Failed) => Note::Problem(
+                "Rebase failed, see the Log view; resolve it outside mgitui".to_string(),
+            ),
+        };
+    }
+
+    pub(super) fn checkout(&mut self, branch: &str, ports: &dyn Ports) {
         ports.log(LogLevel::Info, &format!("check out {branch}"));
         let result: Result<(), Failed> = ports.checkout(branch);
         self.refresh(ports);

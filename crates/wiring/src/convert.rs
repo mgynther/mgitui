@@ -33,6 +33,7 @@ pub fn event(event: ui::event::Event) -> logic::event::Event {
         U::CreateBranch => L::CreateBranch,
         U::Checkout => L::Checkout,
         U::CherryPick => L::CherryPick,
+        U::Rebase => L::Rebase,
         U::SwitchList => L::SwitchList,
         U::StartSelection => L::StartSelection,
         U::EditMessage => L::EditMessage,
@@ -135,14 +136,25 @@ fn prompt_label(prompt: &Prompt) -> String {
         PromptKind::Search => "/".to_string(),
         PromptKind::BranchName { .. } => "New branch name: ".to_string(),
         PromptKind::CheckoutChoice { branches } => {
-            let choices: Vec<String> = branches
-                .iter()
-                .enumerate()
-                .map(|(index, branch): (usize, &String)| format!("{} {branch}", index + 1))
-                .collect();
-            format!("Check out ({}): ", choices.join(", "))
+            format!("Check out ({}): ", numbered(branches))
+        }
+        PromptKind::RebaseBranch { branches } => {
+            format!("Rebase which branch ({}): ", numbered(branches))
+        }
+        PromptKind::RebaseOnto { branch, onto } => {
+            format!("Rebase {branch} onto ({}): ", numbered(onto))
         }
     }
+}
+
+/// `1 a, 2 b, ...` for a numbered prompt.
+fn numbered(items: &[String]) -> String {
+    let choices: Vec<String> = items
+        .iter()
+        .enumerate()
+        .map(|(index, item): (usize, &String)| format!("{} {item}", index + 1))
+        .collect();
+    choices.join(", ")
 }
 
 fn log_view(app: &App) -> ui::views::log::LogView {

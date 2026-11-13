@@ -50,6 +50,8 @@ pub enum Event {
     Checkout,
     /// Cherry-pick the selected commit onto the checked out branch.
     CherryPick,
+    /// Rebase a branch of the selected commit onto another branch.
+    Rebase,
     /// Switch between the unstaged and staged lists.
     SwitchList,
     /// Start selecting lines.

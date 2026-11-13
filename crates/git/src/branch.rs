@@ -47,6 +47,21 @@ impl Git {
         self.run(&command, None, log)?;
         Ok(())
     }
+
+    /// Checks out `branch` and rebases it onto `onto`. A conflict leaves the rebase in
+    /// progress for the user to resolve.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails, for example on a conflict.
+    pub fn rebase(&self, branch: &str, onto: &str, log: &Log<'_>) -> Result<(), GitError> {
+        let command: Command = Command::Rebase {
+            onto: onto.to_string(),
+            branch: branch.to_string(),
+        };
+        self.run(&command, None, log)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -114,5 +129,37 @@ mod tests {
             Err(GitError::Failed { .. })
         ));
         assert!(repo.path().join(".git/CHERRY_PICK_HEAD").exists());
+    }
+
+    #[test]
+    fn rebase_and_conflict() {
+        let repo: TestRepo = TestRepo::new();
+        repo.write("a.txt", "a\n");
+        repo.git_ok(&["add", "."]);
+        repo.git_ok(&["commit", "-q", "-m", "base"]);
+        repo.git_ok(&["switch", "-q", "-c", "topic"]);
+        repo.write("t.txt", "t\n");
+        repo.git_ok(&["add", "."]);
+        repo.git_ok(&["commit", "-q", "-m", "topic work"]);
+        repo.git_ok(&["switch", "-q", "main"]);
+        repo.write("m.txt", "m\n");
+        repo.git_ok(&["add", "."]);
+        repo.git_ok(&["commit", "-q", "-m", "main work"]);
+        let logged: Logged = Logged::new();
+        repo.git().rebase("topic", "main", &logged.log()).unwrap();
+        assert_eq!(
+            repo.git_ok(&["log", "--format=%s", "topic"]),
+            "topic work\nmain work\nbase\n"
+        );
+        assert_eq!(repo.git_ok(&["branch", "--show-current"]), "topic\n");
+        repo.git_ok(&["switch", "-q", "-c", "clash", "main~1"]);
+        repo.write("m.txt", "other\n");
+        repo.git_ok(&["add", "."]);
+        repo.git_ok(&["commit", "-q", "-m", "clash"]);
+        assert!(matches!(
+            repo.git().rebase("clash", "main", &logged.log()),
+            Err(GitError::Failed { .. })
+        ));
+        assert!(repo.path().join(".git/rebase-merge").exists());
     }
 }

@@ -82,6 +82,13 @@ pub enum Command {
         /// The commit hash.
         hash: String,
     },
+    /// `git rebase <onto> <branch>`: checks out a branch and rebases it onto another.
+    Rebase {
+        /// The branch to rebase onto.
+        onto: String,
+        /// The branch to rebase.
+        branch: String,
+    },
     /// `git switch <branch>`: checks out a local branch.
     Switch {
         /// The branch name.
@@ -144,6 +151,7 @@ impl Command {
             Command::CreateBranch { .. } => &["branch"],
             Command::Switch { .. } => &["switch"],
             Command::CherryPick { .. } => &["cherry-pick"],
+            Command::Rebase { .. } => &["rebase"],
             Command::Refs => &[
                 "for-each-ref",
                 "--format=%(HEAD)%00%(objectname)%00%(*objectname)%00%(refname)",
@@ -175,6 +183,10 @@ impl Command {
             }
             Command::Switch { branch } => args.push(branch.clone()),
             Command::CherryPick { hash } => args.push(hash.clone()),
+            Command::Rebase { onto, branch } => {
+                args.push(onto.clone());
+                args.push(branch.clone());
+            }
             Command::CommitFileDiff { hash, paths } => {
                 args.push(hash.clone());
                 args.push("--".to_string());
@@ -323,6 +335,13 @@ mod tests {
                 hash: "abc".to_string()
             }),
             "cherry-pick abc"
+        );
+        assert_eq!(
+            args(&Command::Rebase {
+                onto: "main".to_string(),
+                branch: "topic".to_string()
+            }),
+            "rebase main topic"
         );
     }
 

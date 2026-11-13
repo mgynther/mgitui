@@ -365,3 +365,41 @@ fn cherry_pick_commit_under_cursor() {
         "Cherry-pick failed, see the Log view"
     );
 }
+
+#[test]
+fn rebase_branch_under_cursor() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    git_ok(dir.path(), &["commit", "-q", "--allow-empty", "-m", "base"]);
+    git_ok(dir.path(), &["switch", "-q", "-c", "topic"]);
+    git_ok(
+        dir.path(),
+        &["commit", "-q", "--allow-empty", "-m", "topic work"],
+    );
+    git_ok(dir.path(), &["branch", "also-topic"]);
+    git_ok(dir.path(), &["switch", "-q", "main"]);
+    git_ok(
+        dir.path(),
+        &["commit", "-q", "--allow-empty", "-m", "main work"],
+    );
+    let mut s: Session = session_in(&dir);
+    s.input(b"/topic work\rb");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "Rebase which branch (1 also-topic, 2 topic):"
+    );
+    s.input(b"2\r");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "Rebase topic onto (1 main, 2 also-topic):"
+    );
+    s.input(b"1\r");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "Rebased topic onto main"
+    );
+    assert_eq!(
+        git_ok(dir.path(), &["log", "--format=%s", "topic"]),
+        "topic work\nmain work\nbase\n"
+    );
+}

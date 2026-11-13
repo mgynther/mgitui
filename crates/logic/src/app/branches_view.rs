@@ -393,21 +393,38 @@ impl App {
     }
 
     /// Asks which branch to rebase `branch` onto: every other local branch, `main` and
-    /// `master` first.
+    /// `master` first. A plain rebase can also go onto remote `main` and `master` branches,
+    /// listed after the local ones; other remote branches are left out because work
+    /// repositories often have many stale ones. An interactive rebase only offers local
+    /// branches: rebase onto the remote first, then rewrite history.
     pub(super) fn ask_rebase_onto(&mut self, branch: String, interactive: bool) {
-        let mut onto: Vec<String> = self
+        let mut onto: Vec<(u8, String)> = self
             .branches
             .labels
             .values()
             .flatten()
             .filter_map(|label: &Label| match label {
-                Label::Local { name, .. } if *name != branch => Some(name.clone()),
+                Label::Local { name, .. } if *name != branch => {
+                    let rank: u8 = match name.as_str() {
+                        "main" => 0,
+                        "master" => 1,
+                        _ => 3,
+                    };
+                    Some((rank, name.clone()))
+                }
+                Label::Remote { remote, branch } if !interactive && is_main(branch) => {
+                    Some((2, format!("{remote}/{branch}")))
+                }
                 Label::Local { .. } | Label::Remote { .. } | Label::Tag { .. } => None,
             })
             .collect();
-        onto.sort_by_key(|name: &String| (name != "main", name != "master", name.clone()));
+        onto.sort();
+        let onto: Vec<String> = onto
+            .into_iter()
+            .map(|(_, name): (u8, String)| name)
+            .collect();
         if onto.is_empty() {
-            self.note = Note::Info("No other local branch to rebase onto".to_string());
+            self.note = Note::Info("No other branch to rebase onto".to_string());
         } else {
             self.open_prompt(PromptKind::RebaseOnto {
                 branch,
@@ -498,4 +515,9 @@ impl App {
         }
         found
     }
+}
+
+/// Whether a branch name is one of the usual main branch names.
+fn is_main(name: &str) -> bool {
+    name == "main" || name == "master"
 }

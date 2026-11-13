@@ -344,7 +344,7 @@ fn rebase_problems() {
     run(&mut alone_app, &alone, &[Event::Rebase]);
     assert_eq!(
         alone_app.note(),
-        &Note::Info("No other local branch to rebase onto".to_string())
+        &Note::Info("No other branch to rebase onto".to_string())
     );
     let failing: TestPorts = TestPorts {
         branch_fails: true,
@@ -409,4 +409,77 @@ fn interactive_rebase_uses_the_same_prompts() {
         app.note(),
         &Note::Info("Interactively rebased topic onto main".to_string())
     );
+}
+
+fn remote(remote: &str, branch: &str) -> Label {
+    Label::Remote {
+        remote: remote.to_string(),
+        branch: branch.to_string(),
+    }
+}
+
+/// `topic` at c2 with local `main` and `dev`, and remote branches at c1.
+fn remote_ports() -> TestPorts {
+    let ports: TestPorts = labelled_ports(vec![local("topic")]);
+    if let Some(refs) = ports.refs.borrow_mut().as_mut() {
+        for label in [
+            local("dev"),
+            local("main"),
+            remote("upstream", "main"),
+            remote("origin", "old-feature"),
+            remote("origin", "master"),
+            remote("origin", "main"),
+            Label::Tag {
+                name: "v1".to_string(),
+            },
+        ] {
+            refs.labels.push(("c1".to_string(), label));
+        }
+    }
+    ports
+}
+
+fn onto_choices(app: &App) -> Vec<String> {
+    match app.mode() {
+        Mode::Prompt(Prompt {
+            kind: PromptKind::RebaseOnto { onto, .. },
+            ..
+        }) => onto.clone(),
+        other => vec![format!("{other:?}")],
+    }
+}
+
+#[test]
+fn rebase_offers_remote_main_and_master_only() {
+    let ports: TestPorts = remote_ports();
+    let mut app: App = loaded_app(&ports);
+    run(&mut app, &ports, &[Event::Rebase]);
+    assert_eq!(
+        onto_choices(&app),
+        vec![
+            "main",
+            "origin/main",
+            "origin/master",
+            "upstream/main",
+            "dev"
+        ]
+    );
+    run(&mut app, &ports, &[Event::Input('2'), Event::InputSubmit]);
+    assert_eq!(
+        actions(&ports),
+        vec![
+            "Info: rebase topic onto origin/main",
+            "rebase topic onto origin/main"
+        ]
+    );
+}
+
+#[test]
+fn interactive_rebase_offers_no_remote_branches() {
+    let ports: TestPorts = remote_ports();
+    let mut app: App = loaded_app(&ports);
+    run(&mut app, &ports, &[Event::InteractiveRebase]);
+    assert_eq!(onto_choices(&app), vec!["main", "dev"]);
+    run(&mut app, &ports, &[Event::InputCancel]);
+    assert_eq!(onto_choices(&app), vec!["Normal"]);
 }

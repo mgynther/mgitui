@@ -457,3 +457,44 @@ fn interactive_rebase_prompt() {
         "topic work\nmain work\nbase\n"
     );
 }
+
+#[test]
+fn rebase_onto_remote_main() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    git_ok(dir.path(), &["commit", "-q", "--allow-empty", "-m", "base"]);
+    git_ok(dir.path(), &["switch", "-q", "-c", "topic"]);
+    git_ok(
+        dir.path(),
+        &["commit", "-q", "--allow-empty", "-m", "topic work"],
+    );
+    git_ok(dir.path(), &["switch", "-q", "main"]);
+    git_ok(
+        dir.path(),
+        &["commit", "-q", "--allow-empty", "-m", "remote work"],
+    );
+    git_ok(
+        dir.path(),
+        &["update-ref", "refs/remotes/origin/main", "HEAD"],
+    );
+    git_ok(
+        dir.path(),
+        &["update-ref", "refs/remotes/origin/stale", "HEAD"],
+    );
+    git_ok(dir.path(), &["reset", "-q", "--hard", "HEAD~1"]);
+    let mut s: Session = session_in(&dir);
+    s.input(b"/topic work\rb");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "Rebase topic onto (1 main, 2 origin/main):"
+    );
+    s.input(b"2\r");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "Rebased topic onto origin/main"
+    );
+    assert_eq!(
+        git_ok(dir.path(), &["log", "--format=%s", "topic"]),
+        "topic work\nremote work\nbase\n"
+    );
+}

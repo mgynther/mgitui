@@ -48,6 +48,7 @@ fn actions(ports: &TestPorts) -> Vec<String> {
             c.starts_with("create")
                 || c.starts_with("checkout")
                 || c.starts_with("cherry-pick")
+                || c.starts_with("delete")
                 || c.starts_with("rebase")
                 || c.contains(": ")
         })
@@ -482,4 +483,76 @@ fn interactive_rebase_offers_no_remote_branches() {
     assert_eq!(onto_choices(&app), vec!["main", "dev"]);
     run(&mut app, &ports, &[Event::InputCancel]);
     assert_eq!(onto_choices(&app), vec!["Normal"]);
+}
+
+#[test]
+fn delete_the_only_branch_that_is_not_checked_out() {
+    let ports: TestPorts = labelled_ports(vec![
+        Label::Local {
+            name: "main".to_string(),
+            head: true,
+        },
+        local("old"),
+    ]);
+    let mut app: App = loaded_app(&ports);
+    run(&mut app, &ports, &[Event::DeleteBranch]);
+    assert_eq!(
+        actions(&ports),
+        vec!["Info: delete branch old", "delete old"]
+    );
+    assert_eq!(app.note(), &Note::Info("Deleted branch old".to_string()));
+}
+
+#[test]
+fn delete_asks_which_branch() {
+    let ports: TestPorts = labelled_ports(vec![local("a"), local("b")]);
+    let mut app: App = loaded_app(&ports);
+    run(&mut app, &ports, &[Event::DeleteBranch]);
+    assert_eq!(
+        app.mode(),
+        &Mode::Prompt(Prompt {
+            kind: PromptKind::DeleteBranch {
+                branches: vec!["a".to_string(), "b".to_string()],
+            },
+            text: String::new()
+        })
+    );
+    run(&mut app, &ports, &[Event::Input('2'), Event::InputSubmit]);
+    assert_eq!(actions(&ports), vec!["Info: delete branch b", "delete b"]);
+    run(
+        &mut app,
+        &ports,
+        &[Event::DeleteBranch, Event::Input('9'), Event::InputSubmit],
+    );
+    assert!(matches!(app.mode(), Mode::Prompt(_)));
+}
+
+#[test]
+fn delete_problems() {
+    let head_only: TestPorts = labelled_ports(vec![Label::Local {
+        name: "main".to_string(),
+        head: true,
+    }]);
+    let mut app: App = loaded_app(&head_only);
+    run(&mut app, &head_only, &[Event::DeleteBranch]);
+    let checked_out: &str = "The checked out branch cannot be deleted";
+    assert_eq!(actions(&head_only), vec![format!("Error: {checked_out}")]);
+    assert_eq!(app.note(), &Note::Problem(checked_out.to_string()));
+    let none: TestPorts = labelled_ports(vec![]);
+    let mut none_app: App = loaded_app(&none);
+    run(&mut none_app, &none, &[Event::DeleteBranch]);
+    assert_eq!(
+        none_app.note(),
+        &Note::Problem("No local branch at this commit to delete".to_string())
+    );
+    let failing: TestPorts = TestPorts {
+        branch_fails: true,
+        ..labelled_ports(vec![local("old")])
+    };
+    let mut failing_app: App = loaded_app(&failing);
+    run(&mut failing_app, &failing, &[Event::DeleteBranch]);
+    assert_eq!(
+        failing_app.note(),
+        &Note::Problem("Deleting the branch failed, see the Log view".to_string())
+    );
 }

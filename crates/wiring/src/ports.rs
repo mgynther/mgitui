@@ -158,6 +158,12 @@ impl logic::ports::Ports for SessionPorts<'_> {
             .map_err(|_| Failed)
     }
 
+    fn delete_branch(&self, name: &str) -> Result<(), Failed> {
+        self.git
+            .delete_branch(name, &self.log_git())
+            .map_err(|_| Failed)
+    }
+
     fn cherry_pick(&self, hash: &str) -> Result<(), Failed> {
         self.git
             .cherry_pick(hash, &self.log_git())

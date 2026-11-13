@@ -376,6 +376,48 @@ impl App {
         }
     }
 
+    pub(super) fn start_delete_branch(&mut self, ports: &dyn Ports) {
+        let labels: &[Label] = self
+            .branches
+            .selected()
+            .map_or(&[][..], |c: &Commit| self.branches.labels(&c.hash));
+        let checked_out: bool = labels
+            .iter()
+            .any(|label: &Label| matches!(label, Label::Local { head: true, .. }));
+        let branches: Vec<String> = labels
+            .iter()
+            .filter_map(|label: &Label| match label {
+                Label::Local { name, head: false } => Some(name.clone()),
+                Label::Local { .. } | Label::Remote { .. } | Label::Tag { .. } => None,
+            })
+            .collect();
+        match branches.as_slice() {
+            [] => {
+                let message: &str = if checked_out {
+                    "The checked out branch cannot be deleted"
+                } else {
+                    "No local branch at this commit to delete"
+                };
+                ports.log(LogLevel::Error, message);
+                self.note = Note::Problem(message.to_string());
+            }
+            [branch] => self.delete_branch(&branch.clone(), ports),
+            _ => self.open_prompt(PromptKind::DeleteBranch { branches }),
+        }
+    }
+
+    pub(super) fn delete_branch(&mut self, branch: &str, ports: &dyn Ports) {
+        ports.log(LogLevel::Info, &format!("delete branch {branch}"));
+        let result: Result<(), Failed> = ports.delete_branch(branch);
+        self.refresh(ports);
+        self.note = match result {
+            Ok(()) => Note::Info(format!("Deleted branch {branch}")),
+            Err(Failed) => {
+                Note::Problem("Deleting the branch failed, see the Log view".to_string())
+            }
+        };
+    }
+
     pub(super) fn start_rebase(&mut self, interactive: bool, ports: &dyn Ports) {
         let branches: Vec<String> = self.local_branches();
         match branches.as_slice() {

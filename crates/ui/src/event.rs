@@ -63,6 +63,8 @@ pub enum Event {
     Checkout,
     /// Cherry-pick the selected commit onto the checked out branch.
     CherryPick,
+    /// Delete a local branch of the selected commit that is not checked out.
+    DeleteBranch,
     /// Rebase a branch of the selected commit onto another branch.
     Rebase,
     /// Interactively rebase a branch of the selected commit onto another branch.
@@ -137,6 +139,7 @@ fn view_event(key: Key, view: ViewId) -> Option<Event> {
         (ViewId::Branches, Key::Char('c')) => Some(Event::CreateBranch),
         (ViewId::Branches, Key::Char('h')) => Some(Event::Checkout),
         (ViewId::Branches, Key::Char('p')) => Some(Event::CherryPick),
+        (ViewId::Branches, Key::Char('d')) => Some(Event::DeleteBranch),
         (ViewId::Branches, Key::Char('b')) => Some(Event::Rebase),
         (ViewId::Branches, Key::Char('i')) => Some(Event::InteractiveRebase),
         (ViewId::Diff, Key::Char('s')) => Some(Event::SwitchList),
@@ -181,7 +184,7 @@ mod tests {
 
     #[test]
     fn view_specific_keys() {
-        let cases: [(ViewId, Key, Option<Event>); 18] = [
+        let cases: [(ViewId, Key, Option<Event>); 19] = [
             (ViewId::Branches, Key::Char('w'), Some(Event::NextPane)),
             (ViewId::Diff, Key::Char('w'), Some(Event::NextPane)),
             (ViewId::Log, Key::Char('w'), None),
@@ -190,6 +193,7 @@ mod tests {
             (ViewId::Branches, Key::Char('c'), Some(Event::CreateBranch)),
             (ViewId::Branches, Key::Char('h'), Some(Event::Checkout)),
             (ViewId::Branches, Key::Char('p'), Some(Event::CherryPick)),
+            (ViewId::Branches, Key::Char('d'), Some(Event::DeleteBranch)),
             (ViewId::Branches, Key::Char('b'), Some(Event::Rebase)),
             (
                 ViewId::Branches,

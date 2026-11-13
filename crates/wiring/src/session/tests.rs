@@ -498,3 +498,45 @@ fn rebase_onto_remote_main() {
         "topic work\nremote work\nbase\n"
     );
 }
+
+#[test]
+fn delete_branches_that_are_not_checked_out() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    git_ok(dir.path(), &["commit", "-q", "--allow-empty", "-m", "base"]);
+    git_ok(dir.path(), &["branch", "done"]);
+    git_ok(dir.path(), &["branch", "kept"]);
+    git_ok(dir.path(), &["switch", "-q", "-c", "unmerged"]);
+    git_ok(dir.path(), &["commit", "-q", "--allow-empty", "-m", "work"]);
+    git_ok(dir.path(), &["switch", "-q", "main"]);
+    let mut s: Session = session_in(&dir);
+    s.input(b"/base\rd");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "Delete which branch (1 done, 2 kept):"
+    );
+    s.input(b"1\r");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "Deleted branch done"
+    );
+    s.input(b"d");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "Deleted branch kept"
+    );
+    s.input(b"d");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "The checked out branch cannot be deleted"
+    );
+    s.input(b"/work\rd");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "Deleting the branch failed, see the Log view"
+    );
+    assert_eq!(
+        git_ok(dir.path(), &["branch", "--format=%(refname:short)"]),
+        "main\nunmerged\n"
+    );
+}

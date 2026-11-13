@@ -285,6 +285,10 @@ impl Ports for TestPorts {
         self.branch_result(format!("create {} at {at}", name.0))
     }
 
+    fn delete_branch(&self, name: &str) -> Result<(), Failed> {
+        self.branch_result(format!("delete {name}"))
+    }
+
     fn cherry_pick(&self, hash: &str) -> Result<(), Failed> {
         self.branch_result(format!("cherry-pick {hash}"))
     }

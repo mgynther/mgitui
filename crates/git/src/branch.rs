@@ -19,6 +19,19 @@ impl Git {
         Ok(())
     }
 
+    /// Deletes local branch `name`. Git refuses branches that are not merged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails, for example when the branch is not merged or is checked out.
+    pub fn delete_branch(&self, name: &str, log: &Log<'_>) -> Result<(), GitError> {
+        let command: Command = Command::DeleteBranch {
+            name: name.to_string(),
+        };
+        self.run(&command, None, log)?;
+        Ok(())
+    }
+
     /// Checks out local branch `branch`.
     ///
     /// # Errors
@@ -218,5 +231,25 @@ mod tests {
             missing.rebase_interactive("topic", "main", &logged.log()),
             Err(GitError::Spawn(_))
         ));
+    }
+
+    #[test]
+    fn delete_merged_branch_only() {
+        let repo: TestRepo = TestRepo::new();
+        repo.git_ok(&["commit", "-q", "--allow-empty", "-m", "base"]);
+        repo.git_ok(&["branch", "merged"]);
+        repo.git_ok(&["switch", "-q", "-c", "unmerged"]);
+        repo.git_ok(&["commit", "-q", "--allow-empty", "-m", "work"]);
+        repo.git_ok(&["switch", "-q", "main"]);
+        let logged: Logged = Logged::new();
+        repo.git().delete_branch("merged", &logged.log()).unwrap();
+        assert!(matches!(
+            repo.git().delete_branch("unmerged", &logged.log()),
+            Err(GitError::Failed { .. })
+        ));
+        assert_eq!(
+            repo.git_ok(&["branch", "--format=%(refname:short)"]),
+            "main\nunmerged\n"
+        );
     }
 }

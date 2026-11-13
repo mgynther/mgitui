@@ -50,6 +50,8 @@ pub enum Event {
     Checkout,
     /// Cherry-pick the selected commit onto the checked out branch.
     CherryPick,
+    /// Delete a local branch of the selected commit that is not checked out.
+    DeleteBranch,
     /// Rebase a branch of the selected commit onto another branch.
     Rebase,
     /// Interactively rebase a branch of the selected commit onto another branch.

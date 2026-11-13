@@ -136,6 +136,7 @@ fn git_failures_become_failed() {
     );
     assert_eq!(ports.checkout("b"), Err(Failed));
     assert_eq!(ports.cherry_pick("h"), Err(Failed));
+    assert_eq!(ports.delete_branch("b"), Err(Failed));
     assert_eq!(ports.rebase("b", "main", false), Err(Failed));
     assert_eq!(ports.rebase("b", "main", true), Err(Failed));
     assert_eq!(ports.commit_files("h"), Err(Failed));

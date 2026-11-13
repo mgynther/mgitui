@@ -33,6 +33,7 @@ pub fn event(event: ui::event::Event) -> logic::event::Event {
         U::CreateBranch => L::CreateBranch,
         U::Checkout => L::Checkout,
         U::CherryPick => L::CherryPick,
+        U::DeleteBranch => L::DeleteBranch,
         U::Rebase => L::Rebase,
         U::InteractiveRebase => L::InteractiveRebase,
         U::SwitchList => L::SwitchList,
@@ -138,6 +139,9 @@ fn prompt_label(prompt: &Prompt) -> String {
         PromptKind::BranchName { .. } => "New branch name: ".to_string(),
         PromptKind::CheckoutChoice { branches } => {
             format!("Check out ({}): ", numbered(branches))
+        }
+        PromptKind::DeleteBranch { branches } => {
+            format!("Delete which branch ({}): ", numbered(branches))
         }
         PromptKind::RebaseBranch {
             branches,

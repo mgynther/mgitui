@@ -61,6 +61,11 @@ pub enum PromptKind {
         /// The local branches to choose from.
         branches: Vec<String>,
     },
+    /// The number of the branch to delete.
+    DeleteBranch {
+        /// The local branches that can be deleted.
+        branches: Vec<String>,
+    },
     /// The number of the branch to rebase.
     RebaseBranch {
         /// The local branches of the selected commit.
@@ -269,6 +274,7 @@ impl App {
                     Event::CreateBranch => self.start_create_branch(),
                     Event::Checkout => self.start_checkout(ports),
                     Event::CherryPick => self.cherry_pick(ports),
+                    Event::DeleteBranch => self.start_delete_branch(ports),
                     Event::Rebase => self.start_rebase(false, ports),
                     Event::InteractiveRebase => self.start_rebase(true, ports),
                     _ => self.handle_branches(event, ports),
@@ -302,6 +308,11 @@ impl App {
             PromptKind::CheckoutChoice { branches } => {
                 if let Some(branch) = self.choose(prompt, branches, ports) {
                     self.checkout(&branch, ports);
+                }
+            }
+            PromptKind::DeleteBranch { branches } => {
+                if let Some(branch) = self.choose(prompt, branches, ports) {
+                    self.delete_branch(&branch, ports);
                 }
             }
             PromptKind::RebaseBranch {

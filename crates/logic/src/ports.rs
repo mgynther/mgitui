@@ -159,6 +159,13 @@ pub trait Ports {
     /// Fails when git fails.
     fn create_branch(&self, name: &BranchName, at: &str) -> Result<(), Failed>;
 
+    /// Deletes a local branch that is not checked out.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails, for example when the branch is not merged.
+    fn delete_branch(&self, name: &str) -> Result<(), Failed>;
+
     /// Cherry-picks a commit onto the checked out branch.
     ///
     /// # Errors

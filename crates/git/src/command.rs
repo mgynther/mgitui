@@ -77,6 +77,11 @@ pub enum Command {
         /// The commit the branch points to.
         at: String,
     },
+    /// `git branch -d <name>`: deletes a local branch, refusing branches that are not merged.
+    DeleteBranch {
+        /// The branch name.
+        name: String,
+    },
     /// `git cherry-pick <commit>`: applies a commit onto the checked out branch.
     CherryPick {
         /// The commit hash.
@@ -159,6 +164,7 @@ impl Command {
             Command::CreateBranch { .. } => &["branch"],
             Command::Switch { .. } => &["switch"],
             Command::CherryPick { .. } => &["cherry-pick"],
+            Command::DeleteBranch { .. } => &["branch", "-d"],
             Command::Rebase { .. } => &["rebase"],
             Command::RebaseInteractive { .. } => &["rebase", "-i"],
             Command::Refs => &[
@@ -192,6 +198,7 @@ impl Command {
             }
             Command::Switch { branch } => args.push(branch.clone()),
             Command::CherryPick { hash } => args.push(hash.clone()),
+            Command::DeleteBranch { name } => args.push(name.clone()),
             Command::Rebase { onto, branch } | Command::RebaseInteractive { onto, branch } => {
                 args.push(onto.clone());
                 args.push(branch.clone());
@@ -356,6 +363,12 @@ mod tests {
                 hash: "abc".to_string()
             }),
             "cherry-pick abc"
+        );
+        assert_eq!(
+            args(&Command::DeleteBranch {
+                name: "old".to_string()
+            }),
+            "branch -d old"
         );
         assert_eq!(
             args(&Command::Rebase {

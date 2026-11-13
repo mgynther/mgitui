@@ -1,0 +1,19 @@
+[package]
+name = "wiring"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "mgitui"
+path = "src/main.rs"
+
+[dependencies]
+git = { path = "../git" }
+logic = { path = "../logic" }
+ui = { path = "../ui" }
+validation = { path = "../validation" }
+
+[lints]
+workspace = true

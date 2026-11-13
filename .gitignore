@@ -1,4 +1,4 @@
-build
+target
 *.md
 !/README.md
 .claude/

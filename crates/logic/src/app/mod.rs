@@ -1,10 +1,14 @@
 //! The application state and how events change it.
 
+mod branches_view;
 mod diff_view;
 mod log_view;
 
+pub use branches_view::{BranchesState, CHUNK};
 pub use diff_view::{DiffPane, DiffState};
 
+#[cfg(test)]
+mod branches_tests;
 #[cfg(test)]
 mod commit_tests;
 #[cfg(test)]
@@ -61,6 +65,8 @@ pub enum Note {
 /// How many rows each list is shown in. Logic needs these to scroll.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Viewports {
+    /// Rows of the commit graph.
+    pub branches_graph: usize,
     /// Rows of the log list.
     pub log: usize,
     /// Rows of the unstaged file list.
@@ -107,6 +113,7 @@ pub struct App {
     quit: bool,
     log: LogStore,
     log_cursor: Cursor,
+    branches: BranchesState,
     diff: DiffState,
     terms: SearchTerms,
     viewports: Viewports,
@@ -129,6 +136,7 @@ impl App {
             quit: false,
             log: LogStore::new(DEFAULT_CAPACITY),
             log_cursor: Cursor::default(),
+            branches: BranchesState::default(),
             diff: DiffState::default(),
             terms: SearchTerms::default(),
             viewports: Viewports::default(),
@@ -183,6 +191,7 @@ impl App {
         self.log_cursor
             .clamp(self.log.entries().len(), viewports.log);
         self.clamp_diff_cursors();
+        self.clamp_branch_cursors();
     }
 
     /// Changes the state for `event`, using `ports` for everything outside the state.
@@ -224,7 +233,7 @@ impl App {
             _ => match self.view {
                 ViewId::Log => self.handle_log(event),
                 ViewId::Diff => self.handle_diff(event, ports),
-                ViewId::Branches => {}
+                ViewId::Branches => self.handle_branches(event, ports),
             },
         }
     }
@@ -237,6 +246,7 @@ impl App {
 
     /// Reloads everything from git after an action.
     fn refresh(&mut self, ports: &dyn Ports) {
+        self.reload_branches(ports);
         self.reload_status(ports);
     }
 
@@ -270,7 +280,7 @@ impl App {
         let found: Option<Found> = match self.view {
             ViewId::Log => self.search_log(&term.0, direction),
             ViewId::Diff => self.search_diff(&term.0, direction, ports),
-            ViewId::Branches => None,
+            ViewId::Branches => self.search_branches(&term.0, direction, ports),
         };
         self.note = match found {
             None => Note::Info(format!("Pattern not found: {}", term.0)),

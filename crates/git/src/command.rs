@@ -44,6 +44,15 @@ pub enum Command {
     },
     /// `git log -1 --format=%B`: the message of the last commit.
     LastMessage,
+    /// `git log --all --topo-order`: a chunk of the history of all refs.
+    Log {
+        /// Number of commits to skip from the newest.
+        skip: usize,
+        /// Maximum number of commits.
+        count: usize,
+    },
+    /// `git for-each-ref`: all branches and tags with the commits they point to.
+    Refs,
     /// `git commit -F <file>`: commits with the message in a file.
     Commit {
         /// The file that contains the message.
@@ -74,10 +83,29 @@ impl Command {
             Command::ApplyCached { reverse: false } => &["apply", "--cached"],
             Command::ApplyCached { reverse: true } => &["apply", "--cached", "--reverse"],
             Command::LastMessage => &["log", "-1", "--format=%B"],
+            Command::Log { .. } => &[
+                "log",
+                "--all",
+                "--topo-order",
+                "-z",
+                "--date=format-local:%Y-%m-%d %H:%M",
+                "--format=%H%x1f%P%x1f%an%x1f%ad%x1f%s",
+            ],
+            Command::Refs => &[
+                "for-each-ref",
+                "--format=%(HEAD)%00%(objectname)%00%(*objectname)%00%(refname)",
+                "refs/heads",
+                "refs/remotes",
+                "refs/tags",
+            ],
             Command::Commit { amend: false, .. } => &["commit", "-F"],
             Command::Commit { amend: true, .. } => &["commit", "--amend", "-F"],
         };
         let mut args: Vec<String> = fixed.iter().map(|a: &&str| (*a).to_string()).collect();
+        if let Command::Log { skip, count } = self {
+            args.push(format!("--skip={skip}"));
+            args.push(format!("--max-count={count}"));
+        }
         match self {
             Command::Diff { paths, .. }
             | Command::Add { paths }
@@ -89,7 +117,9 @@ impl Command {
             | Command::Status
             | Command::HasHead
             | Command::ApplyCached { .. }
-            | Command::LastMessage => {}
+            | Command::LastMessage
+            | Command::Log { .. }
+            | Command::Refs => {}
         }
         args
     }
@@ -170,6 +200,16 @@ mod tests {
             "apply --cached --reverse"
         );
         assert_eq!(Command::HasHead.success_codes(), &[0, 1]);
+    }
+
+    #[test]
+    fn history_arguments() {
+        assert_eq!(
+            args(&Command::Log { skip: 10, count: 5 }),
+            "log --all --topo-order -z --date=format-local:%Y-%m-%d %H:%M \
+             --format=%H%x1f%P%x1f%an%x1f%ad%x1f%s --skip=10 --max-count=5"
+        );
+        assert!(args(&Command::Refs).starts_with("for-each-ref --format=%(HEAD)"));
     }
 
     #[test]

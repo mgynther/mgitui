@@ -83,13 +83,13 @@ fn log_view_search_with_validation() {
     s.input(b"\r");
     let screen: ui::buffer::Buffer = s.render(SIZE);
     assert_eq!(screen.row_text(23).trim_end(), "search text is empty");
-    assert!(screen.row_text(2).contains("wiring     Info  started"));
-    assert!(screen.row_text(3).contains("logic      Info  reload"));
-    assert!(screen.row_text(4).contains("git        Info  git status"));
+    let lines: Vec<String> = (0..24).map(|y: usize| screen.row_text(y)).collect();
+    let position = |text: &str| lines.iter().position(|l: &String| l.contains(text));
+    assert_eq!(position("wiring     Info  started"), Some(2));
+    assert_eq!(position("logic      Info  reload"), Some(3));
+    assert!(position("git        Info  git log --all") > Some(3));
     assert!(
-        screen
-            .row_text(5)
-            .contains("validation Error search text is empty")
+        position("validation Error search text is empty") > position("git        Info  git status")
     );
 }
 

@@ -5,6 +5,7 @@ use crate::test_ports::{TestPorts, modified};
 
 fn viewports() -> Viewports {
     Viewports {
+        branches_graph: 5,
         log: 5,
         diff_unstaged: 2,
         diff_staged: 2,
@@ -36,7 +37,13 @@ fn reload_loads_status_and_first_diff() {
     let app: App = diff_app(&ports);
     assert_eq!(
         ports.calls(),
-        vec!["Info: reload", "status", "diff Unstaged a"]
+        vec![
+            "Info: reload",
+            "refs",
+            "commits 0 2000",
+            "status",
+            "diff Unstaged a"
+        ]
     );
     assert!(app.diff().status().has_changes());
     assert_eq!(app.diff().side(), Side::Unstaged);

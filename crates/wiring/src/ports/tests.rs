@@ -116,6 +116,8 @@ fn git_failures_become_failed() {
     );
     assert_eq!(ports.apply_to_index("", false), Err(Failed));
     assert_eq!(ports.has_commits(), Err(Failed));
+    assert_eq!(ports.commits(0, 1), Err(Failed));
+    assert_eq!(ports.refs(), Err(Failed));
     assert_eq!(ports.last_commit_message(), Err(Failed));
     assert_eq!(ports.edit_message("x"), Err(Failed));
     assert_eq!(
@@ -191,5 +193,30 @@ fn edit_validate_commit_and_amend() {
                 .iter()
                 .any(|e: &LogEntry| e.layer == Layer::Validation)
         );
+    });
+}
+
+#[test]
+fn history_and_refs() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    git_ok(dir.path(), &["commit", "-q", "--allow-empty", "-m", "one"]);
+    git_ok(dir.path(), &["tag", "v1"]);
+    with_ports(dir.path(), |ports: &SessionPorts<'_>, _log: &LogBuffer| {
+        let commits: Vec<logic::model::Commit> = ports.commits(0, 10).unwrap();
+        assert_eq!(commits[0].subject, "one");
+        let refs: logic::model::Refs = ports.refs().unwrap();
+        assert_eq!(refs.head, Some(commits[0].hash.clone()));
+        assert_eq!(refs.labels.len(), 2);
+    });
+}
+
+#[test]
+fn refs_fail_when_head_fails() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    std::fs::write(dir.path().join(".git/HEAD"), "garbage\n").unwrap();
+    with_ports(dir.path(), |ports: &SessionPorts<'_>, _log: &LogBuffer| {
+        assert_eq!(ports.refs(), Err(Failed));
     });
 }

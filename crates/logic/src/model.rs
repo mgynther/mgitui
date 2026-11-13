@@ -182,6 +182,54 @@ fn note(text: &str) -> DiffRow {
     }
 }
 
+/// A commit in the history.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Commit {
+    /// The full hash.
+    pub hash: String,
+    /// The hashes of the parents, first parent first.
+    pub parents: Vec<String>,
+    /// The author name.
+    pub author: String,
+    /// The author date, formatted for display.
+    pub date: String,
+    /// The first line of the message.
+    pub subject: String,
+}
+
+/// A branch or tag label of a commit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Label {
+    /// A local branch.
+    Local {
+        /// The branch name.
+        name: String,
+        /// Whether the branch is checked out.
+        head: bool,
+    },
+    /// A remote-tracking branch.
+    Remote {
+        /// The remote name.
+        remote: String,
+        /// The branch name on the remote.
+        branch: String,
+    },
+    /// A tag.
+    Tag {
+        /// The tag name.
+        name: String,
+    },
+}
+
+/// All labels and the commit `HEAD` points to.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Refs {
+    /// Labels with the hash of the commit they point to.
+    pub labels: Vec<(String, Label)>,
+    /// The commit `HEAD` points to, if there are commits.
+    pub head: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::{

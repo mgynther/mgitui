@@ -75,6 +75,7 @@ pub fn input_mode(mode: &Mode) -> ui::event::InputMode {
 pub fn viewports(size: ui::layout::Size) -> Viewports {
     let diff: ui::layout::DiffLayout = ui::layout::diff_layout(size);
     Viewports {
+        branches_graph: ui::layout::branches_layout(size).graph.content().height,
         log: ui::layout::log_layout(size).list.content().height,
         diff_unstaged: diff.unstaged.content().height,
         diff_staged: diff.staged.content().height,

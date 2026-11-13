@@ -37,6 +37,8 @@ fn edit_and_commit() {
             "edit \"edited\\n\"",
             "Info: commit",
             "commit amend=false \"edited\\nedited\\n\"",
+            "refs",
+            "commits 0 2000",
             "status",
         ]
     );
@@ -98,7 +100,13 @@ fn amend_mode_has_its_own_draft() {
     run(&mut app, &ports, &[Event::Commit]);
     assert_eq!(
         ports.calls(),
-        vec!["Info: amend", "commit amend=true \"Last\\n\"", "status"]
+        vec![
+            "Info: amend",
+            "commit amend=true \"Last\\n\"",
+            "refs",
+            "commits 0 2000",
+            "status"
+        ]
     );
     assert!(!app.diff().amend());
     assert_eq!(app.diff().message(), "edited\n");

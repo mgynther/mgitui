@@ -1,7 +1,7 @@
 //! The functions logic uses to get things done, provided by wiring.
 
 use crate::log::LogLevel;
-use crate::model::{ChangedFile, FileDiff, Side, WorkStatus};
+use crate::model::{ChangedFile, Commit, FileDiff, Refs, Side, WorkStatus};
 
 /// Search text that passed validation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,4 +97,18 @@ pub trait Ports {
     ///
     /// Fails when git fails.
     fn commit(&self, message: &CommitMessage, amend: bool) -> Result<(), Failed>;
+
+    /// Up to `count` commits of all refs in topological order, after skipping `skip`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn commits(&self, skip: usize, count: usize) -> Result<Vec<Commit>, Failed>;
+
+    /// All branch and tag labels and the commit `HEAD` points to.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn refs(&self) -> Result<Refs, Failed>;
 }

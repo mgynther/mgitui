@@ -3,7 +3,9 @@
 use std::cell::RefCell;
 
 use crate::log::LogLevel;
-use crate::model::{ChangeKind, ChangedFile, DiffLine, FileDiff, Hunk, LineKind, Side, WorkStatus};
+use crate::model::{
+    ChangeKind, ChangedFile, Commit, DiffLine, FileDiff, Hunk, LineKind, Refs, Side, WorkStatus,
+};
 use crate::ports::{CommitMessage, Failed, Ports, SearchText};
 
 /// Records calls as text and answers from its fields.
@@ -26,6 +28,10 @@ pub struct TestPorts {
     pub editor_appends: Option<String>,
     /// Whether committing fails.
     pub commit_fails: bool,
+    /// The whole history; `commits` returns chunks of it. `None` fails.
+    pub history: RefCell<Option<Vec<Commit>>>,
+    /// The answer to `refs`; `None` fails.
+    pub refs: RefCell<Option<Refs>>,
 }
 
 impl TestPorts {
@@ -40,6 +46,8 @@ impl TestPorts {
             last_message: Some("Last\n".to_string()),
             editor_appends: Some("edited\n".to_string()),
             commit_fails: false,
+            history: RefCell::new(Some(Vec::new())),
+            refs: RefCell::new(Some(Refs::default())),
         }
     }
 
@@ -69,6 +77,25 @@ impl TestPorts {
     pub fn clear(&self) {
         self.calls.borrow_mut().clear();
     }
+}
+
+/// A linear history of `count` commits, newest first, with hashes `c<n>` and subjects
+/// `commit <n>`.
+pub fn linear_history(count: usize) -> Vec<Commit> {
+    (0..count)
+        .rev()
+        .map(|n: usize| Commit {
+            hash: format!("c{n}"),
+            parents: if n == 0 {
+                vec![]
+            } else {
+                vec![format!("c{}", n - 1)]
+            },
+            author: if n.is_multiple_of(2) { "Ada" } else { "Bo" }.to_string(),
+            date: "2025-01-02 03:04".to_string(),
+            subject: format!("commit {n}"),
+        })
+        .collect()
 }
 
 pub fn modified(path: &str) -> ChangedFile {
@@ -180,5 +207,20 @@ impl Ports for TestPorts {
         } else {
             Ok(())
         }
+    }
+
+    fn commits(&self, skip: usize, count: usize) -> Result<Vec<Commit>, Failed> {
+        self.calls
+            .borrow_mut()
+            .push(format!("commits {skip} {count}"));
+        let history: Option<Vec<Commit>> = self.history.borrow().clone();
+        history
+            .map(|all: Vec<Commit>| all.into_iter().skip(skip).take(count).collect())
+            .ok_or(Failed)
+    }
+
+    fn refs(&self) -> Result<Refs, Failed> {
+        self.calls.borrow_mut().push("refs".to_string());
+        self.refs.borrow().clone().ok_or(Failed)
     }
 }

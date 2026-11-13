@@ -5,6 +5,7 @@ use crate::test_ports::{TestPorts, modified};
 
 fn viewports() -> Viewports {
     Viewports {
+        branches_graph: 5,
         log: 5,
         diff_unstaged: 5,
         diff_staged: 5,
@@ -78,7 +79,14 @@ fn enter_stages_and_unstages_whole_files() {
     run(&mut app, &ports, &[Event::Activate]);
     assert_eq!(
         ports.calls(),
-        vec!["Info: stage u", "stage u", "status", "diff Unstaged u"]
+        vec![
+            "Info: stage u",
+            "stage u",
+            "refs",
+            "commits 0 2000",
+            "status",
+            "diff Unstaged u"
+        ]
     );
     ports.clear();
     run(&mut app, &ports, &[Event::SwitchList, Event::Activate]);
@@ -88,6 +96,8 @@ fn enter_stages_and_unstages_whole_files() {
             "diff Staged s",
             "Info: unstage s",
             "unstage s",
+            "refs",
+            "commits 0 2000",
             "status",
             "diff Staged s"
         ]
@@ -146,6 +156,8 @@ fn line_selection_stages_selected_lines() {
         vec![
             "Info: stage lines of u",
             "apply reverse=false\n--- a/f\n+++ b/f\n@@ -1,2 +1,2 @@\n-a\n+A\n b\n",
+            "refs",
+            "commits 0 2000",
             "status",
             "diff Unstaged u",
         ]

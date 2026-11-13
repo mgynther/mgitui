@@ -1,6 +1,8 @@
 //! Conversions from the git layer's types to the logic layer's types.
 
-use logic::model::{ChangeKind, ChangedFile, DiffLine, FileDiff, Hunk, LineKind, WorkStatus};
+use logic::model::{
+    ChangeKind, ChangedFile, Commit, DiffLine, FileDiff, Hunk, Label, LineKind, Refs, WorkStatus,
+};
 
 /// The logic status for a git status.
 #[must_use]
@@ -66,10 +68,113 @@ fn line(line: git::DiffLine) -> DiffLine {
     }
 }
 
+/// The logic commit for a git commit.
+#[must_use]
+pub fn commit(commit: git::Commit) -> Commit {
+    Commit {
+        hash: commit.hash,
+        parents: commit.parents,
+        author: commit.author,
+        date: commit.date,
+        subject: commit.subject,
+    }
+}
+
+/// The logic refs for git refs and the `HEAD` commit.
+#[must_use]
+pub fn refs(refs: Vec<git::Ref>, head: Option<String>) -> Refs {
+    Refs {
+        labels: refs
+            .into_iter()
+            .map(|r: git::Ref| {
+                let label: Label = match r.kind {
+                    git::RefKind::Local(name) => Label::Local {
+                        name,
+                        head: r.is_head,
+                    },
+                    git::RefKind::Remote { remote, branch } => Label::Remote { remote, branch },
+                    git::RefKind::Tag(name) => Label::Tag { name },
+                };
+                (r.target, label)
+            })
+            .collect(),
+        head,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{change_kind, file_diff, work_status};
-    use logic::model::{ChangeKind, LineKind};
+    use super::{change_kind, commit, file_diff, refs, work_status};
+    use logic::model::{ChangeKind, Label, LineKind};
+
+    #[test]
+    fn commits_and_refs() {
+        let converted: logic::model::Commit = commit(git::Commit {
+            hash: "h".to_string(),
+            parents: vec!["p".to_string()],
+            author: "a".to_string(),
+            date: "d".to_string(),
+            subject: "s".to_string(),
+        });
+        assert_eq!(
+            (
+                converted.hash,
+                converted.parents,
+                converted.author,
+                converted.date,
+                converted.subject
+            ),
+            (
+                "h".to_string(),
+                vec!["p".to_string()],
+                "a".to_string(),
+                "d".to_string(),
+                "s".to_string()
+            )
+        );
+        let git_ref = |kind: git::RefKind| git::Ref {
+            target: "t".to_string(),
+            kind,
+            is_head: true,
+        };
+        let converted: logic::model::Refs = refs(
+            vec![
+                git_ref(git::RefKind::Local("main".to_string())),
+                git_ref(git::RefKind::Remote {
+                    remote: "origin".to_string(),
+                    branch: "main".to_string(),
+                }),
+                git_ref(git::RefKind::Tag("v1".to_string())),
+            ],
+            Some("t".to_string()),
+        );
+        assert_eq!(converted.head, Some("t".to_string()));
+        assert_eq!(
+            converted.labels,
+            vec![
+                (
+                    "t".to_string(),
+                    Label::Local {
+                        name: "main".to_string(),
+                        head: true
+                    }
+                ),
+                (
+                    "t".to_string(),
+                    Label::Remote {
+                        remote: "origin".to_string(),
+                        branch: "main".to_string()
+                    }
+                ),
+                (
+                    "t".to_string(),
+                    Label::Tag {
+                        name: "v1".to_string()
+                    }
+                ),
+            ]
+        );
+    }
 
     #[test]
     fn change_kinds() {

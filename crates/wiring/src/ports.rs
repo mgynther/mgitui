@@ -1,7 +1,7 @@
 //! The functions wiring provides to the logic layer.
 
 use logic::log::LogLevel;
-use logic::model::{ChangeKind, ChangedFile, FileDiff, Side, WorkStatus};
+use logic::model::{ChangeKind, ChangedFile, Commit, FileDiff, Refs, Side, WorkStatus};
 use logic::ports::{CommitMessage, Failed};
 
 use crate::editor::{self, Editor};
@@ -117,6 +117,24 @@ impl logic::ports::Ports for SessionPorts<'_> {
     fn commit(&self, message: &CommitMessage, amend: bool) -> Result<(), Failed> {
         self.git
             .commit(&message.0, amend, &self.log_git())
+            .map_err(|_| Failed)
+    }
+
+    fn commits(&self, skip: usize, count: usize) -> Result<Vec<Commit>, Failed> {
+        self.git
+            .log(skip, count, &self.log_git())
+            .map(|commits: Vec<git::Commit>| commits.into_iter().map(model::commit).collect())
+            .map_err(|_| Failed)
+    }
+
+    fn refs(&self) -> Result<Refs, Failed> {
+        self.git
+            .refs(&self.log_git())
+            .and_then(|refs: Vec<git::Ref>| {
+                self.git
+                    .head(&self.log_git())
+                    .map(|head: Option<String>| model::refs(refs, head))
+            })
             .map_err(|_| Failed)
     }
 }

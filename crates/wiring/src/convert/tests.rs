@@ -66,6 +66,18 @@ impl logic::ports::Ports for NoPorts {
     ) -> Result<(), logic::ports::Failed> {
         Err(logic::ports::Failed)
     }
+
+    fn commits(
+        &self,
+        _skip: usize,
+        _count: usize,
+    ) -> Result<Vec<logic::model::Commit>, logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
+    fn refs(&self) -> Result<logic::model::Refs, logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
 }
 
 #[test]
@@ -159,6 +171,7 @@ fn viewports_follow_layout() {
     assert_eq!(
         viewports(size),
         Viewports {
+            branches_graph: 10,
             log: 21,
             diff_unstaged: 10,
             diff_staged: 10,

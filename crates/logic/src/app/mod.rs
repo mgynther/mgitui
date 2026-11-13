@@ -1,13 +1,18 @@
 //! The application state and how events change it.
 
+mod diff_view;
 mod log_view;
 
+pub use diff_view::{DiffPane, DiffState};
+
+#[cfg(test)]
+mod diff_tests;
 #[cfg(test)]
 mod tests;
 
 use crate::cursor::Cursor;
 use crate::event::{Event, ViewId};
-use crate::log::{DEFAULT_CAPACITY, LogStore};
+use crate::log::{DEFAULT_CAPACITY, LogLevel, LogStore};
 use crate::ports::{Ports, SearchText};
 use crate::search::{Direction, Found};
 
@@ -54,6 +59,12 @@ pub enum Note {
 pub struct Viewports {
     /// Rows of the log list.
     pub log: usize,
+    /// Rows of the unstaged file list.
+    pub diff_unstaged: usize,
+    /// Rows of the staged file list.
+    pub diff_staged: usize,
+    /// Rows of the file diff in the Diff view.
+    pub diff_file: usize,
 }
 
 /// The last search term of each view.
@@ -92,6 +103,7 @@ pub struct App {
     quit: bool,
     log: LogStore,
     log_cursor: Cursor,
+    diff: DiffState,
     terms: SearchTerms,
     viewports: Viewports,
 }
@@ -113,6 +125,7 @@ impl App {
             quit: false,
             log: LogStore::new(DEFAULT_CAPACITY),
             log_cursor: Cursor::default(),
+            diff: DiffState::default(),
             terms: SearchTerms::default(),
             viewports: Viewports::default(),
         }
@@ -165,6 +178,7 @@ impl App {
         self.viewports = viewports;
         self.log_cursor
             .clamp(self.log.entries().len(), viewports.log);
+        self.clamp_diff_cursors();
     }
 
     /// Changes the state for `event`, using `ports` for everything outside the state.
@@ -191,22 +205,30 @@ impl App {
                 }
                 _ => {}
             },
-            Mode::Normal => self.handle_normal(event),
+            Mode::Normal => self.handle_normal(event, ports),
         }
     }
 
-    fn handle_normal(&mut self, event: Event) {
+    fn handle_normal(&mut self, event: Event, ports: &dyn Ports) {
         match event {
             Event::Quit => self.mode = Mode::QuitConfirm,
             Event::SwitchView(view) => self.switch_view(view),
+            Event::Reload => self.reload(ports),
             Event::StartSearch => self.open_prompt(PromptKind::Search),
-            Event::SearchNext => self.search_again(Direction::Forward),
-            Event::SearchPrevious => self.search_again(Direction::Backward),
+            Event::SearchNext => self.search_again(Direction::Forward, ports),
+            Event::SearchPrevious => self.search_again(Direction::Backward, ports),
             _ => match self.view {
                 ViewId::Log => self.handle_log(event),
-                ViewId::Branches | ViewId::Diff => {}
+                ViewId::Diff => self.handle_diff(event, ports),
+                ViewId::Branches => {}
             },
         }
+    }
+
+    /// Reloads everything from git.
+    fn reload(&mut self, ports: &dyn Ports) {
+        ports.log(LogLevel::Info, "reload");
+        self.reload_status(ports);
     }
 
     fn open_prompt(&mut self, kind: PromptKind) {
@@ -221,24 +243,25 @@ impl App {
             PromptKind::Search => match ports.validate_search(&prompt.text) {
                 Ok(term) => {
                     self.terms.set(self.view, term.clone());
-                    self.search(&term, Direction::Forward);
+                    self.search(&term, Direction::Forward, ports);
                 }
                 Err(problem) => self.note = Note::Problem(problem),
             },
         }
     }
 
-    fn search_again(&mut self, direction: Direction) {
+    fn search_again(&mut self, direction: Direction, ports: &dyn Ports) {
         match self.terms.get(self.view).cloned() {
-            Some(term) => self.search(&term, direction),
+            Some(term) => self.search(&term, direction, ports),
             None => self.note = Note::Info("No previous search".to_string()),
         }
     }
 
-    fn search(&mut self, term: &SearchText, direction: Direction) {
+    fn search(&mut self, term: &SearchText, direction: Direction, ports: &dyn Ports) {
         let found: Option<Found> = match self.view {
             ViewId::Log => self.search_log(&term.0, direction),
-            ViewId::Branches | ViewId::Diff => None,
+            ViewId::Diff => self.search_diff(&term.0, direction, ports),
+            ViewId::Branches => None,
         };
         self.note = match found {
             None => Note::Info(format!("Pattern not found: {}", term.0)),

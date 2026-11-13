@@ -4,6 +4,7 @@ use crate::buffer::Buffer;
 use crate::event::ViewId;
 use crate::layout::{self, MIN_SIZE, Rect, Size};
 use crate::style::{Color, Style};
+use crate::views::diff::DiffView;
 use crate::views::log::LogView;
 
 /// Everything drawn on the screen.
@@ -52,7 +53,7 @@ pub enum Body {
     /// The Branches view.
     Branches,
     /// The Diff view.
-    Diff,
+    Diff(DiffView),
     /// The Log view.
     Log(LogView),
 }
@@ -80,15 +81,7 @@ pub fn render(screen: &Screen, size: Size) -> Buffer {
             draw_title(&mut buffer, panes.files, "Files", false);
             draw_separator(&mut buffer, panes.files);
         }
-        Body::Diff => {
-            let panes: layout::DiffLayout = layout::diff_layout(size);
-            draw_title(&mut buffer, panes.unstaged, "Unstaged", true);
-            draw_title(&mut buffer, panes.staged, "Staged", false);
-            draw_title(&mut buffer, panes.file_diff, "Diff", false);
-            draw_title(&mut buffer, panes.message, "Commit message", false);
-            draw_separator(&mut buffer, panes.file_diff);
-            draw_separator(&mut buffer, panes.message);
-        }
+        Body::Diff(view) => crate::views::diff::render(&mut buffer, view, size),
         Body::Log(view) => crate::views::log::render(&mut buffer, view, size),
     }
     buffer
@@ -143,7 +136,7 @@ pub fn draw_title(buffer: &mut Buffer, rect: Rect, title: &str, focused: bool) {
 }
 
 /// Draws a vertical line in the column left of `rect`.
-fn draw_separator(buffer: &mut Buffer, rect: Rect) {
+pub fn draw_separator(buffer: &mut Buffer, rect: Rect) {
     if let Some(x) = rect.x.checked_sub(1) {
         for y in rect.y..rect.y + rect.height {
             buffer.set(x, y, '│', Style::fg(Color::Gray));
@@ -158,7 +151,21 @@ mod tests {
     use crate::event::ViewId;
     use crate::layout::{Rect, Size};
     use crate::style::{Color, Style};
+    use crate::views::diff::{DiffFocus, DiffView};
     use crate::views::log::LogView;
+
+    fn empty_diff() -> DiffView {
+        DiffView {
+            focus: DiffFocus::Unstaged,
+            unstaged: vec![],
+            staged: vec![],
+            diff_title: "Diff".to_string(),
+            diff: vec![],
+            message_title: "Commit message".to_string(),
+            message: String::new(),
+            no_changes: true,
+        }
+    }
 
     const SIZE: Size = Size {
         width: 80,
@@ -199,7 +206,10 @@ mod tests {
 
     #[test]
     fn tabs_show_active_view_and_red_diff() {
-        let buffer: Buffer = render(&screen(ViewId::Diff, Status::Empty, Body::Diff), SIZE);
+        let buffer: Buffer = render(
+            &screen(ViewId::Diff, Status::Empty, Body::Diff(empty_diff())),
+            SIZE,
+        );
         assert!(
             buffer
                 .row_text(0)
@@ -266,7 +276,10 @@ mod tests {
         );
         assert!(branches.row_text(1).starts_with("─ Commits ─"));
         assert!(branches.row_text(12).contains(" Files "));
-        let diff: Buffer = render(&screen(ViewId::Diff, Status::Empty, Body::Diff), SIZE);
+        let diff: Buffer = render(
+            &screen(ViewId::Diff, Status::Empty, Body::Diff(empty_diff())),
+            SIZE,
+        );
         assert!(diff.row_text(1).starts_with("─ Unstaged ─"));
         assert!(diff.row_text(1).contains("│─ Diff ─"));
         let log: Buffer = render(

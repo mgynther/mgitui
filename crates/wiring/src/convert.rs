@@ -1,7 +1,9 @@
 //! Conversions between the types of the logic and ui layers.
 
-use logic::app::{App, Mode, Note, Prompt, PromptKind, Viewports};
+use logic::app::{App, DiffPane, DiffState, Mode, Note, Prompt, PromptKind, Viewports};
+use logic::cursor::Cursor;
 use logic::log::{Layer, LogEntry, LogLevel};
+use logic::model::{ChangeKind, ChangedFile, DiffRow, LineKind, RowKind, Side};
 
 /// The logic event for a ui event.
 #[must_use]
@@ -71,8 +73,12 @@ pub fn input_mode(mode: &Mode) -> ui::event::InputMode {
 /// How many rows each list has for a terminal of `size`.
 #[must_use]
 pub fn viewports(size: ui::layout::Size) -> Viewports {
+    let diff: ui::layout::DiffLayout = ui::layout::diff_layout(size);
     Viewports {
         log: ui::layout::log_layout(size).list.content().height,
+        diff_unstaged: diff.unstaged.content().height,
+        diff_staged: diff.staged.content().height,
+        diff_file: diff.file_diff.content().height,
     }
 }
 
@@ -82,13 +88,13 @@ pub fn screen(app: &App) -> ui::screen::Screen {
     ui::screen::Screen {
         tabs: ui::screen::Tabs {
             active: ui_view(app.view()),
-            diff_has_changes: false,
+            diff_has_changes: app.diff().status().has_changes(),
             log_has_problems: app.log().has_unseen_problems(),
         },
         status: status(app),
         body: match app.view() {
             logic::event::ViewId::Branches => ui::screen::Body::Branches,
-            logic::event::ViewId::Diff => ui::screen::Body::Diff,
+            logic::event::ViewId::Diff => ui::screen::Body::Diff(diff_view(app)),
             logic::event::ViewId::Log => ui::screen::Body::Log(log_view(app)),
         },
     }
@@ -136,6 +142,109 @@ fn log_view(app: &App) -> ui::views::log::LogView {
         )
         .collect();
     ui::views::log::LogView { rows }
+}
+
+fn diff_view(app: &App) -> ui::views::diff::DiffView {
+    let diff: &DiffState = app.diff();
+    let viewports: Viewports = app.viewports();
+    let focus: ui::views::diff::DiffFocus = match (diff.pane(), diff.side()) {
+        (DiffPane::FileDiff, _) => ui::views::diff::DiffFocus::FileDiff,
+        (DiffPane::Files, Side::Unstaged) => ui::views::diff::DiffFocus::Unstaged,
+        (DiffPane::Files, Side::Staged) => ui::views::diff::DiffFocus::Staged,
+    };
+    ui::views::diff::DiffView {
+        focus,
+        unstaged: file_rows(
+            diff.files(Side::Unstaged),
+            diff.cursor(Side::Unstaged),
+            viewports.diff_unstaged,
+        ),
+        staged: file_rows(
+            diff.files(Side::Staged),
+            diff.cursor(Side::Staged),
+            viewports.diff_staged,
+        ),
+        diff_title: diff.selected_file().map_or_else(
+            || "Diff".to_string(),
+            |f: &ChangedFile| format!("Diff {}", f.path),
+        ),
+        diff: diff_rows(diff.rows(), diff.diff_cursor(), viewports.diff_file),
+        message_title: "Commit message".to_string(),
+        message: String::new(),
+        no_changes: !diff.status().has_changes(),
+    }
+}
+
+fn file_rows(
+    files: &[ChangedFile],
+    cursor: Cursor,
+    height: usize,
+) -> Vec<ui::views::file_list::FileRow> {
+    files
+        .iter()
+        .enumerate()
+        .skip(cursor.offset())
+        .take(height)
+        .map(
+            |(index, file): (usize, &ChangedFile)| ui::views::file_list::FileRow {
+                label: file_label(file),
+                selected: index == cursor.selected(),
+            },
+        )
+        .collect()
+}
+
+/// A status letter and the path, for example `M src/main.rs` or `R old -> new`.
+fn file_label(file: &ChangedFile) -> String {
+    let letter: char = match file.kind {
+        ChangeKind::Modified => 'M',
+        ChangeKind::Added => 'A',
+        ChangeKind::Deleted => 'D',
+        ChangeKind::Renamed => 'R',
+        ChangeKind::Copied => 'C',
+        ChangeKind::TypeChanged => 'T',
+        ChangeKind::Untracked => '?',
+        ChangeKind::Conflict => 'U',
+    };
+    let path: String = match &file.original_path {
+        Some(original) => format!("{original} -> {}", file.path),
+        None => file.path.clone(),
+    };
+    let mode: &str = if file.mode_changed { " (mode)" } else { "" };
+    format!("{letter} {path}{mode}")
+}
+
+/// The visible rows of a file diff.
+pub(crate) fn diff_rows(
+    rows: &[DiffRow],
+    cursor: Cursor,
+    height: usize,
+) -> Vec<ui::views::diff_text::DiffRowView> {
+    rows.iter()
+        .enumerate()
+        .skip(cursor.offset())
+        .take(height)
+        .map(
+            |(index, row): (usize, &DiffRow)| ui::views::diff_text::DiffRowView {
+                kind: diff_row_kind(row.kind),
+                text: row.text.clone(),
+                cursor: index == cursor.selected(),
+                marked: false,
+            },
+        )
+        .collect()
+}
+
+fn diff_row_kind(kind: RowKind) -> ui::views::diff_text::DiffRowKind {
+    use ui::views::diff_text::DiffRowKind as K;
+    match kind {
+        RowKind::HunkHeader => K::HunkHeader,
+        RowKind::Line(LineKind::Context) => K::Context,
+        RowKind::Line(LineKind::Added) => K::Added,
+        RowKind::Line(LineKind::Removed) => K::Removed,
+        RowKind::Line(LineKind::NoNewline) => K::NoNewline,
+        RowKind::Note => K::Note,
+    }
 }
 
 fn layer_name(layer: Layer) -> &'static str {

@@ -26,7 +26,10 @@ fn typed(text: &str) -> Vec<Event> {
 
 fn log_app(messages: &[&str]) -> App {
     let mut app: App = App::new();
-    app.set_viewports(Viewports { log: 3 });
+    app.set_viewports(Viewports {
+        log: 3,
+        ..Viewports::default()
+    });
     for message in messages {
         app.push_log(&entry(LogLevel::Info, message));
     }
@@ -93,9 +96,12 @@ fn log_navigation() {
     assert_eq!(app.log_cursor().selected(), 3);
     run(&mut app, &[Event::Cancel]);
     assert_eq!(app.log_cursor().selected(), 3);
-    app.set_viewports(Viewports { log: 1 });
+    app.set_viewports(Viewports {
+        log: 1,
+        ..Viewports::default()
+    });
     assert_eq!(app.log_cursor().offset(), 3);
-    assert_eq!(app.viewports(), Viewports { log: 1 });
+    assert_eq!(app.viewports().log, 1);
 }
 
 #[test]
@@ -176,8 +182,16 @@ fn search_in_views_without_lists_finds_nothing() {
 }
 
 #[test]
+fn branches_view_ignores_list_keys_for_now() {
+    let mut app: App = App::new();
+    run(&mut app, &[Event::MoveDown]);
+    assert_eq!(app.view(), ViewId::Branches);
+    assert_eq!(app.mode(), &Mode::Normal);
+}
+
+#[test]
 fn test_ports_log() {
     let ports: TestPorts = TestPorts::new();
     ports.log(LogLevel::Info, "x");
-    assert_eq!(ports.logged.borrow().clone(), vec!["Info: x".to_string()]);
+    assert_eq!(ports.calls(), vec!["Info: x".to_string()]);
 }

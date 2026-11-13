@@ -2,6 +2,7 @@
 
 pub mod convert;
 pub mod log;
+pub mod model;
 pub mod ports;
 pub mod session;
 pub mod size;

@@ -1,6 +1,10 @@
 //! The functions wiring provides to the logic layer.
 
+use logic::model::{ChangeKind, ChangedFile, FileDiff, Side, WorkStatus};
+use logic::ports::Failed;
+
 use crate::log::LogBuffer;
+use crate::model;
 
 /// Implements the logic layer's ports with the git and validation layers.
 pub struct SessionPorts<'a> {
@@ -14,6 +18,18 @@ impl SessionPorts<'_> {
     fn log_validation(&self) -> impl Fn(validation::log::LogLevel, &str) + '_ {
         |level: validation::log::LogLevel, message: &str| self.log.validation(level, message)
     }
+
+    fn log_git(&self) -> impl Fn(git::log::LogLevel, &str) + '_ {
+        |level: git::log::LogLevel, message: &str| self.log.git(level, message)
+    }
+}
+
+/// The paths git needs for the diff of `file`: renames in the index need both paths.
+fn diff_paths(file: &ChangedFile, side: Side) -> Vec<String> {
+    match (&file.original_path, side) {
+        (Some(original), Side::Staged) => vec![original.clone(), file.path.clone()],
+        _ => vec![file.path.clone()],
+    }
 }
 
 impl logic::ports::Ports for SessionPorts<'_> {
@@ -26,48 +42,27 @@ impl logic::ports::Ports for SessionPorts<'_> {
             .map(|text: validation::SearchText| logic::ports::SearchText(text.as_str().to_string()))
             .map_err(|error: validation::ValidationError| error.to_string())
     }
+
+    fn status(&self) -> Result<WorkStatus, Failed> {
+        self.git
+            .status(&self.log_git())
+            .map(model::work_status)
+            .map_err(|_| Failed)
+    }
+
+    fn file_diff(&self, file: &ChangedFile, side: Side) -> Result<FileDiff, Failed> {
+        let diff: Result<git::FileDiff, git::GitError> = if file.kind == ChangeKind::Untracked {
+            self.git.diff_untracked(&file.path, &self.log_git())
+        } else {
+            self.git.diff(
+                &diff_paths(file, side),
+                side == Side::Staged,
+                &self.log_git(),
+            )
+        };
+        diff.map(model::file_diff).map_err(|_| Failed)
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::SessionPorts;
-    use crate::log::LogBuffer;
-    use crate::test_support::fixed_clock;
-    use logic::log::{Layer, LogEntry, LogLevel};
-    use logic::ports::{Ports, SearchText};
-
-    fn with_ports(test: impl Fn(&SessionPorts<'_>, &LogBuffer)) {
-        let log: LogBuffer = LogBuffer::new(fixed_clock);
-        let git: git::Git = git::Git::new(std::path::Path::new("."));
-        let ports: SessionPorts<'_> = SessionPorts {
-            log: &log,
-            git: &git,
-        };
-        test(&ports, &log);
-    }
-
-    #[test]
-    fn logic_log_goes_to_buffer() {
-        with_ports(|ports: &SessionPorts<'_>, log: &LogBuffer| {
-            ports.log(LogLevel::Info, "hello");
-            let entries: Vec<LogEntry> = log.drain();
-            assert_eq!(entries[0].layer, Layer::Logic);
-            assert_eq!(entries[0].message, "hello");
-        });
-    }
-
-    #[test]
-    fn search_is_validated_by_validation_layer() {
-        with_ports(|ports: &SessionPorts<'_>, log: &LogBuffer| {
-            assert_eq!(ports.validate_search("x"), Ok(SearchText("x".to_string())));
-            assert_eq!(
-                ports.validate_search(""),
-                Err("search text is empty".to_string())
-            );
-            let entries: Vec<LogEntry> = log.drain();
-            assert_eq!(entries.len(), 1);
-            assert_eq!(entries[0].layer, Layer::Validation);
-            assert_eq!(entries[0].level, LogLevel::Error);
-        });
-    }
-}
+mod tests;

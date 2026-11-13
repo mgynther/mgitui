@@ -23,13 +23,7 @@ impl App {
     pub(super) fn handle_log(&mut self, event: Event) {
         let len: usize = self.log.entries().len();
         let height: usize = self.viewports.log;
-        match event {
-            Event::MoveDown => self.log_cursor.down(len, height),
-            Event::MoveUp => self.log_cursor.up(len, height),
-            Event::Top => self.log_cursor.top(),
-            Event::Bottom => self.log_cursor.bottom(len, height),
-            _ => {}
-        }
+        super::diff_view::move_cursor(&mut self.log_cursor, event, len, height);
     }
 
     pub(super) fn search_log(&mut self, term: &str, direction: Direction) -> Option<Found> {

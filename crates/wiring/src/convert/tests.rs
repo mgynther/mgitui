@@ -1,10 +1,12 @@
 use super::{
-    event, input_mode, layer_name, log_view, logic_view, screen, ui_level, ui_view, viewports,
+    diff_row_kind, event, file_label, input_mode, layer_name, log_view, logic_view, screen,
+    ui_level, ui_view, viewports,
 };
 use logic::app::{App, Mode, Viewports};
 use logic::event::Event as L;
 use logic::event::ViewId as LV;
 use logic::log::{Layer, LogEntry, LogLevel};
+use logic::model::{ChangeKind, ChangedFile, LineKind, RowKind};
 use ui::event::Event as U;
 use ui::event::ViewId as UV;
 
@@ -15,6 +17,18 @@ impl logic::ports::Ports for NoPorts {
 
     fn validate_search(&self, input: &str) -> Result<logic::ports::SearchText, String> {
         Ok(logic::ports::SearchText(input.to_string()))
+    }
+
+    fn status(&self) -> Result<logic::model::WorkStatus, logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
+    fn file_diff(
+        &self,
+        _file: &logic::model::ChangedFile,
+        _side: logic::model::Side,
+    ) -> Result<logic::model::FileDiff, logic::ports::Failed> {
+        Err(logic::ports::Failed)
     }
 }
 
@@ -106,7 +120,15 @@ fn viewports_follow_layout() {
         width: 80,
         height: 24,
     };
-    assert_eq!(viewports(size), Viewports { log: 21 });
+    assert_eq!(
+        viewports(size),
+        Viewports {
+            log: 21,
+            diff_unstaged: 10,
+            diff_staged: 10,
+            diff_file: 13,
+        }
+    );
 }
 
 #[test]
@@ -120,7 +142,10 @@ fn startup_screen() {
 #[test]
 fn log_screen_shows_visible_rows_and_status() {
     let mut app: App = App::new();
-    app.set_viewports(Viewports { log: 2 });
+    app.set_viewports(Viewports {
+        log: 2,
+        ..Viewports::default()
+    });
     for message in ["a", "b", "c"] {
         app.push_log(&LogEntry {
             time: 5,
@@ -163,5 +188,50 @@ fn log_screen_shows_visible_rows_and_status() {
         ui::screen::Status::Note("Pattern not found: z".to_string())
     );
     app.handle(L::SwitchView(LV::Diff), &NoPorts);
-    assert_eq!(screen(&app).body, ui::screen::Body::Diff);
+    assert!(matches!(screen(&app).body, ui::screen::Body::Diff(_)));
+}
+
+#[test]
+fn file_labels() {
+    let file = |kind: ChangeKind| ChangedFile {
+        path: "p".to_string(),
+        original_path: None,
+        kind,
+        mode_changed: false,
+    };
+    let cases: [(ChangeKind, &str); 8] = [
+        (ChangeKind::Modified, "M p"),
+        (ChangeKind::Added, "A p"),
+        (ChangeKind::Deleted, "D p"),
+        (ChangeKind::Renamed, "R p"),
+        (ChangeKind::Copied, "C p"),
+        (ChangeKind::TypeChanged, "T p"),
+        (ChangeKind::Untracked, "? p"),
+        (ChangeKind::Conflict, "U p"),
+    ];
+    for (kind, label) in cases {
+        assert_eq!(file_label(&file(kind)), label);
+    }
+    let renamed: ChangedFile = ChangedFile {
+        original_path: Some("o".to_string()),
+        mode_changed: true,
+        ..file(ChangeKind::Renamed)
+    };
+    assert_eq!(file_label(&renamed), "R o -> p (mode)");
+}
+
+#[test]
+fn diff_row_kinds() {
+    use ui::views::diff_text::DiffRowKind as K;
+    let cases: [(RowKind, K); 6] = [
+        (RowKind::HunkHeader, K::HunkHeader),
+        (RowKind::Line(LineKind::Context), K::Context),
+        (RowKind::Line(LineKind::Added), K::Added),
+        (RowKind::Line(LineKind::Removed), K::Removed),
+        (RowKind::Line(LineKind::NoNewline), K::NoNewline),
+        (RowKind::Note, K::Note),
+    ];
+    for (from, to) in cases {
+        assert_eq!(diff_row_kind(from), to);
+    }
 }

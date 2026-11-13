@@ -23,7 +23,7 @@ impl Session {
             git,
             log,
         };
-        session.collect_log();
+        session.handle(logic::event::Event::Reload);
         session
     }
 
@@ -35,13 +35,18 @@ impl Session {
             let view: ui::event::ViewId = convert::ui_view(self.app.view());
             let mode: ui::event::InputMode = convert::input_mode(self.app.mode());
             if let Some(event) = ui::event::event_for(key, view, mode) {
-                let ports: SessionPorts<'_> = SessionPorts {
-                    log: &self.log,
-                    git: &self.git,
-                };
-                self.app.handle(convert::event(event), &ports);
+                self.handle(convert::event(event));
             }
         }
+        self.collect_log();
+    }
+
+    fn handle(&mut self, event: logic::event::Event) {
+        let ports: SessionPorts<'_> = SessionPorts {
+            log: &self.log,
+            git: &self.git,
+        };
+        self.app.handle(event, &ports);
         self.collect_log();
     }
 
@@ -73,7 +78,7 @@ impl Session {
 mod tests {
     use super::Session;
     use crate::log::LogBuffer;
-    use crate::test_support::fixed_clock;
+    use crate::test_support::{TempDir, fixed_clock, init_repo};
     use ui::layout::Size;
 
     const SIZE: Size = Size {
@@ -81,15 +86,24 @@ mod tests {
         height: 24,
     };
 
-    fn session() -> Session {
+    fn session_in(dir: &TempDir) -> Session {
         let log: LogBuffer = LogBuffer::new(fixed_clock);
         log.wiring(logic::log::LogLevel::Info, "started");
-        Session::new(git::Git::new(std::path::Path::new(".")), log)
+        let mut session: Session = Session::new(git::Git::new(dir.path()), log);
+        session.resize(SIZE);
+        session
+    }
+
+    fn session() -> (TempDir, Session) {
+        let dir: TempDir = TempDir::new();
+        init_repo(dir.path());
+        let session: Session = session_in(&dir);
+        (dir, session)
     }
 
     #[test]
     fn shows_tabs_and_quits_after_confirmation() {
-        let mut s: Session = session();
+        let (_dir, mut s): (TempDir, Session) = session();
         assert!(s.render(SIZE).row_text(0).starts_with(" F1 Branches "));
         s.input(b"q");
         assert_eq!(s.render(SIZE).row_text(23).trim_end(), "Quit? y/n");
@@ -101,7 +115,7 @@ mod tests {
 
     #[test]
     fn function_keys_switch_views_and_unknown_keys_are_logged() {
-        let mut s: Session = session();
+        let (_dir, mut s): (TempDir, Session) = session();
         s.input(b"\x1bOR\x1b[Z");
         let screen: ui::buffer::Buffer = s.render(SIZE);
         assert!(screen.row_text(1).starts_with("─ Log ─"));
@@ -110,18 +124,39 @@ mod tests {
     }
 
     #[test]
+    fn diff_view_shows_changes_and_reloads() {
+        let (dir, mut s): (TempDir, Session) = session();
+        s.input(b"\x1bOQ");
+        assert!(s.render(SIZE).row_text(2).contains("No changes"));
+        std::fs::write(dir.path().join("new.txt"), "hello\n").unwrap();
+        s.input(b"r");
+        let screen: ui::buffer::Buffer = s.render(SIZE);
+        assert!(screen.row_text(1).contains("Diff new.txt"));
+        assert!(screen.row_text(2).starts_with("? new.txt"));
+        assert!(screen.row_text(3).contains("+hello"));
+        assert_eq!(screen.cell(15, 0).unwrap().style.fg, ui::style::Color::Red);
+        assert!(screen.cell(0, 2).unwrap().style.reverse);
+        s.input(b"s");
+        let staged: String = s.render(SIZE).row_text(1);
+        assert!(staged.contains(" Diff ") && !staged.contains("new.txt"));
+        s.input(b"sw");
+        assert!(s.render(SIZE).row_text(2).contains("▶@@ -0,0 +1 @@"));
+    }
+
+    #[test]
     fn log_view_search_with_validation() {
-        let mut s: Session = session();
-        s.resize(SIZE);
+        let (_dir, mut s): (TempDir, Session) = session();
         s.input(b"\x1bOR/");
         assert_eq!(s.render(SIZE).row_text(23).trim_end(), "/");
         s.input(b"\r");
         let screen: ui::buffer::Buffer = s.render(SIZE);
         assert_eq!(screen.row_text(23).trim_end(), "search text is empty");
         assert!(screen.row_text(2).contains("wiring     Info  started"));
+        assert!(screen.row_text(3).contains("logic      Info  reload"));
+        assert!(screen.row_text(4).contains("git        Info  git status"));
         assert!(
             screen
-                .row_text(3)
+                .row_text(5)
                 .contains("validation Error search text is empty")
         );
     }

@@ -5,6 +5,7 @@ pub mod app;
 pub mod cursor;
 pub mod event;
 pub mod log;
+pub mod model;
 pub mod ports;
 pub mod search;
 

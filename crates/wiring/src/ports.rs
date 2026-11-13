@@ -1,8 +1,10 @@
 //! The functions wiring provides to the logic layer.
 
+use logic::log::LogLevel;
 use logic::model::{ChangeKind, ChangedFile, FileDiff, Side, WorkStatus};
-use logic::ports::Failed;
+use logic::ports::{CommitMessage, Failed};
 
+use crate::editor::{self, Editor};
 use crate::log::LogBuffer;
 use crate::model;
 
@@ -12,6 +14,8 @@ pub struct SessionPorts<'a> {
     pub log: &'a LogBuffer,
     /// Runs git in the repository.
     pub git: &'a git::Git,
+    /// Runs Vim on a file.
+    pub editor: &'a Editor,
 }
 
 impl SessionPorts<'_> {
@@ -78,6 +82,41 @@ impl logic::ports::Ports for SessionPorts<'_> {
     fn apply_to_index(&self, patch: &str, reverse: bool) -> Result<(), Failed> {
         self.git
             .apply_cached(patch, reverse, &self.log_git())
+            .map_err(|_| Failed)
+    }
+
+    fn has_commits(&self) -> Result<bool, Failed> {
+        self.git.has_head(&self.log_git()).map_err(|_| Failed)
+    }
+
+    fn last_commit_message(&self) -> Result<String, Failed> {
+        self.git
+            .last_commit_message(&self.log_git())
+            .map(|message: String| format!("{}\n", message.trim_end()))
+            .map_err(|_| Failed)
+    }
+
+    fn edit_message(&self, text: &str) -> Result<String, Failed> {
+        editor::edit_text(text, self.git.temp_dir(), self.editor).map_err(
+            |error: std::io::Error| {
+                self.log.wiring(
+                    LogLevel::Error,
+                    &format!("editing the commit message failed: {error}"),
+                );
+                Failed
+            },
+        )
+    }
+
+    fn validate_commit_message(&self, text: &str) -> Result<CommitMessage, String> {
+        validation::commit_message(text, &self.log_validation())
+            .map(|message: validation::CommitMessage| CommitMessage(message.as_str().to_string()))
+            .map_err(|error: validation::ValidationError| error.to_string())
+    }
+
+    fn commit(&self, message: &CommitMessage, amend: bool) -> Result<(), Failed> {
+        self.git
+            .commit(&message.0, amend, &self.log_git())
             .map_err(|_| Failed)
     }
 }

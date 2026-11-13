@@ -4,7 +4,7 @@
 mod terminal;
 
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use terminal::Terminal;
@@ -18,8 +18,7 @@ fn main() -> ExitCode {
         Ok(git) => git,
         Err(message) => return fail(&message),
     };
-    let session: Session = Session::new(git, log);
-    match run(session) {
+    match run(git, log) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => fail(&format!("mgitui: {error}")),
     }
@@ -30,14 +29,17 @@ fn fail(message: &str) -> ExitCode {
     ExitCode::FAILURE
 }
 
-fn run(mut session: Session) -> io::Result<()> {
+fn run(git: git::Git, log: LogBuffer) -> io::Result<()> {
     let terminal: Terminal = Terminal::enter()?;
     let saved: String = terminal.saved().to_string();
+    let for_panic: String = saved.clone();
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        terminal::restore(&saved);
+        terminal::restore(&for_panic);
         default_hook(info);
     }));
+    let editor = move |path: &Path| terminal::run_vim(&saved, path);
+    let mut session: Session = Session::new(git, log, Box::new(editor));
     let result: io::Result<()> = event_loop(&terminal, &mut session);
     terminal.leave();
     result

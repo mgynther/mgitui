@@ -4,7 +4,7 @@ use std::cell::RefCell;
 
 use crate::log::LogLevel;
 use crate::model::{ChangeKind, ChangedFile, DiffLine, FileDiff, Hunk, LineKind, Side, WorkStatus};
-use crate::ports::{Failed, Ports, SearchText};
+use crate::ports::{CommitMessage, Failed, Ports, SearchText};
 
 /// Records calls as text and answers from its fields.
 pub struct TestPorts {
@@ -18,6 +18,14 @@ pub struct TestPorts {
     pub diff: Option<FileDiff>,
     /// Whether staging, unstaging and applying patches fail.
     pub stage_fails: bool,
+    /// The answer to `has_commits`; `None` fails.
+    pub has_commits: Option<bool>,
+    /// The answer to `last_commit_message`; `None` fails.
+    pub last_message: Option<String>,
+    /// What the editor appends to the text; `None` fails.
+    pub editor_appends: Option<String>,
+    /// Whether committing fails.
+    pub commit_fails: bool,
 }
 
 impl TestPorts {
@@ -28,6 +36,10 @@ impl TestPorts {
             diff_fails: false,
             diff: None,
             stage_fails: false,
+            has_commits: Some(true),
+            last_message: Some("Last\n".to_string()),
+            editor_appends: Some("edited\n".to_string()),
+            commit_fails: false,
         }
     }
 
@@ -131,5 +143,42 @@ impl Ports for TestPorts {
 
     fn apply_to_index(&self, patch: &str, reverse: bool) -> Result<(), Failed> {
         self.record(format!("apply reverse={reverse}\n{patch}"))
+    }
+
+    fn has_commits(&self) -> Result<bool, Failed> {
+        self.calls.borrow_mut().push("has commits".to_string());
+        self.has_commits.ok_or(Failed)
+    }
+
+    fn last_commit_message(&self) -> Result<String, Failed> {
+        self.calls.borrow_mut().push("last message".to_string());
+        self.last_message.clone().ok_or(Failed)
+    }
+
+    fn edit_message(&self, text: &str) -> Result<String, Failed> {
+        self.calls.borrow_mut().push(format!("edit {text:?}"));
+        self.editor_appends
+            .as_ref()
+            .map(|added: &String| format!("{text}{added}"))
+            .ok_or(Failed)
+    }
+
+    fn validate_commit_message(&self, text: &str) -> Result<CommitMessage, String> {
+        if text.trim().is_empty() {
+            Err("commit message is empty".to_string())
+        } else {
+            Ok(CommitMessage(text.to_string()))
+        }
+    }
+
+    fn commit(&self, message: &CommitMessage, amend: bool) -> Result<(), Failed> {
+        self.calls
+            .borrow_mut()
+            .push(format!("commit amend={amend} {:?}", message.0));
+        if self.commit_fails {
+            Err(Failed)
+        } else {
+            Ok(())
+        }
     }
 }

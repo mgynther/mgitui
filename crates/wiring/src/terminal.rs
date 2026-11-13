@@ -1,13 +1,16 @@
-//! The real terminal: raw mode, size, reading input and drawing. Terminal-only code, excluded
-//! from coverage.
+//! The real terminal: raw mode, size, reading input, drawing and handing the terminal to Vim.
+//! Terminal-only code, excluded from coverage.
 
 use std::io::{self, Read, Write};
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 /// Switches to the alternate screen and hides the cursor.
 const ENTER: &str = "\x1b[?1049h\x1b[?25l";
 /// Resets styles, shows the cursor and leaves the alternate screen.
 const LEAVE: &str = "\x1b[0m\x1b[?25h\x1b[?1049l";
+/// Raw mode where reads return after at most 0.1 seconds.
+const RAW: [&str; 6] = ["raw", "-echo", "min", "0", "time", "1"];
 
 /// The terminal in raw mode. Restored by [`Terminal::leave`].
 pub struct Terminal {
@@ -19,16 +22,14 @@ pub struct Terminal {
     reason = "reading, drawing and the size are only meaningful while the terminal is in raw mode"
 )]
 impl Terminal {
-    /// Saves the terminal settings, switches to raw mode where reads return after at most 0.1
-    /// seconds, and switches to the alternate screen.
+    /// Saves the terminal settings, switches to raw mode and to the alternate screen.
     pub fn enter() -> io::Result<Terminal> {
         let saved: String = stty(&["-g"])?.trim().to_string();
-        stty(&["raw", "-echo", "min", "0", "time", "1"])?;
-        write_out(ENTER)?;
+        resume()?;
         Ok(Terminal { saved })
     }
 
-    /// The saved terminal settings, for restoring from a panic hook.
+    /// The saved terminal settings, for restoring from a panic hook or for running Vim.
     pub fn saved(&self) -> &str {
         &self.saved
     }
@@ -61,6 +62,25 @@ impl Terminal {
 pub fn restore(saved: &str) {
     let _ = write_out(LEAVE);
     let _ = stty(&[saved]);
+}
+
+/// Switches back to raw mode and the alternate screen.
+fn resume() -> io::Result<()> {
+    stty(&RAW)?;
+    write_out(ENTER)
+}
+
+/// Hands the terminal to Vim for editing `path` and takes it back when Vim exits.
+pub fn run_vim(saved: &str, path: &Path) -> io::Result<()> {
+    restore(saved);
+    let status: io::Result<std::process::ExitStatus> = Command::new("vim").arg(path).status();
+    resume()?;
+    let status: std::process::ExitStatus = status?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(format!("vim exited with {status}")))
+    }
 }
 
 fn write_out(text: &str) -> io::Result<()> {

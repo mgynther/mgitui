@@ -65,6 +65,7 @@ pub struct Git {
     program: OsString,
     dir: PathBuf,
     env: Vec<(OsString, OsString)>,
+    temp_dir: PathBuf,
 }
 
 impl Git {
@@ -75,7 +76,22 @@ impl Git {
             program: OsString::from("git"),
             dir: dir.to_path_buf(),
             env: Vec::new(),
+            temp_dir: std::env::temp_dir(),
         }
+    }
+
+    /// Writes temporary files, such as commit messages, to `dir` instead of the system temp
+    /// directory.
+    #[must_use]
+    pub fn with_temp_dir(mut self, dir: &Path) -> Self {
+        self.temp_dir = dir.to_path_buf();
+        self
+    }
+
+    /// The directory for temporary files.
+    #[must_use]
+    pub fn temp_dir(&self) -> &Path {
+        &self.temp_dir
     }
 
     /// Uses `program` instead of `git` from `PATH`.

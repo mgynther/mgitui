@@ -3,6 +3,7 @@
 pub mod log;
 
 mod command;
+mod commit;
 mod diff;
 mod runner;
 mod stage;

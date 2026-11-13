@@ -11,7 +11,17 @@ const SIZE: Size = Size {
 fn session_in(dir: &TempDir) -> Session {
     let log: LogBuffer = LogBuffer::new(fixed_clock);
     log.wiring(logic::log::LogLevel::Info, "started");
-    let mut session: Session = Session::new(git::Git::new(dir.path()), log);
+    let git: git::Git = git::Git::new(dir.path()).with_temp_dir(dir.path());
+    let editor = |path: &std::path::Path| -> std::io::Result<()> {
+        let old: String = std::fs::read_to_string(path).unwrap();
+        let new: String = if old.is_empty() {
+            "New commit\n".to_string()
+        } else {
+            old.replace("New", "Amended")
+        };
+        std::fs::write(path, new)
+    };
+    let mut session: Session = Session::new(git, log, Box::new(editor));
     session.resize(SIZE);
     session
 }
@@ -140,4 +150,38 @@ fn stage_lines_of_first_hunk_and_whole_file() {
     );
     s.input(b"s\r");
     assert_eq!(index_content(&dir), "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n");
+}
+
+#[test]
+fn edit_message_commit_and_amend() {
+    let (dir, mut s): (TempDir, Session) = two_hunk_session();
+    s.input(b"c");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "commit message is empty"
+    );
+    s.input(b"e");
+    assert!(s.render(SIZE).row_text(16).contains("│New commit"));
+    s.input(b"\rc");
+    assert_eq!(
+        git_ok(dir.path(), &["log", "--format=%s"]),
+        "New commit\ninit\n"
+    );
+    assert!(!s.render(SIZE).row_text(16).contains("New commit"));
+    s.input(b"a");
+    let screen: ui::buffer::Buffer = s.render(SIZE);
+    assert!(
+        screen.row_text(15).contains("Amend message"),
+        "{}",
+        screen.row_text(15)
+    );
+    assert!(screen.row_text(16).contains("│New commit"));
+    s.input(b"ec");
+    assert_eq!(
+        git_ok(dir.path(), &["log", "--format=%s"]),
+        "Amended commit\ninit\n"
+    );
+    let after: ui::buffer::Buffer = s.render(SIZE);
+    assert!(after.row_text(15).contains("Commit message"));
+    assert!(!after.row_text(16).contains("commit"));
 }

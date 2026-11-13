@@ -6,6 +6,8 @@ mod log_view;
 pub use diff_view::{DiffPane, DiffState};
 
 #[cfg(test)]
+mod commit_tests;
+#[cfg(test)]
 mod diff_tests;
 #[cfg(test)]
 mod stage_tests;

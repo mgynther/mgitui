@@ -33,6 +33,9 @@ pub struct DiffState {
     rows: Vec<DiffRow>,
     diff_cursor: Cursor,
     anchor: Option<usize>,
+    draft: String,
+    amend_draft: String,
+    amend: bool,
 }
 
 impl DiffState {
@@ -96,6 +99,31 @@ impl DiffState {
         let cursor: usize = self.diff_cursor.selected();
         self.anchor
             .map(|anchor: usize| (anchor.min(cursor), anchor.max(cursor)))
+    }
+
+    /// The commit message shown in the message box: the amend draft in amend mode, the new
+    /// commit draft otherwise.
+    #[must_use]
+    pub fn message(&self) -> &str {
+        if self.amend {
+            &self.amend_draft
+        } else {
+            &self.draft
+        }
+    }
+
+    /// Whether committing amends the last commit.
+    #[must_use]
+    pub fn amend(&self) -> bool {
+        self.amend
+    }
+
+    fn message_mut(&mut self) -> &mut String {
+        if self.amend {
+            &mut self.amend_draft
+        } else {
+            &mut self.draft
+        }
     }
 
     fn cursor_mut(&mut self, side: Side) -> &mut Cursor {
@@ -189,6 +217,9 @@ impl App {
 
     pub(super) fn handle_diff(&mut self, event: Event, ports: &dyn Ports) {
         match (self.diff.pane, event) {
+            (_, Event::EditMessage) => self.edit_message(ports),
+            (_, Event::Commit) => self.commit(ports),
+            (_, Event::ToggleAmend) => self.toggle_amend(ports),
             (_, Event::NextPane) => {
                 self.diff.pane = match self.diff.pane {
                     DiffPane::Files => DiffPane::FileDiff,
@@ -323,6 +354,65 @@ impl App {
         self.refresh(ports);
         if result.is_err() {
             self.note = Note::Problem("Staging failed, see the Log view".to_string());
+        }
+    }
+
+    fn edit_message(&mut self, ports: &dyn Ports) {
+        ports.log(LogLevel::Info, "edit commit message");
+        match ports.edit_message(self.diff.message()) {
+            Ok(text) => *self.diff.message_mut() = text,
+            Err(Failed) => {
+                self.note = Note::Problem("Editing failed, see the Log view".to_string());
+            }
+        }
+    }
+
+    fn toggle_amend(&mut self, ports: &dyn Ports) {
+        if self.diff.amend {
+            self.diff.amend = false;
+            self.diff.amend_draft.clear();
+            return;
+        }
+        match ports.has_commits() {
+            Ok(false) => {
+                let message: &str = "Nothing to amend: there are no commits yet";
+                ports.log(LogLevel::Warn, message);
+                self.note = Note::Problem(message.to_string());
+            }
+            Ok(true) => match ports.last_commit_message() {
+                Ok(message) => {
+                    self.diff.amend_draft = message;
+                    self.diff.amend = true;
+                }
+                Err(Failed) => self.amend_failed(),
+            },
+            Err(Failed) => self.amend_failed(),
+        }
+    }
+
+    fn amend_failed(&mut self) {
+        self.note = Note::Problem("Reading the last commit failed, see the Log view".to_string());
+    }
+
+    fn commit(&mut self, ports: &dyn Ports) {
+        let message: crate::ports::CommitMessage =
+            match ports.validate_commit_message(self.diff.message()) {
+                Ok(message) => message,
+                Err(problem) => {
+                    self.note = Note::Problem(problem);
+                    return;
+                }
+            };
+        let amend: bool = self.diff.amend;
+        ports.log(LogLevel::Info, if amend { "amend" } else { "commit" });
+        let result: Result<(), Failed> = ports.commit(&message, amend);
+        if result.is_ok() {
+            self.diff.message_mut().clear();
+            self.diff.amend = false;
+        }
+        self.refresh(ports);
+        if result.is_err() {
+            self.note = Note::Problem("Commit failed, see the Log view".to_string());
         }
     }
 

@@ -174,8 +174,12 @@ fn diff_view(app: &App) -> ui::views::diff::DiffView {
             diff.selection(),
             viewports.diff_file,
         ),
-        message_title: "Commit message".to_string(),
-        message: String::new(),
+        message_title: if diff.amend() {
+            "Amend message (previous commit)".to_string()
+        } else {
+            "Commit message".to_string()
+        },
+        message: diff.message().to_string(),
         no_changes: !diff.status().has_changes(),
     }
 }

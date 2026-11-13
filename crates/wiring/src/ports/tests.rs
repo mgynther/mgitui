@@ -3,14 +3,20 @@ use crate::log::LogBuffer;
 use crate::test_support::{TempDir, fixed_clock, git_ok, init_repo};
 use logic::log::{Layer, LogEntry, LogLevel};
 use logic::model::{ChangeKind, ChangedFile, FileDiff, LineKind, Side, WorkStatus};
-use logic::ports::{Failed, Ports, SearchText};
+use logic::ports::{CommitMessage, Failed, Ports, SearchText};
+
+fn append_line(path: &std::path::Path) -> std::io::Result<()> {
+    let old: String = std::fs::read_to_string(path).unwrap();
+    std::fs::write(path, format!("{old}line\n"))
+}
 
 fn with_ports(dir: &std::path::Path, test: impl Fn(&SessionPorts<'_>, &LogBuffer)) {
     let log: LogBuffer = LogBuffer::new(fixed_clock);
-    let git: git::Git = git::Git::new(dir);
+    let git: git::Git = git::Git::new(dir).with_temp_dir(dir);
     let ports: SessionPorts<'_> = SessionPorts {
         log: &log,
         git: &git,
+        editor: &append_line,
     };
     test(&ports, &log);
 }
@@ -87,10 +93,13 @@ fn status_and_diffs_from_real_repository() {
 fn git_failures_become_failed() {
     let dir: TempDir = TempDir::new();
     let log: LogBuffer = LogBuffer::new(fixed_clock);
-    let git: git::Git = git::Git::new(dir.path()).with_program("/nonexistent/git");
+    let git: git::Git = git::Git::new(dir.path())
+        .with_program("/nonexistent/git")
+        .with_temp_dir(&dir.path().join("missing"));
     let ports: SessionPorts<'_> = SessionPorts {
         log: &log,
         git: &git,
+        editor: &append_line,
     };
     assert_eq!(ports.status(), Err(Failed));
     assert_eq!(
@@ -106,6 +115,16 @@ fn git_failures_become_failed() {
         Err(Failed)
     );
     assert_eq!(ports.apply_to_index("", false), Err(Failed));
+    assert_eq!(ports.has_commits(), Err(Failed));
+    assert_eq!(ports.last_commit_message(), Err(Failed));
+    assert_eq!(ports.edit_message("x"), Err(Failed));
+    assert_eq!(
+        ports.commit(&CommitMessage("m".to_string()), false),
+        Err(Failed)
+    );
+    let logged: Vec<LogEntry> = log.drain();
+    assert!(logged.iter().any(|e: &LogEntry| e.layer == Layer::Wiring
+        && e.message.starts_with("editing the commit message failed: ")));
 }
 
 #[test]
@@ -140,5 +159,37 @@ fn staging_a_renamed_file_back_and_forth() {
             .apply_to_index("--- a/b.txt\n+++ b/b.txt\n@@ -1 +1 @@\n-a\n+z\n", false)
             .unwrap();
         assert_eq!(git_ok(dir.path(), &["show", ":b.txt"]), "z\n");
+    });
+}
+
+#[test]
+fn edit_validate_commit_and_amend() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    std::fs::write(dir.path().join("a.txt"), "a\n").unwrap();
+    git_ok(dir.path(), &["add", "."]);
+    with_ports(dir.path(), |ports: &SessionPorts<'_>, log: &LogBuffer| {
+        assert_eq!(ports.has_commits(), Ok(false));
+        assert_eq!(
+            ports.edit_message("First\n"),
+            Ok("First\nline\n".to_string())
+        );
+        assert_eq!(
+            ports.validate_commit_message(" "),
+            Err("commit message is empty".to_string())
+        );
+        let message: CommitMessage = ports.validate_commit_message("First\n").unwrap();
+        ports.commit(&message, false).unwrap();
+        assert_eq!(ports.has_commits(), Ok(true));
+        assert_eq!(ports.last_commit_message(), Ok("First\n".to_string()));
+        ports
+            .commit(&CommitMessage("Second\n".to_string()), true)
+            .unwrap();
+        assert_eq!(git_ok(dir.path(), &["log", "--format=%s"]), "Second\n");
+        assert!(
+            log.drain()
+                .iter()
+                .any(|e: &LogEntry| e.layer == Layer::Validation)
+        );
     });
 }

@@ -7,6 +7,10 @@ use crate::model::{ChangedFile, FileDiff, Side, WorkStatus};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SearchText(pub String);
 
+/// A commit message that passed validation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommitMessage(pub String);
+
 /// A failure that was already logged by the layer where it happened.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Failed;
@@ -58,4 +62,39 @@ pub trait Ports {
     ///
     /// Fails when git fails, for example when the patch does not apply.
     fn apply_to_index(&self, patch: &str, reverse: bool) -> Result<(), Failed>;
+
+    /// Whether the repository has at least one commit.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn has_commits(&self) -> Result<bool, Failed>;
+
+    /// The message of the last commit.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn last_commit_message(&self) -> Result<String, Failed>;
+
+    /// Lets the user edit `text` in Vim and returns the edited text.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the editor cannot be run.
+    fn edit_message(&self, text: &str) -> Result<String, Failed>;
+
+    /// Validates a commit message.
+    ///
+    /// # Errors
+    ///
+    /// Returns a short description when the message is not valid.
+    fn validate_commit_message(&self, text: &str) -> Result<CommitMessage, String>;
+
+    /// Commits the staged changes, or amends the last commit.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn commit(&self, message: &CommitMessage, amend: bool) -> Result<(), Failed>;
 }

@@ -3,6 +3,7 @@
 use logic::app::App;
 
 use crate::convert;
+use crate::editor::Editor;
 use crate::log::LogBuffer;
 use crate::ports::SessionPorts;
 
@@ -11,17 +12,19 @@ pub struct Session {
     app: App,
     git: git::Git,
     log: LogBuffer,
+    editor: Box<Editor>,
 }
 
 impl Session {
-    /// Starts the application for the repository `git` runs in. Entries already in `log` are
-    /// moved into the application log.
+    /// Starts the application for the repository `git` runs in, editing commit messages with
+    /// `editor`. Entries already in `log` are moved into the application log.
     #[must_use]
-    pub fn new(git: git::Git, log: LogBuffer) -> Self {
+    pub fn new(git: git::Git, log: LogBuffer, editor: Box<Editor>) -> Self {
         let mut session: Session = Session {
             app: App::new(),
             git,
             log,
+            editor,
         };
         session.handle(logic::event::Event::Reload);
         session
@@ -45,6 +48,7 @@ impl Session {
         let ports: SessionPorts<'_> = SessionPorts {
             log: &self.log,
             git: &self.git,
+            editor: self.editor.as_ref(),
         };
         self.app.handle(event, &ports);
         self.collect_log();

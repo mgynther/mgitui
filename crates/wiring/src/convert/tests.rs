@@ -42,6 +42,30 @@ impl logic::ports::Ports for NoPorts {
     fn apply_to_index(&self, _patch: &str, _reverse: bool) -> Result<(), logic::ports::Failed> {
         Err(logic::ports::Failed)
     }
+
+    fn has_commits(&self) -> Result<bool, logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
+    fn last_commit_message(&self) -> Result<String, logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
+    fn edit_message(&self, _text: &str) -> Result<String, logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
+    fn validate_commit_message(&self, _text: &str) -> Result<logic::ports::CommitMessage, String> {
+        Err(String::new())
+    }
+
+    fn commit(
+        &self,
+        _message: &logic::ports::CommitMessage,
+        _amend: bool,
+    ) -> Result<(), logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
 }
 
 #[test]

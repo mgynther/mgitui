@@ -42,6 +42,15 @@ pub enum Command {
         /// Whether to apply the patch in reverse.
         reverse: bool,
     },
+    /// `git log -1 --format=%B`: the message of the last commit.
+    LastMessage,
+    /// `git commit -F <file>`: commits with the message in a file.
+    Commit {
+        /// The file that contains the message.
+        message_file: String,
+        /// Whether to amend the last commit.
+        amend: bool,
+    },
 }
 
 impl Command {
@@ -64,6 +73,9 @@ impl Command {
             Command::RemoveCached { .. } => &["rm", "--cached", "-q", "-r", "--"],
             Command::ApplyCached { reverse: false } => &["apply", "--cached"],
             Command::ApplyCached { reverse: true } => &["apply", "--cached", "--reverse"],
+            Command::LastMessage => &["log", "-1", "--format=%B"],
+            Command::Commit { amend: false, .. } => &["commit", "-F"],
+            Command::Commit { amend: true, .. } => &["commit", "--amend", "-F"],
         };
         let mut args: Vec<String> = fixed.iter().map(|a: &&str| (*a).to_string()).collect();
         match self {
@@ -72,10 +84,12 @@ impl Command {
             | Command::RestoreStaged { paths }
             | Command::RemoveCached { paths } => args.extend(paths.iter().cloned()),
             Command::DiffUntracked { path } => args.push(path.clone()),
+            Command::Commit { message_file, .. } => args.push(message_file.clone()),
             Command::ShowToplevel
             | Command::Status
             | Command::HasHead
-            | Command::ApplyCached { .. } => {}
+            | Command::ApplyCached { .. }
+            | Command::LastMessage => {}
         }
         args
     }
@@ -156,6 +170,25 @@ mod tests {
             "apply --cached --reverse"
         );
         assert_eq!(Command::HasHead.success_codes(), &[0, 1]);
+    }
+
+    #[test]
+    fn commit_arguments() {
+        assert_eq!(args(&Command::LastMessage), "log -1 --format=%B");
+        assert_eq!(
+            args(&Command::Commit {
+                message_file: "/tmp/m".to_string(),
+                amend: false
+            }),
+            "commit -F /tmp/m"
+        );
+        assert_eq!(
+            args(&Command::Commit {
+                message_file: "/tmp/m".to_string(),
+                amend: true
+            }),
+            "commit --amend -F /tmp/m"
+        );
     }
 
     #[test]

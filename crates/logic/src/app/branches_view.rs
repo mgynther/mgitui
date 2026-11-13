@@ -380,6 +380,21 @@ impl App {
         };
     }
 
+    pub(super) fn cherry_pick(&mut self, ports: &dyn Ports) {
+        let Some(hash) = self.branches.selected().map(|c: &Commit| c.hash.clone()) else {
+            self.note = Note::Info("No commit selected".to_string());
+            return;
+        };
+        let short: &str = hash.get(..7).unwrap_or(&hash);
+        ports.log(LogLevel::Info, &format!("cherry-pick {short}"));
+        let result: Result<(), Failed> = ports.cherry_pick(&hash);
+        self.refresh(ports);
+        self.note = match result {
+            Ok(()) => Note::Info(format!("Cherry-picked {short}")),
+            Err(Failed) => Note::Problem("Cherry-pick failed, see the Log view".to_string()),
+        };
+    }
+
     pub(super) fn search_branches(
         &mut self,
         term: &str,

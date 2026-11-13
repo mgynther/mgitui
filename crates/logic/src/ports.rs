@@ -159,6 +159,13 @@ pub trait Ports {
     /// Fails when git fails.
     fn create_branch(&self, name: &BranchName, at: &str) -> Result<(), Failed>;
 
+    /// Cherry-picks a commit onto the checked out branch.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails, for example on a conflict.
+    fn cherry_pick(&self, hash: &str) -> Result<(), Failed>;
+
     /// Checks out a local branch.
     ///
     /// # Errors

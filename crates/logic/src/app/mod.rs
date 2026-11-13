@@ -252,6 +252,7 @@ impl App {
                 ViewId::Branches => match event {
                     Event::CreateBranch => self.start_create_branch(),
                     Event::Checkout => self.start_checkout(ports),
+                    Event::CherryPick => self.cherry_pick(ports),
                     _ => self.handle_branches(event, ports),
                 },
             },

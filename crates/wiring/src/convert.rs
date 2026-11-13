@@ -32,6 +32,7 @@ pub fn event(event: ui::event::Event) -> logic::event::Event {
         U::Activate => L::Activate,
         U::CreateBranch => L::CreateBranch,
         U::Checkout => L::Checkout,
+        U::CherryPick => L::CherryPick,
         U::SwitchList => L::SwitchList,
         U::StartSelection => L::StartSelection,
         U::EditMessage => L::EditMessage,

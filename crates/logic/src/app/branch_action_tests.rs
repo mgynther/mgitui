@@ -45,7 +45,10 @@ fn actions(ports: &TestPorts) -> Vec<String> {
         .calls()
         .into_iter()
         .filter(|c: &String| {
-            c.starts_with("create") || c.starts_with("checkout") || c.contains(": ")
+            c.starts_with("create")
+                || c.starts_with("checkout")
+                || c.starts_with("cherry-pick")
+                || c.contains(": ")
         })
         .collect()
 }
@@ -197,5 +200,33 @@ fn checkout_failure_and_cancel() {
     assert_eq!(
         app.note(),
         &Note::Problem("Checkout failed, see the Log view".to_string())
+    );
+}
+
+#[test]
+fn cherry_pick_selected_commit() {
+    let ports: TestPorts = labelled_ports(vec![]);
+    let mut app: App = loaded_app(&ports);
+    run(&mut app, &ports, &[Event::MoveDown, Event::CherryPick]);
+    assert_eq!(
+        actions(&ports),
+        vec!["Info: cherry-pick c1", "cherry-pick c1"]
+    );
+    assert_eq!(app.note(), &Note::Info("Cherry-picked c1".to_string()));
+    let failing: TestPorts = TestPorts {
+        branch_fails: true,
+        ..labelled_ports(vec![])
+    };
+    run(&mut app, &failing, &[Event::CherryPick]);
+    assert_eq!(
+        app.note(),
+        &Note::Problem("Cherry-pick failed, see the Log view".to_string())
+    );
+    let empty: TestPorts = TestPorts::new();
+    let mut empty_app: App = loaded_app(&empty);
+    run(&mut empty_app, &empty, &[Event::CherryPick]);
+    assert_eq!(
+        empty_app.note(),
+        &Note::Info("No commit selected".to_string())
     );
 }

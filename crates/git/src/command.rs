@@ -77,6 +77,11 @@ pub enum Command {
         /// The commit the branch points to.
         at: String,
     },
+    /// `git cherry-pick <commit>`: applies a commit onto the checked out branch.
+    CherryPick {
+        /// The commit hash.
+        hash: String,
+    },
     /// `git switch <branch>`: checks out a local branch.
     Switch {
         /// The branch name.
@@ -138,6 +143,7 @@ impl Command {
             ],
             Command::CreateBranch { .. } => &["branch"],
             Command::Switch { .. } => &["switch"],
+            Command::CherryPick { .. } => &["cherry-pick"],
             Command::Refs => &[
                 "for-each-ref",
                 "--format=%(HEAD)%00%(objectname)%00%(*objectname)%00%(refname)",
@@ -168,6 +174,7 @@ impl Command {
                 args.push(at.clone());
             }
             Command::Switch { branch } => args.push(branch.clone()),
+            Command::CherryPick { hash } => args.push(hash.clone()),
             Command::CommitFileDiff { hash, paths } => {
                 args.push(hash.clone());
                 args.push("--".to_string());
@@ -306,6 +313,16 @@ mod tests {
                 branch: "main".to_string()
             }),
             "switch main"
+        );
+    }
+
+    #[test]
+    fn cherry_pick_arguments() {
+        assert_eq!(
+            args(&Command::CherryPick {
+                hash: "abc".to_string()
+            }),
+            "cherry-pick abc"
         );
     }
 

@@ -341,3 +341,27 @@ fn empty_repository_and_small_terminal() {
     s.resize(SIZE);
     assert!(s.render(SIZE).row_text(0).starts_with(" F1 Branches "));
 }
+
+#[test]
+fn cherry_pick_commit_under_cursor() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    git_ok(dir.path(), &["commit", "-q", "--allow-empty", "-m", "base"]);
+    git_ok(dir.path(), &["switch", "-q", "-c", "side"]);
+    std::fs::write(dir.path().join("s.txt"), "s\n").unwrap();
+    git_ok(dir.path(), &["add", "."]);
+    git_ok(dir.path(), &["commit", "-q", "-m", "side work"]);
+    git_ok(dir.path(), &["switch", "-q", "main"]);
+    let mut s: Session = session_in(&dir);
+    s.input(b"/side work\rp");
+    assert!(s.render(SIZE).row_text(23).starts_with("Cherry-picked "));
+    assert_eq!(
+        git_ok(dir.path(), &["log", "-1", "--format=%s"]),
+        "side work\n"
+    );
+    s.input(b"p");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "Cherry-pick failed, see the Log view"
+    );
+}

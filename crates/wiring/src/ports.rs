@@ -156,6 +156,12 @@ impl logic::ports::Ports for SessionPorts<'_> {
             .map_err(|_| Failed)
     }
 
+    fn cherry_pick(&self, hash: &str) -> Result<(), Failed> {
+        self.git
+            .cherry_pick(hash, &self.log_git())
+            .map_err(|_| Failed)
+    }
+
     fn checkout(&self, branch: &str) -> Result<(), Failed> {
         self.git.switch(branch, &self.log_git()).map_err(|_| Failed)
     }

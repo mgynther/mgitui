@@ -33,6 +33,22 @@ impl Git {
     }
 }
 
+impl Git {
+    /// Applies commit `hash` onto the checked out branch. A conflict leaves the cherry-pick in
+    /// progress for the user to resolve.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails, for example on a conflict.
+    pub fn cherry_pick(&self, hash: &str, log: &Log<'_>) -> Result<(), GitError> {
+        let command: Command = Command::CherryPick {
+            hash: hash.to_string(),
+        };
+        self.run(&command, None, log)?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::runner::GitError;
@@ -71,5 +87,32 @@ mod tests {
             repo.git().switch("old", &logged.log()),
             Err(GitError::Failed { .. })
         ));
+    }
+
+    #[test]
+    fn cherry_pick_and_conflict() {
+        let repo: TestRepo = TestRepo::new();
+        repo.write("a.txt", "a\n");
+        repo.git_ok(&["add", "."]);
+        repo.git_ok(&["commit", "-q", "-m", "base"]);
+        repo.git_ok(&["switch", "-q", "-c", "side"]);
+        repo.write("b.txt", "b\n");
+        repo.git_ok(&["add", "."]);
+        repo.git_ok(&["commit", "-q", "-m", "add b"]);
+        repo.write("a.txt", "side\n");
+        repo.git_ok(&["commit", "-q", "-am", "change a"]);
+        let add_b: String = repo.git_ok(&["rev-parse", "HEAD~1"]).trim().to_string();
+        let change_a: String = repo.git_ok(&["rev-parse", "HEAD"]).trim().to_string();
+        repo.git_ok(&["switch", "-q", "main"]);
+        repo.write("a.txt", "main\n");
+        repo.git_ok(&["commit", "-q", "-am", "main change"]);
+        let logged: Logged = Logged::new();
+        repo.git().cherry_pick(&add_b, &logged.log()).unwrap();
+        assert_eq!(repo.git_ok(&["log", "-1", "--format=%s"]), "add b\n");
+        assert!(matches!(
+            repo.git().cherry_pick(&change_a, &logged.log()),
+            Err(GitError::Failed { .. })
+        ));
+        assert!(repo.path().join(".git/CHERRY_PICK_HEAD").exists());
     }
 }

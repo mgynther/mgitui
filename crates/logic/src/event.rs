@@ -48,6 +48,8 @@ pub enum Event {
     CreateBranch,
     /// Check out a branch of the selected commit.
     Checkout,
+    /// Cherry-pick the selected commit onto the checked out branch.
+    CherryPick,
     /// Switch between the unstaged and staged lists.
     SwitchList,
     /// Start selecting lines.

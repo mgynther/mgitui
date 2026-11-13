@@ -113,6 +113,7 @@ The code is split into one crate per layer under `crates/`: `git`, `logic`, `ui`
 | w | Branches, Diff | next pane |
 | c | Branches | create a branch at the selected commit |
 | h | Branches | check out the commit's local branch |
+| p | Branches | cherry-pick the selected commit onto the checked out branch |
 | s | Diff file lists | switch between unstaged and staged |
 | Enter | Diff file list | stage or unstage the whole file |
 | space, j / k, Enter | Diff file diff | select lines, stage or unstage them |

@@ -1,0 +1,83 @@
+//! The real terminal: raw mode, size, reading input and drawing. Terminal-only code, excluded
+//! from coverage.
+
+use std::io::{self, Read, Write};
+use std::process::{Command, Stdio};
+
+/// Switches to the alternate screen and hides the cursor.
+const ENTER: &str = "\x1b[?1049h\x1b[?25l";
+/// Resets styles, shows the cursor and leaves the alternate screen.
+const LEAVE: &str = "\x1b[0m\x1b[?25h\x1b[?1049l";
+
+/// The terminal in raw mode. Restored by [`Terminal::leave`].
+pub struct Terminal {
+    saved: String,
+}
+
+#[expect(
+    clippy::unused_self,
+    reason = "reading, drawing and the size are only meaningful while the terminal is in raw mode"
+)]
+impl Terminal {
+    /// Saves the terminal settings, switches to raw mode where reads return after at most 0.1
+    /// seconds, and switches to the alternate screen.
+    pub fn enter() -> io::Result<Terminal> {
+        let saved: String = stty(&["-g"])?.trim().to_string();
+        stty(&["raw", "-echo", "min", "0", "time", "1"])?;
+        write_out(ENTER)?;
+        Ok(Terminal { saved })
+    }
+
+    /// The saved terminal settings, for restoring from a panic hook.
+    pub fn saved(&self) -> &str {
+        &self.saved
+    }
+
+    /// Restores the settings saved by [`Terminal::enter`].
+    pub fn leave(&self) {
+        restore(&self.saved);
+    }
+
+    /// The terminal size.
+    pub fn size(&self) -> io::Result<ui::layout::Size> {
+        let output: String = stty(&["size"])?;
+        wiring::size::parse_stty_size(&output)
+            .ok_or_else(|| io::Error::other(format!("unexpected stty size output {output:?}")))
+    }
+
+    /// Reads available input. Returns 0 when nothing was typed within 0.1 seconds.
+    pub fn read(&self, buffer: &mut [u8]) -> io::Result<usize> {
+        io::stdin().lock().read(buffer)
+    }
+
+    /// Writes a frame to the terminal.
+    pub fn draw(&self, frame: &str) -> io::Result<()> {
+        write_out(frame)
+    }
+}
+
+/// Restores terminal settings and leaves the alternate screen. Errors are ignored: this runs
+/// while exiting or panicking.
+pub fn restore(saved: &str) {
+    let _ = write_out(LEAVE);
+    let _ = stty(&[saved]);
+}
+
+fn write_out(text: &str) -> io::Result<()> {
+    let mut out: io::StdoutLock<'_> = io::stdout().lock();
+    out.write_all(text.as_bytes())?;
+    out.flush()
+}
+
+fn stty(args: &[&str]) -> io::Result<String> {
+    let output: std::process::Output = Command::new("stty")
+        .args(args)
+        .stdin(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .output()?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    } else {
+        Err(io::Error::other(format!("stty {} failed", args.join(" "))))
+    }
+}

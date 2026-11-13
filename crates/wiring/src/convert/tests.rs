@@ -30,6 +30,18 @@ impl logic::ports::Ports for NoPorts {
     ) -> Result<logic::model::FileDiff, logic::ports::Failed> {
         Err(logic::ports::Failed)
     }
+
+    fn stage_file(&self, _file: &logic::model::ChangedFile) -> Result<(), logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
+    fn unstage_file(&self, _file: &logic::model::ChangedFile) -> Result<(), logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
+    fn apply_to_index(&self, _patch: &str, _reverse: bool) -> Result<(), logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
 }
 
 #[test]

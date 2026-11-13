@@ -95,7 +95,8 @@ impl Git {
 pub fn parse_diff(output: &str) -> FileDiff {
     let mut diff: FileDiff = FileDiff::default();
     let mut combined: bool = false;
-    for line in output.lines() {
+    // Split on `\n` only: `lines()` would also remove a `\r` that belongs to the content.
+    for line in output.split_terminator('\n') {
         if line.starts_with("@@@") {
             combined = true;
             diff.hunks.push(hunk(line, (0, 0, 0, 0)));

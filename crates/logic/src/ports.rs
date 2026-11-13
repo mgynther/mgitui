@@ -37,4 +37,25 @@ pub trait Ports {
     ///
     /// Fails when git fails.
     fn file_diff(&self, file: &ChangedFile, side: Side) -> Result<FileDiff, Failed>;
+
+    /// Stages all changes of a file in the unstaged list.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn stage_file(&self, file: &ChangedFile) -> Result<(), Failed>;
+
+    /// Unstages all changes of a file in the staged list.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn unstage_file(&self, file: &ChangedFile) -> Result<(), Failed>;
+
+    /// Applies a patch to the index, in reverse when `reverse` is true.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails, for example when the patch does not apply.
+    fn apply_to_index(&self, patch: &str, reverse: bool) -> Result<(), Failed>;
 }

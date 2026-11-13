@@ -168,7 +168,12 @@ fn diff_view(app: &App) -> ui::views::diff::DiffView {
             || "Diff".to_string(),
             |f: &ChangedFile| format!("Diff {}", f.path),
         ),
-        diff: diff_rows(diff.rows(), diff.diff_cursor(), viewports.diff_file),
+        diff: diff_rows(
+            diff.rows(),
+            diff.diff_cursor(),
+            diff.selection(),
+            viewports.diff_file,
+        ),
         message_title: "Commit message".to_string(),
         message: String::new(),
         no_changes: !diff.status().has_changes(),
@@ -218,6 +223,7 @@ fn file_label(file: &ChangedFile) -> String {
 pub(crate) fn diff_rows(
     rows: &[DiffRow],
     cursor: Cursor,
+    selection: Option<(usize, usize)>,
     height: usize,
 ) -> Vec<ui::views::diff_text::DiffRowView> {
     rows.iter()
@@ -229,7 +235,8 @@ pub(crate) fn diff_rows(
                 kind: diff_row_kind(row.kind),
                 text: row.text.clone(),
                 cursor: index == cursor.selected(),
-                marked: false,
+                marked: selection
+                    .is_some_and(|(first, last): (usize, usize)| (first..=last).contains(&index)),
             },
         )
         .collect()

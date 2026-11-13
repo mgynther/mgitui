@@ -1,0 +1,143 @@
+use super::Session;
+use crate::log::LogBuffer;
+use crate::test_support::{TempDir, fixed_clock, git_ok, init_repo};
+use ui::layout::Size;
+
+const SIZE: Size = Size {
+    width: 80,
+    height: 24,
+};
+
+fn session_in(dir: &TempDir) -> Session {
+    let log: LogBuffer = LogBuffer::new(fixed_clock);
+    log.wiring(logic::log::LogLevel::Info, "started");
+    let mut session: Session = Session::new(git::Git::new(dir.path()), log);
+    session.resize(SIZE);
+    session
+}
+
+fn session() -> (TempDir, Session) {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    let session: Session = session_in(&dir);
+    (dir, session)
+}
+
+#[test]
+fn shows_tabs_and_quits_after_confirmation() {
+    let (_dir, mut s): (TempDir, Session) = session();
+    assert!(s.render(SIZE).row_text(0).starts_with(" F1 Branches "));
+    s.input(b"q");
+    assert_eq!(s.render(SIZE).row_text(23).trim_end(), "Quit? y/n");
+    s.input(b"n");
+    assert!(!s.should_quit());
+    s.input(b"qy");
+    assert!(s.should_quit());
+}
+
+#[test]
+fn function_keys_switch_views_and_unknown_keys_are_logged() {
+    let (_dir, mut s): (TempDir, Session) = session();
+    s.input(b"\x1bOR\x1b[Z");
+    let screen: ui::buffer::Buffer = s.render(SIZE);
+    assert!(screen.row_text(1).starts_with("─ Log ─"));
+    s.input(b"x\x1bOQ");
+    assert!(s.render(SIZE).row_text(1).starts_with("─ Unstaged ─"));
+}
+
+#[test]
+fn diff_view_shows_changes_and_reloads() {
+    let (dir, mut s): (TempDir, Session) = session();
+    s.input(b"\x1bOQ");
+    assert!(s.render(SIZE).row_text(2).contains("No changes"));
+    std::fs::write(dir.path().join("new.txt"), "hello\n").unwrap();
+    s.input(b"r");
+    let screen: ui::buffer::Buffer = s.render(SIZE);
+    assert!(screen.row_text(1).contains("Diff new.txt"));
+    assert!(screen.row_text(2).starts_with("? new.txt"));
+    assert!(screen.row_text(3).contains("+hello"));
+    assert_eq!(screen.cell(15, 0).unwrap().style.fg, ui::style::Color::Red);
+    assert!(screen.cell(0, 2).unwrap().style.reverse);
+    s.input(b"s");
+    let staged: String = s.render(SIZE).row_text(1);
+    assert!(staged.contains(" Diff ") && !staged.contains("new.txt"));
+    s.input(b"sw");
+    assert!(s.render(SIZE).row_text(2).contains("▶@@ -0,0 +1 @@"));
+}
+
+#[test]
+fn log_view_search_with_validation() {
+    let (_dir, mut s): (TempDir, Session) = session();
+    s.input(b"\x1bOR/");
+    assert_eq!(s.render(SIZE).row_text(23).trim_end(), "/");
+    s.input(b"\r");
+    let screen: ui::buffer::Buffer = s.render(SIZE);
+    assert_eq!(screen.row_text(23).trim_end(), "search text is empty");
+    assert!(screen.row_text(2).contains("wiring     Info  started"));
+    assert!(screen.row_text(3).contains("logic      Info  reload"));
+    assert!(screen.row_text(4).contains("git        Info  git status"));
+    assert!(
+        screen
+            .row_text(5)
+            .contains("validation Error search text is empty")
+    );
+}
+
+/// A repository with `f.txt` containing lines 1 to 10, changed so that line 2 is `two` and
+/// line 9 is `nine`: two hunks in the unstaged diff.
+fn two_hunk_session() -> (TempDir, Session) {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    let numbers: &str = "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n";
+    std::fs::write(dir.path().join("f.txt"), numbers).unwrap();
+    git_ok(dir.path(), &["add", "."]);
+    git_ok(dir.path(), &["commit", "-q", "-m", "init"]);
+    let changed: String = numbers.replace("2\n", "two\n").replace("9\n", "nine\n");
+    std::fs::write(dir.path().join("f.txt"), changed).unwrap();
+    let mut session: Session = session_in(&dir);
+    session.input(b"\x1bOQ");
+    (dir, session)
+}
+
+fn index_content(dir: &TempDir) -> String {
+    git_ok(dir.path(), &["show", ":f.txt"])
+}
+
+#[test]
+fn stage_second_hunk_then_unstage_one_line_of_it() {
+    let (dir, mut s): (TempDir, Session) = two_hunk_session();
+    s.input(b"wGk k");
+    let screen: ui::buffer::Buffer = s.render(SIZE);
+    assert!(
+        screen.row_text(12).contains("▶-9"),
+        "{}",
+        screen.row_text(12)
+    );
+    assert!(
+        screen.row_text(13).contains("┃+nine"),
+        "{}",
+        screen.row_text(13)
+    );
+    s.input(b"\r");
+    assert_eq!(index_content(&dir), "1\n2\n3\n4\n5\n6\n7\n8\nnine\n10\n");
+    s.input(b"wsw");
+    s.input(b"jjjjj\r");
+    assert_eq!(index_content(&dir), "1\n2\n3\n4\n5\n6\n7\n8\n10\n");
+}
+
+#[test]
+fn stage_lines_of_first_hunk_and_whole_file() {
+    let (dir, mut s): (TempDir, Session) = two_hunk_session();
+    s.input(b"wjj jj\r");
+    assert_eq!(index_content(&dir), "1\ntwo\n3\n4\n5\n6\n7\n8\n9\n10\n");
+    s.input(b"w\r");
+    assert_eq!(index_content(&dir), "1\ntwo\n3\n4\n5\n6\n7\n8\nnine\n10\n");
+    let screen: ui::buffer::Buffer = s.render(SIZE);
+    assert!(
+        screen.row_text(13).starts_with("M f.txt"),
+        "{}",
+        screen.row_text(13)
+    );
+    s.input(b"s\r");
+    assert_eq!(index_content(&dir), "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n");
+}

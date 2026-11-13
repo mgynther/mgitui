@@ -97,6 +97,15 @@ fn git_failures_become_failed() {
         ports.file_diff(&file("x", ChangeKind::Modified), Side::Unstaged),
         Err(Failed)
     );
+    assert_eq!(
+        ports.stage_file(&file("x", ChangeKind::Modified)),
+        Err(Failed)
+    );
+    assert_eq!(
+        ports.unstage_file(&file("x", ChangeKind::Modified)),
+        Err(Failed)
+    );
+    assert_eq!(ports.apply_to_index("", false), Err(Failed));
 }
 
 #[test]
@@ -107,4 +116,29 @@ fn rename_diffs_need_both_paths_in_the_index() {
     };
     assert_eq!(diff_paths(&renamed, Side::Staged), vec!["old", "new"]);
     assert_eq!(diff_paths(&renamed, Side::Unstaged), vec!["new"]);
+}
+
+#[test]
+fn staging_a_renamed_file_back_and_forth() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    std::fs::write(dir.path().join("a.txt"), "a\n").unwrap();
+    git_ok(dir.path(), &["add", "."]);
+    git_ok(dir.path(), &["commit", "-q", "-m", "init"]);
+    git_ok(dir.path(), &["mv", "a.txt", "b.txt"]);
+    with_ports(dir.path(), |ports: &SessionPorts<'_>, _log: &LogBuffer| {
+        let renamed: ChangedFile = ports.status().unwrap().staged[0].clone();
+        ports.unstage_file(&renamed).unwrap();
+        let status: WorkStatus = ports.status().unwrap();
+        assert_eq!(status.staged, vec![]);
+        assert_eq!(status.unstaged.len(), 2);
+        for changed in &status.unstaged {
+            ports.stage_file(changed).unwrap();
+        }
+        assert_eq!(ports.status().unwrap().staged[0].kind, ChangeKind::Renamed);
+        ports
+            .apply_to_index("--- a/b.txt\n+++ b/b.txt\n@@ -1 +1 @@\n-a\n+z\n", false)
+            .unwrap();
+        assert_eq!(git_ok(dir.path(), &["show", ":b.txt"]), "z\n");
+    });
 }

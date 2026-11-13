@@ -20,6 +20,28 @@ pub enum Command {
         /// The path of the file.
         path: String,
     },
+    /// `git add -A`: stages all changes of the paths, including deletions.
+    Add {
+        /// The paths.
+        paths: Vec<String>,
+    },
+    /// `git rev-parse --verify HEAD`: whether there is a commit yet. Exit code 1 means no.
+    HasHead,
+    /// `git restore --staged`: unstages the paths.
+    RestoreStaged {
+        /// The paths.
+        paths: Vec<String>,
+    },
+    /// `git rm --cached`: unstages the paths in a repository without commits.
+    RemoveCached {
+        /// The paths.
+        paths: Vec<String>,
+    },
+    /// `git apply --cached`: applies a patch from standard input to the index.
+    ApplyCached {
+        /// Whether to apply the patch in reverse.
+        reverse: bool,
+    },
 }
 
 impl Command {
@@ -36,12 +58,24 @@ impl Command {
             Command::DiffUntracked { .. } => {
                 &["diff", "--no-ext-diff", "--no-index", "--", "/dev/null"]
             }
+            Command::Add { .. } => &["add", "-A", "--"],
+            Command::HasHead => &["rev-parse", "--verify", "-q", "HEAD"],
+            Command::RestoreStaged { .. } => &["restore", "--staged", "--"],
+            Command::RemoveCached { .. } => &["rm", "--cached", "-q", "-r", "--"],
+            Command::ApplyCached { reverse: false } => &["apply", "--cached"],
+            Command::ApplyCached { reverse: true } => &["apply", "--cached", "--reverse"],
         };
         let mut args: Vec<String> = fixed.iter().map(|a: &&str| (*a).to_string()).collect();
         match self {
-            Command::Diff { paths, .. } => args.extend(paths.iter().cloned()),
+            Command::Diff { paths, .. }
+            | Command::Add { paths }
+            | Command::RestoreStaged { paths }
+            | Command::RemoveCached { paths } => args.extend(paths.iter().cloned()),
             Command::DiffUntracked { path } => args.push(path.clone()),
-            Command::ShowToplevel | Command::Status => {}
+            Command::ShowToplevel
+            | Command::Status
+            | Command::HasHead
+            | Command::ApplyCached { .. } => {}
         }
         args
     }
@@ -50,8 +84,8 @@ impl Command {
     #[must_use]
     pub fn success_codes(&self) -> &'static [i32] {
         match self {
-            Command::DiffUntracked { .. } => &[0, 1],
-            Command::ShowToplevel | Command::Status | Command::Diff { .. } => &[0],
+            Command::DiffUntracked { .. } | Command::HasHead => &[0, 1],
+            _ => &[0],
         }
     }
 }
@@ -91,6 +125,37 @@ mod tests {
             }),
             "diff --no-ext-diff --no-index -- /dev/null n"
         );
+    }
+
+    #[test]
+    fn staging_arguments() {
+        let paths: Vec<String> = vec!["p".to_string()];
+        assert_eq!(
+            args(&Command::Add {
+                paths: paths.clone()
+            }),
+            "add -A -- p"
+        );
+        assert_eq!(args(&Command::HasHead), "rev-parse --verify -q HEAD");
+        assert_eq!(
+            args(&Command::RestoreStaged {
+                paths: paths.clone()
+            }),
+            "restore --staged -- p"
+        );
+        assert_eq!(
+            args(&Command::RemoveCached { paths }),
+            "rm --cached -q -r -- p"
+        );
+        assert_eq!(
+            args(&Command::ApplyCached { reverse: false }),
+            "apply --cached"
+        );
+        assert_eq!(
+            args(&Command::ApplyCached { reverse: true }),
+            "apply --cached --reverse"
+        );
+        assert_eq!(Command::HasHead.success_codes(), &[0, 1]);
     }
 
     #[test]

@@ -1,9 +1,13 @@
 //! The Diff view: staged and unstaged files and the diff of the selected file.
 
+use std::collections::BTreeSet;
+
 use super::{App, Note};
 use crate::cursor::Cursor;
 use crate::event::Event;
-use crate::model::{ChangedFile, DiffRow, FileDiff, Side, WorkStatus, diff_rows};
+use crate::log::LogLevel;
+use crate::model::{ChangeKind, ChangedFile, DiffRow, FileDiff, Side, WorkStatus, diff_rows};
+use crate::patch::{LineRef, build_patch};
 use crate::ports::{Failed, Ports};
 use crate::search::{self, Direction, Found};
 
@@ -25,8 +29,10 @@ pub struct DiffState {
     side: Side,
     unstaged: Cursor,
     staged: Cursor,
+    file_diff: Option<FileDiff>,
     rows: Vec<DiffRow>,
     diff_cursor: Cursor,
+    anchor: Option<usize>,
 }
 
 impl DiffState {
@@ -82,6 +88,14 @@ impl DiffState {
     #[must_use]
     pub fn diff_cursor(&self) -> Cursor {
         self.diff_cursor
+    }
+
+    /// The first and last selected rows of the file diff, while lines are being selected.
+    #[must_use]
+    pub fn selection(&self) -> Option<(usize, usize)> {
+        let cursor: usize = self.diff_cursor.selected();
+        self.anchor
+            .map(|anchor: usize| (anchor.min(cursor), anchor.max(cursor)))
     }
 
     fn cursor_mut(&mut self, side: Side) -> &mut Cursor {
@@ -156,15 +170,21 @@ impl App {
             .diff
             .selected_file()
             .map(|file: &ChangedFile| ports.file_diff(file, side));
-        self.diff.rows = match diff {
-            None => Vec::new(),
-            Some(Ok(diff)) => diff_rows(&diff),
+        self.diff.file_diff = match diff {
+            None => None,
+            Some(Ok(diff)) => Some(diff),
             Some(Err(Failed)) => {
                 self.note = Note::Problem("Loading the diff failed, see the Log view".to_string());
-                Vec::new()
+                None
             }
         };
+        self.diff.rows = self
+            .diff
+            .file_diff
+            .as_ref()
+            .map_or_else(Vec::new, diff_rows);
         self.diff.diff_cursor = Cursor::default();
+        self.diff.anchor = None;
     }
 
     pub(super) fn handle_diff(&mut self, event: Event, ports: &dyn Ports) {
@@ -182,7 +202,15 @@ impl App {
                 };
                 self.load_file_diff(ports);
             }
+            (DiffPane::Files, Event::Activate) => self.stage_whole_file(ports),
             (DiffPane::Files, _) => self.move_in_file_list(event, ports),
+            (DiffPane::FileDiff, Event::StartSelection) => {
+                if self.line_staging_allowed(ports) {
+                    self.diff.anchor = Some(self.diff.diff_cursor.selected());
+                }
+            }
+            (DiffPane::FileDiff, Event::Cancel) => self.diff.anchor = None,
+            (DiffPane::FileDiff, Event::Activate) => self.stage_lines(ports),
             (DiffPane::FileDiff, _) => {
                 let len: usize = self.diff.rows.len();
                 let height: usize = self.viewports.diff_file;
@@ -199,6 +227,102 @@ impl App {
         move_cursor(self.diff.cursor_mut(side), event, len, height);
         if self.diff.cursor(side).selected() != before.selected() {
             self.load_file_diff(ports);
+        }
+    }
+
+    /// The selected file, unless it has a conflict: then the action is refused and logged.
+    fn file_for_action(&mut self, ports: &dyn Ports) -> Option<ChangedFile> {
+        let file: ChangedFile = self.diff.selected_file()?.clone();
+        if file.kind == ChangeKind::Conflict {
+            let message: String = format!(
+                "{} has a merge conflict; resolve it outside mgitui",
+                file.path
+            );
+            ports.log(LogLevel::Error, &message);
+            self.note = Note::Problem(message);
+            return None;
+        }
+        Some(file)
+    }
+
+    fn line_staging_allowed(&mut self, ports: &dyn Ports) -> bool {
+        let Some(file) = self.file_for_action(ports) else {
+            return false;
+        };
+        let allowed: bool = file.supports_line_staging();
+        if !allowed {
+            self.note = Note::Info(
+                "Only whole files can be staged here: use Enter in the file list".to_string(),
+            );
+        }
+        allowed
+    }
+
+    fn stage_whole_file(&mut self, ports: &dyn Ports) {
+        let Some(file) = self.file_for_action(ports) else {
+            return;
+        };
+        let result: Result<(), Failed> = match self.diff.side {
+            Side::Unstaged => {
+                ports.log(LogLevel::Info, &format!("stage {}", file.path));
+                ports.stage_file(&file)
+            }
+            Side::Staged => {
+                ports.log(LogLevel::Info, &format!("unstage {}", file.path));
+                ports.unstage_file(&file)
+            }
+        };
+        self.after_staging(result, ports);
+    }
+
+    fn stage_lines(&mut self, ports: &dyn Ports) {
+        if !self.line_staging_allowed(ports) {
+            return;
+        }
+        let cursor: usize = self.diff.diff_cursor.selected();
+        let (first, last): (usize, usize) = self.diff.selection().unwrap_or((cursor, cursor));
+        let selected: BTreeSet<LineRef> = self
+            .diff
+            .rows
+            .iter()
+            .skip(first)
+            .take(last + 1 - first)
+            .filter_map(|row: &DiffRow| row.line.map(|line: usize| (row.hunk, line)))
+            .collect();
+        let reverse: bool = self.diff.side == Side::Staged;
+        let patch: Option<String> = self
+            .diff
+            .file_diff
+            .as_ref()
+            .and_then(|diff: &FileDiff| build_patch(diff, &selected, reverse));
+        let Some(patch) = patch else {
+            self.note = Note::Info("No changed lines selected".to_string());
+            return;
+        };
+        let file_path: String = self
+            .diff
+            .selected_file()
+            .map_or_else(String::new, |f: &ChangedFile| f.path.clone());
+        let verb: &str = if reverse { "unstage" } else { "stage" };
+        ports.log(LogLevel::Info, &format!("{verb} lines of {file_path}"));
+        let result: Result<(), Failed> = ports.apply_to_index(&patch, reverse);
+        self.after_staging(result, ports);
+        let same_file: bool = self
+            .diff
+            .selected_file()
+            .is_some_and(|f: &ChangedFile| f.path == file_path);
+        if same_file {
+            let len: usize = self.diff.rows.len();
+            self.diff
+                .diff_cursor
+                .select(cursor, len, self.viewports.diff_file);
+        }
+    }
+
+    fn after_staging(&mut self, result: Result<(), Failed>, ports: &dyn Ports) {
+        self.refresh(ports);
+        if result.is_err() {
+            self.note = Note::Problem("Staging failed, see the Log view".to_string());
         }
     }
 

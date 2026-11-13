@@ -14,6 +14,10 @@ pub struct TestPorts {
     pub status: RefCell<Option<WorkStatus>>,
     /// Whether `file_diff` fails.
     pub diff_fails: bool,
+    /// The diff returned for every file; by default one built from the path.
+    pub diff: Option<FileDiff>,
+    /// Whether staging, unstaging and applying patches fail.
+    pub stage_fails: bool,
 }
 
 impl TestPorts {
@@ -22,6 +26,8 @@ impl TestPorts {
             calls: RefCell::new(Vec::new()),
             status: RefCell::new(Some(WorkStatus::default())),
             diff_fails: false,
+            diff: None,
+            stage_fails: false,
         }
     }
 
@@ -33,6 +39,15 @@ impl TestPorts {
             staged: staged.iter().map(|p: &&str| modified(p)).collect(),
         });
         ports
+    }
+
+    fn record(&self, call: String) -> Result<(), Failed> {
+        self.calls.borrow_mut().push(call);
+        if self.stage_fails {
+            Err(Failed)
+        } else {
+            Ok(())
+        }
     }
 
     pub fn calls(&self) -> Vec<String> {
@@ -102,7 +117,19 @@ impl Ports for TestPorts {
         if self.diff_fails {
             Err(Failed)
         } else {
-            Ok(diff_of(&file.path))
+            Ok(self.diff.clone().unwrap_or_else(|| diff_of(&file.path)))
         }
+    }
+
+    fn stage_file(&self, file: &ChangedFile) -> Result<(), Failed> {
+        self.record(format!("stage {}", file.path))
+    }
+
+    fn unstage_file(&self, file: &ChangedFile) -> Result<(), Failed> {
+        self.record(format!("unstage {}", file.path))
+    }
+
+    fn apply_to_index(&self, patch: &str, reverse: bool) -> Result<(), Failed> {
+        self.record(format!("apply reverse={reverse}\n{patch}"))
     }
 }

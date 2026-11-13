@@ -5,6 +5,7 @@ pub mod log;
 mod command;
 mod diff;
 mod runner;
+mod stage;
 mod status;
 
 #[cfg(test)]

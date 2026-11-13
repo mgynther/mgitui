@@ -62,6 +62,24 @@ impl logic::ports::Ports for SessionPorts<'_> {
         };
         diff.map(model::file_diff).map_err(|_| Failed)
     }
+
+    fn stage_file(&self, file: &ChangedFile) -> Result<(), Failed> {
+        self.git
+            .add(&diff_paths(file, Side::Unstaged), &self.log_git())
+            .map_err(|_| Failed)
+    }
+
+    fn unstage_file(&self, file: &ChangedFile) -> Result<(), Failed> {
+        self.git
+            .unstage(&diff_paths(file, Side::Staged), &self.log_git())
+            .map_err(|_| Failed)
+    }
+
+    fn apply_to_index(&self, patch: &str, reverse: bool) -> Result<(), Failed> {
+        self.git
+            .apply_cached(patch, reverse, &self.log_git())
+            .map_err(|_| Failed)
+    }
 }
 
 #[cfg(test)]

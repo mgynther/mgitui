@@ -119,3 +119,12 @@ fn diff_failures() {
         Err(GitError::Spawn(_))
     ));
 }
+
+#[test]
+fn carriage_returns_are_content() {
+    let diff: FileDiff = parse_diff("@@ -1 +1 @@\n-a\r\n+b\r\n");
+    assert_eq!(
+        diff.hunks[0].lines,
+        vec![line(LineKind::Removed, "a\r"), line(LineKind::Added, "b\r")]
+    );
+}

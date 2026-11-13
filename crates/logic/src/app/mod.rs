@@ -8,6 +8,8 @@ pub use diff_view::{DiffPane, DiffState};
 #[cfg(test)]
 mod diff_tests;
 #[cfg(test)]
+mod stage_tests;
+#[cfg(test)]
 mod tests;
 
 use crate::cursor::Cursor;
@@ -225,9 +227,14 @@ impl App {
         }
     }
 
-    /// Reloads everything from git.
+    /// Reloads everything from git, as asked by the user.
     fn reload(&mut self, ports: &dyn Ports) {
         ports.log(LogLevel::Info, "reload");
+        self.refresh(ports);
+    }
+
+    /// Reloads everything from git after an action.
+    fn refresh(&mut self, ports: &dyn Ports) {
         self.reload_status(ports);
     }
 

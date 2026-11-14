@@ -99,6 +99,8 @@ cargo install --path crates/wiring
 
 `./check.sh` runs all checks in order: build, tests with 100% coverage, lint and format.
 
+`./upgrade.sh` upgrades the pinned Rust toolchain in `rust-toolchain.toml` to the latest stable, raises `rust-version` in `Cargo.toml` to match, updates `Cargo.lock` and cargo-llvm-cov, and then runs `./check.sh`. It commits nothing. New Clippy lints in a new toolchain can make the checks fail; fix them before committing. The previous toolchain stays installed; remove it with `rustup toolchain uninstall <version>` when no longer needed.
+
 The code is split into one crate per layer under `crates/`: `git`, `logic`, `ui`, `validation` and `wiring`. Only `wiring` depends on the other crates, so each layer can be built and tested on its own, for example `cargo test -p logic`.
 
 ## Keys

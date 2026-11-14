@@ -39,6 +39,10 @@ impl logic::ports::Ports for NoPorts {
         Err(logic::ports::Failed)
     }
 
+    fn discard_file(&self, _file: &logic::model::ChangedFile) -> Result<(), logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
     fn apply_to_index(&self, _patch: &str, _reverse: bool) -> Result<(), logic::ports::Failed> {
         Err(logic::ports::Failed)
     }
@@ -142,7 +146,7 @@ impl logic::ports::Ports for NoPorts {
 
 #[test]
 fn every_event_converts() {
-    let cases: [(U, L); 31] = [
+    let cases: [(U, L); 32] = [
         (U::SwitchView(UV::Log), L::SwitchView(LV::Log)),
         (U::Quit, L::Quit),
         (U::Yes, L::Yes),
@@ -163,6 +167,7 @@ fn every_event_converts() {
         (U::CherryPick, L::CherryPick),
         (U::RemoteUpdate, L::RemoteUpdate),
         (U::DeleteBranch, L::DeleteBranch),
+        (U::DiscardFile, L::DiscardFile),
         (U::Rebase, L::Rebase),
         (U::InteractiveRebase, L::InteractiveRebase),
         (U::SwitchList, L::SwitchList),

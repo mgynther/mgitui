@@ -114,6 +114,8 @@ cargo llvm-cov -p logic --fail-under-lines 100 --fail-under-functions 100 --fail
 
 For `wiring`, add the `--ignore-filename-regex` from `check.sh` to the coverage command. Run `./check.sh` before committing.
 
+If per-layer coverage reports well-tested code as uncovered, the coverage data from earlier runs is stale. Clear it with `cargo llvm-cov clean --workspace` and run the coverage command again.
+
 ## Keys
 
 | Key | Where | Action |
@@ -133,6 +135,7 @@ For `wiring`, add the `--ignore-filename-regex` from `check.sh` to the coverage 
 | i | Branches | the same as b, interactively: git opens Vim for the todo list |
 | s | Diff file lists | switch between unstaged and staged |
 | Enter | Diff file list | stage or unstage the whole file |
+| d | Diff unstaged list | discard the file's unstaged changes, or delete it when untracked, after confirming with y |
 | space, j / k, Enter | Diff file diff | select lines, stage or unstage them |
 | Esc | Diff file diff | clear the line selection |
 | e | Diff | edit the commit message in Vim |

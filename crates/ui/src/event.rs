@@ -73,6 +73,8 @@ pub enum Event {
     InteractiveRebase,
     /// Switch between the unstaged and staged lists.
     SwitchList,
+    /// Discard the unstaged changes of the selected file, deleting it when untracked.
+    DiscardFile,
     /// Start selecting lines.
     StartSelection,
     /// Edit the commit message.
@@ -146,6 +148,7 @@ fn view_event(key: Key, view: ViewId) -> Option<Event> {
         (ViewId::Branches, Key::Char('b')) => Some(Event::Rebase),
         (ViewId::Branches, Key::Char('i')) => Some(Event::InteractiveRebase),
         (ViewId::Diff, Key::Char('s')) => Some(Event::SwitchList),
+        (ViewId::Diff, Key::Char('d')) => Some(Event::DiscardFile),
         (ViewId::Diff, Key::Char(' ')) => Some(Event::StartSelection),
         (ViewId::Diff, Key::Char('e')) => Some(Event::EditMessage),
         (ViewId::Diff, Key::Char('c')) => Some(Event::Commit),
@@ -187,7 +190,7 @@ mod tests {
 
     #[test]
     fn view_specific_keys() {
-        let cases: [(ViewId, Key, Option<Event>); 20] = [
+        let cases: [(ViewId, Key, Option<Event>); 22] = [
             (ViewId::Branches, Key::Char('w'), Some(Event::NextPane)),
             (ViewId::Diff, Key::Char('w'), Some(Event::NextPane)),
             (ViewId::Log, Key::Char('w'), None),
@@ -206,6 +209,8 @@ mod tests {
             ),
             (ViewId::Diff, Key::Char('p'), None),
             (ViewId::Diff, Key::Char('s'), Some(Event::SwitchList)),
+            (ViewId::Diff, Key::Char('d'), Some(Event::DiscardFile)),
+            (ViewId::Log, Key::Char('d'), None),
             (ViewId::Diff, Key::Char(' '), Some(Event::StartSelection)),
             (ViewId::Diff, Key::Char('e'), Some(Event::EditMessage)),
             (ViewId::Diff, Key::Char('c'), Some(Event::Commit)),

@@ -572,3 +572,42 @@ fn remote_update_shows_fetched_branches() {
         screen.row_text(2)
     );
 }
+
+#[test]
+fn d_discards_changes_and_deletes_untracked_files_after_confirming() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    std::fs::write(dir.path().join("a.txt"), "a\n").unwrap();
+    git_ok(dir.path(), &["add", "."]);
+    git_ok(dir.path(), &["commit", "-q", "-m", "init"]);
+    std::fs::write(dir.path().join("a.txt"), "changed\n").unwrap();
+    std::fs::write(dir.path().join("new.txt"), "n\n").unwrap();
+    let mut s: Session = session_in(&dir);
+    s.input(b"\x1bOQd");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "Discard unstaged changes in a.txt? y/n"
+    );
+    s.input(b"n");
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("a.txt")).unwrap(),
+        "changed\n"
+    );
+    s.input(b"dy");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "Discarded changes in a.txt"
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("a.txt")).unwrap(),
+        "a\n"
+    );
+    s.input(b"d");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "Delete untracked file new.txt? y/n"
+    );
+    s.input(b"y");
+    assert_eq!(s.render(SIZE).row_text(23).trim_end(), "Deleted new.txt");
+    assert!(!dir.path().join("new.txt").exists());
+}

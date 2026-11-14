@@ -60,6 +60,8 @@ pub enum Event {
     InteractiveRebase,
     /// Switch between the unstaged and staged lists.
     SwitchList,
+    /// Discard the unstaged changes of the selected file, deleting it when untracked.
+    DiscardFile,
     /// Start selecting lines.
     StartSelection,
     /// Edit the commit message.

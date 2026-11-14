@@ -22,7 +22,7 @@ pub struct TestPorts {
     pub diff_fails: bool,
     /// The diff returned for every file; by default one built from the path.
     pub diff: Option<FileDiff>,
-    /// Whether staging, unstaging and applying patches fail.
+    /// Whether staging, unstaging, applying patches and discarding fail.
     pub stage_fails: bool,
     /// The answer to `has_commits`; `None` fails.
     pub has_commits: Option<bool>,
@@ -193,6 +193,10 @@ impl Ports for TestPorts {
 
     fn unstage_file(&self, file: &ChangedFile) -> Result<(), Failed> {
         self.record(format!("unstage {}", file.path))
+    }
+
+    fn discard_file(&self, file: &ChangedFile) -> Result<(), Failed> {
+        self.record(format!("discard {}", file.path))
     }
 
     fn apply_to_index(&self, patch: &str, reverse: bool) -> Result<(), Failed> {

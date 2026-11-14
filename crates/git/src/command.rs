@@ -37,6 +37,17 @@ pub enum Command {
         /// The paths.
         paths: Vec<String>,
     },
+    /// `git restore`: discards the unstaged changes of tracked paths, restoring them from the
+    /// index.
+    Restore {
+        /// The paths.
+        paths: Vec<String>,
+    },
+    /// `git clean -f`: deletes untracked files.
+    Clean {
+        /// The paths.
+        paths: Vec<String>,
+    },
     /// `git apply --cached`: applies a patch from standard input to the index.
     ApplyCached {
         /// Whether to apply the patch in reverse.
@@ -119,10 +130,9 @@ pub enum Command {
 }
 
 impl Command {
-    /// The command line arguments, without the leading `git`.
-    #[must_use]
-    pub fn args(&self) -> Vec<String> {
-        let fixed: &[&str] = match self {
+    /// The arguments before the variable ones, without the leading `git`.
+    fn fixed_args(&self) -> &'static [&'static str] {
+        match self {
             Command::ShowToplevel => &["rev-parse", "--show-toplevel"],
             Command::Status => &["status", "--porcelain=v2", "-z", "--untracked-files=all"],
             Command::Diff { staged: false, .. } => &["diff", "--no-ext-diff", "--"],
@@ -136,6 +146,8 @@ impl Command {
             Command::HasHead => &["rev-parse", "--verify", "-q", "HEAD"],
             Command::RestoreStaged { .. } => &["restore", "--staged", "--"],
             Command::RemoveCached { .. } => &["rm", "--cached", "-q", "-r", "--"],
+            Command::Restore { .. } => &["restore", "--"],
+            Command::Clean { .. } => &["clean", "-f", "-q", "--"],
             Command::ApplyCached { reverse: false } => &["apply", "--cached"],
             Command::ApplyCached { reverse: true } => &["apply", "--cached", "--reverse"],
             Command::LastMessage => &["log", "-1", "--format=%B"],
@@ -179,8 +191,17 @@ impl Command {
             ],
             Command::Commit { amend: false, .. } => &["commit", "-F"],
             Command::Commit { amend: true, .. } => &["commit", "--amend", "-F"],
-        };
-        let mut args: Vec<String> = fixed.iter().map(|a: &&str| (*a).to_string()).collect();
+        }
+    }
+
+    /// The command line arguments, without the leading `git`.
+    #[must_use]
+    pub fn args(&self) -> Vec<String> {
+        let mut args: Vec<String> = self
+            .fixed_args()
+            .iter()
+            .map(|a: &&str| (*a).to_string())
+            .collect();
         if let Command::Log { skip, count } = self {
             args.push(format!("--skip={skip}"));
             args.push(format!("--max-count={count}"));
@@ -189,7 +210,9 @@ impl Command {
             Command::Diff { paths, .. }
             | Command::Add { paths }
             | Command::RestoreStaged { paths }
-            | Command::RemoveCached { paths } => args.extend(paths.iter().cloned()),
+            | Command::RemoveCached { paths }
+            | Command::Restore { paths }
+            | Command::Clean { paths } => args.extend(paths.iter().cloned()),
             Command::DiffUntracked { path } => args.push(path.clone()),
             Command::Commit { message_file, .. } => args.push(message_file.clone()),
             Command::CommitMessage { hash } | Command::CommitFiles { hash } => {
@@ -299,9 +322,18 @@ mod tests {
             "restore --staged -- p"
         );
         assert_eq!(
-            args(&Command::RemoveCached { paths }),
+            args(&Command::RemoveCached {
+                paths: paths.clone()
+            }),
             "rm --cached -q -r -- p"
         );
+        assert_eq!(
+            args(&Command::Restore {
+                paths: paths.clone()
+            }),
+            "restore -- p"
+        );
+        assert_eq!(args(&Command::Clean { paths }), "clean -f -q -- p");
         assert_eq!(
             args(&Command::ApplyCached { reverse: false }),
             "apply --cached"

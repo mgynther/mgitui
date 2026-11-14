@@ -48,6 +48,39 @@ impl Git {
         Ok(())
     }
 
+    /// Discards the unstaged changes of tracked `paths`, restoring them from the index. Staged
+    /// changes are kept.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    pub fn restore(&self, paths: &[String], log: &Log<'_>) -> Result<(), GitError> {
+        self.run(
+            &Command::Restore {
+                paths: paths.to_vec(),
+            },
+            None,
+            log,
+        )?;
+        Ok(())
+    }
+
+    /// Deletes untracked `paths`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    pub fn clean(&self, paths: &[String], log: &Log<'_>) -> Result<(), GitError> {
+        self.run(
+            &Command::Clean {
+                paths: paths.to_vec(),
+            },
+            None,
+            log,
+        )?;
+        Ok(())
+    }
+
     /// Applies `patch` to the index, in reverse when `reverse` is true.
     ///
     /// # Errors
@@ -116,6 +149,33 @@ mod tests {
     }
 
     #[test]
+    fn restore_keeps_staged_changes_and_clean_deletes_untracked() {
+        let repo: TestRepo = TestRepo::new();
+        repo.write("f.txt", "a\n");
+        repo.git_ok(&["add", "."]);
+        repo.git_ok(&["commit", "-q", "-m", "init"]);
+        repo.write("f.txt", "staged\n");
+        repo.git_ok(&["add", "f.txt"]);
+        repo.write("f.txt", "unstaged\n");
+        repo.write("new.txt", "n\n");
+        let logged: Logged = Logged::new();
+        repo.git()
+            .restore(&paths(&["f.txt"]), &logged.log())
+            .unwrap();
+        repo.git()
+            .clean(&paths(&["new.txt"]), &logged.log())
+            .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(repo.path().join("f.txt")).unwrap(),
+            "staged\n"
+        );
+        assert!(!repo.path().join("new.txt").exists());
+        let after: Status = status(&repo);
+        assert_eq!(after.unstaged, Vec::new());
+        assert_eq!(after.staged[0].kind, ChangeKind::Modified);
+    }
+
+    #[test]
     fn apply_patch_to_index_and_back() {
         let repo: TestRepo = TestRepo::new();
         repo.write("f.txt", "a\nb\n");
@@ -145,6 +205,8 @@ mod tests {
         assert!(git.has_head(&logged.log()).is_err());
         assert!(git.unstage(&paths(&["x"]), &logged.log()).is_err());
         assert!(git.apply_cached("", false, &logged.log()).is_err());
+        assert!(git.restore(&paths(&["x"]), &logged.log()).is_err());
+        assert!(git.clean(&paths(&["x"]), &logged.log()).is_err());
         assert!(
             repo.git()
                 .unstage(&paths(&["missing"]), &logged.log())

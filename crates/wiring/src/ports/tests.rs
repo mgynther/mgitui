@@ -125,6 +125,14 @@ fn git_failures_become_failed() {
         ports.unstage_file(&file("x", ChangeKind::Modified)),
         Err(Failed)
     );
+    assert_eq!(
+        ports.discard_file(&file("x", ChangeKind::Untracked)),
+        Err(Failed)
+    );
+    assert_eq!(
+        ports.discard_file(&file("x", ChangeKind::Modified)),
+        Err(Failed)
+    );
     assert_eq!(ports.apply_to_index("", false), Err(Failed));
     assert_eq!(ports.has_commits(), Err(Failed));
     assert_eq!(ports.commits(0, 1), Err(Failed));

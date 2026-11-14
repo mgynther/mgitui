@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use super::{App, Note};
+use super::{App, Confirmation, Mode, Note};
 use crate::cursor::Cursor;
 use crate::event::Event;
 use crate::log::LogLevel;
@@ -234,6 +234,7 @@ impl App {
                 self.load_file_diff(ports);
             }
             (DiffPane::Files, Event::Activate) => self.stage_whole_file(ports),
+            (DiffPane::Files, Event::DiscardFile) => self.start_discard(ports),
             (DiffPane::Files, _) => self.move_in_file_list(event, ports),
             (DiffPane::FileDiff, Event::StartSelection) => {
                 if self.line_staging_allowed(ports) {
@@ -348,6 +349,36 @@ impl App {
                 .diff_cursor
                 .select(cursor, len, self.viewports.diff_file);
         }
+    }
+
+    /// Asks for confirmation before discarding the unstaged changes of the selected file.
+    fn start_discard(&mut self, ports: &dyn Ports) {
+        if self.diff.side == Side::Staged {
+            self.note = Note::Info(
+                "Only unstaged changes can be discarded: unstage the file first".to_string(),
+            );
+            return;
+        }
+        if let Some(file) = self.file_for_action(ports) {
+            self.mode = Mode::Confirm(Confirmation::DiscardFile { file });
+        }
+    }
+
+    pub(super) fn discard_file(&mut self, file: &ChangedFile, ports: &dyn Ports) {
+        let untracked: bool = file.kind == ChangeKind::Untracked;
+        let action: &str = if untracked {
+            "delete"
+        } else {
+            "discard changes in"
+        };
+        ports.log(LogLevel::Info, &format!("{action} {}", file.path));
+        let result: Result<(), Failed> = ports.discard_file(file);
+        self.refresh(ports);
+        self.note = match (result, untracked) {
+            (Ok(()), true) => Note::Info(format!("Deleted {}", file.path)),
+            (Ok(()), false) => Note::Info(format!("Discarded changes in {}", file.path)),
+            (Err(Failed), _) => Note::Problem("Discarding failed, see the Log view".to_string()),
+        };
     }
 
     fn after_staging(&mut self, result: Result<(), Failed>, ports: &dyn Ports) {

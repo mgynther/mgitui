@@ -95,6 +95,16 @@ impl logic::ports::Ports for SessionPorts<'_> {
             .map_err(|_| Failed)
     }
 
+    fn discard_file(&self, file: &ChangedFile) -> Result<(), Failed> {
+        let paths: Vec<String> = diff_paths(file, Side::Unstaged);
+        let result: Result<(), git::GitError> = if file.kind == ChangeKind::Untracked {
+            self.git.clean(&paths, &self.log_git())
+        } else {
+            self.git.restore(&paths, &self.log_git())
+        };
+        result.map_err(|_| Failed)
+    }
+
     fn apply_to_index(&self, patch: &str, reverse: bool) -> Result<(), Failed> {
         self.git
             .apply_cached(patch, reverse, &self.log_git())

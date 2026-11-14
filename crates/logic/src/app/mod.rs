@@ -23,6 +23,7 @@ mod tests;
 use crate::cursor::Cursor;
 use crate::event::{Event, ViewId};
 use crate::log::{DEFAULT_CAPACITY, LogLevel, LogStore};
+use crate::model::ChangedFile;
 use crate::ports::{Ports, SearchText};
 use crate::search::{Direction, Found};
 
@@ -46,6 +47,11 @@ pub enum Confirmation {
     DeleteBranch {
         /// The branch name.
         name: String,
+    },
+    /// Discarding the unstaged changes of a file, or deleting it when untracked.
+    DiscardFile {
+        /// The file in the unstaged list.
+        file: ChangedFile,
     },
 }
 
@@ -254,6 +260,7 @@ impl App {
                     match confirmation {
                         Confirmation::Quit => self.quit = true,
                         Confirmation::DeleteBranch { name } => self.delete_branch(&name, ports),
+                        Confirmation::DiscardFile { file } => self.discard_file(&file, ports),
                     }
                 }
             }

@@ -1,4 +1,4 @@
-use super::{App, DiffPane, Note, Viewports};
+use super::{App, Confirmation, DiffPane, Mode, Note, Viewports};
 use crate::event::{Event, ViewId};
 use crate::model::{ChangeKind, ChangedFile, DiffLine, FileDiff, Hunk, LineKind, Side, WorkStatus};
 use crate::test_ports::{TestPorts, modified};
@@ -234,4 +234,86 @@ fn cursor_resets_when_staged_file_leaves_the_list() {
     );
     assert_eq!(app.diff().diff_cursor().selected(), 0);
     assert_eq!(app.diff().side(), Side::Unstaged);
+}
+
+#[test]
+fn d_discards_unstaged_changes_after_confirming() {
+    let ports: TestPorts = ports_with(vec![modified("u")], vec![]);
+    let mut app: App = app(&ports);
+    run(&mut app, &ports, &[Event::DiscardFile]);
+    assert_eq!(
+        app.mode(),
+        &Mode::Confirm(Confirmation::DiscardFile {
+            file: modified("u")
+        })
+    );
+    run(&mut app, &ports, &[Event::No]);
+    assert_eq!(app.mode(), &Mode::Normal);
+    assert_eq!(ports.calls(), Vec::<String>::new());
+    run(&mut app, &ports, &[Event::DiscardFile, Event::Yes]);
+    assert_eq!(
+        ports.calls(),
+        vec![
+            "Info: discard changes in u",
+            "discard u",
+            "refs",
+            "commits 0 2000",
+            "status",
+            "diff Unstaged u"
+        ]
+    );
+    assert_eq!(
+        app.note(),
+        &Note::Info("Discarded changes in u".to_string())
+    );
+}
+
+#[test]
+fn d_deletes_untracked_files_after_confirming() {
+    let ports: TestPorts = ports_with(vec![file("n", ChangeKind::Untracked)], vec![]);
+    let mut app: App = app(&ports);
+    run(&mut app, &ports, &[Event::DiscardFile, Event::Yes]);
+    assert_eq!(ports.calls()[..2], ["Info: delete n", "discard n"]);
+    assert_eq!(app.note(), &Note::Info("Deleted n".to_string()));
+}
+
+#[test]
+fn discard_failure_is_shown() {
+    let ports: TestPorts = TestPorts {
+        stage_fails: true,
+        ..ports_with(vec![modified("u")], vec![])
+    };
+    let mut app: App = app(&ports);
+    run(&mut app, &ports, &[Event::DiscardFile, Event::Yes]);
+    assert_eq!(
+        app.note(),
+        &Note::Problem("Discarding failed, see the Log view".to_string())
+    );
+}
+
+#[test]
+fn d_is_refused_on_staged_conflicted_and_missing_files_and_in_the_diff() {
+    let ports: TestPorts = ports_with(vec![file("c", ChangeKind::Conflict)], vec![modified("s")]);
+    let mut app: App = app(&ports);
+    run(&mut app, &ports, &[Event::DiscardFile]);
+    assert_eq!(app.mode(), &Mode::Normal);
+    assert_eq!(
+        ports.calls(),
+        vec!["Error: c has a merge conflict; resolve it outside mgitui"]
+    );
+    run(&mut app, &ports, &[Event::SwitchList, Event::DiscardFile]);
+    assert_eq!(app.mode(), &Mode::Normal);
+    assert_eq!(
+        app.note(),
+        &Note::Info("Only unstaged changes can be discarded: unstage the file first".to_string())
+    );
+    run(&mut app, &ports, &[Event::SwitchList, Event::NextPane]);
+    assert_eq!(app.diff().pane(), DiffPane::FileDiff);
+    run(&mut app, &ports, &[Event::DiscardFile]);
+    assert_eq!(app.mode(), &Mode::Normal);
+    let empty: TestPorts = ports_with(vec![], vec![]);
+    let mut app: App = self::app(&empty);
+    run(&mut app, &empty, &[Event::DiscardFile]);
+    assert_eq!(app.mode(), &Mode::Normal);
+    assert_eq!(empty.calls(), Vec::<String>::new());
 }

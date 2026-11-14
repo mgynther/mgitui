@@ -60,6 +60,14 @@ pub trait Ports {
     /// Fails when git fails.
     fn unstage_file(&self, file: &ChangedFile) -> Result<(), Failed>;
 
+    /// Discards the unstaged changes of a file in the unstaged list: an untracked file is
+    /// deleted, a tracked file is restored from the index.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn discard_file(&self, file: &ChangedFile) -> Result<(), Failed>;
+
     /// Applies a patch to the index, in reverse when `reverse` is true.
     ///
     /// # Errors

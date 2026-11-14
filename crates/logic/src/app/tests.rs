@@ -76,6 +76,26 @@ fn switching_views_and_unseen_problems() {
 }
 
 #[test]
+fn switching_to_branches_or_diff_reloads_but_log_does_not() {
+    let reload: Vec<&str> = vec![
+        "Info: reload on view switch",
+        "refs",
+        "commits 0 2000",
+        "status",
+    ];
+    let ports: TestPorts = TestPorts::new();
+    let mut app: App = App::new();
+    for view in [ViewId::Diff, ViewId::Branches, ViewId::Branches] {
+        app.handle(Event::SwitchView(view), &ports);
+        assert_eq!(ports.calls(), reload);
+        ports.clear();
+    }
+    app.handle(Event::SwitchView(ViewId::Log), &ports);
+    assert_eq!(app.view(), ViewId::Log);
+    assert_eq!(ports.calls(), Vec::<String>::new());
+}
+
+#[test]
 fn log_selection_follows_new_lines_at_the_end() {
     let mut app: App = log_app(&["a", "b", "c", "d"]);
     assert_eq!(app.log_cursor().selected(), 3);

@@ -277,7 +277,7 @@ impl App {
     fn handle_normal(&mut self, event: Event, ports: &dyn Ports) {
         match event {
             Event::Quit => self.mode = Mode::Confirm(Confirmation::Quit),
-            Event::SwitchView(view) => self.switch_view(view),
+            Event::SwitchView(view) => self.switch_view(view, ports),
             Event::Reload => self.reload(ports),
             Event::StartSearch => self.open_prompt(PromptKind::Search),
             Event::SearchNext => self.search_again(Direction::Forward, ports),
@@ -378,10 +378,16 @@ impl App {
         };
     }
 
-    fn switch_view(&mut self, view: ViewId) {
+    /// Shows `view`, reloading from git first unless it is the Log view, which shows no git
+    /// data. Reloading also when `view` is already shown makes F1 and F2 work like r.
+    fn switch_view(&mut self, view: ViewId, ports: &dyn Ports) {
         if self.view == ViewId::Log && view != ViewId::Log {
             self.log.mark_seen();
         }
         self.view = view;
+        if view != ViewId::Log {
+            ports.log(LogLevel::Info, "reload on view switch");
+            self.refresh(ports);
+        }
     }
 }

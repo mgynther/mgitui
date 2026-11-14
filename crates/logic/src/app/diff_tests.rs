@@ -19,7 +19,6 @@ fn diff_app(ports: &TestPorts) -> App {
     let mut app: App = App::new();
     app.set_viewports(viewports());
     app.handle(Event::SwitchView(ViewId::Diff), ports);
-    app.handle(Event::Reload, ports);
     app
 }
 
@@ -36,7 +35,9 @@ fn selected_path(app: &App) -> Option<String> {
 #[test]
 fn reload_loads_status_and_first_diff() {
     let ports: TestPorts = TestPorts::with_files(&["a", "b"], &["s"]);
-    let app: App = diff_app(&ports);
+    let mut app: App = diff_app(&ports);
+    ports.clear();
+    run(&mut app, &ports, &[Event::Reload]);
     assert_eq!(
         ports.calls(),
         vec![

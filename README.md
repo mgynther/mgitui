@@ -107,7 +107,7 @@ The code is split into one crate per layer under `crates/`: `git`, `logic`, `ui`
 
 | Key | Where | Action |
 |---|---|---|
-| F1 / F2 / F3 | everywhere | Branches / Diff / Log view |
+| F1 / F2 / F3 | everywhere | Branches / Diff / Log view; F1 and F2 also reload from git |
 | q | everywhere | quit (asks `Quit? y/n`) |
 | r | everywhere | reload from git |
 | j / k / g / G | lists and diffs | down / up / top / bottom |

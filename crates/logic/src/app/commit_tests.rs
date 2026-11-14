@@ -4,11 +4,7 @@ use crate::test_ports::TestPorts;
 
 fn app(ports: &TestPorts) -> App {
     let mut app: App = App::new();
-    run(
-        &mut app,
-        ports,
-        &[Event::SwitchView(ViewId::Diff), Event::Reload],
-    );
+    run(&mut app, ports, &[Event::SwitchView(ViewId::Diff)]);
     ports.clear();
     app
 }

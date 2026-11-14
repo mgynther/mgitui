@@ -61,17 +61,12 @@ Rust needs a C linker. Debian / Ubuntu: `sudo apt install build-essential`. Fedo
 
 ### Development
 
-The linter and formatter are rustup components (included in the default profile):
+`rust-toolchain.toml` pins the Rust version and the rustup components the project uses: Clippy, rustfmt, the LLVM tools for coverage and rust-analyzer for editor support. rustup installs them on the first `cargo` command in the repository.
+
+Test coverage also needs cargo-llvm-cov:
 
 ```sh
-rustup component add clippy rustfmt
-```
-
-Test coverage uses cargo-llvm-cov:
-
-```sh
-rustup component add llvm-tools-preview
-cargo install cargo-llvm-cov
+cargo install cargo-llvm-cov --locked
 ```
 
 Verify:
@@ -80,6 +75,7 @@ Verify:
 cargo clippy --version
 cargo fmt --version
 cargo llvm-cov --version
+rust-analyzer --version
 ```
 
 ## Building and running

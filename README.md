@@ -155,3 +155,7 @@ The terminal handling and starting Vim are not covered by automated tests. After
 6. In the Branches view press i on a branch and choose a branch to rebase onto: git opens Vim with the todo list, and after `:wq` the app comes back with the rebased graph.
 7. Press q then y: the terminal is restored, the cursor is visible and typed keys are echoed again.
 8. Outside a git repository `mgitui` prints an error and exits with status 1.
+
+## Licence
+
+MIT, see [LICENSE](LICENSE).

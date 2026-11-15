@@ -1,9 +1,40 @@
-//! Conversions between the git layer's types and the logic layer's types.
+//! Conversions from the git and validation layers' types to the logic layer's types, and back.
 
 use logic::model::{
     AmendBase, ChangeKind, ChangedFile, Commit, DiffLine, FileDiff, Hunk, Label, LineKind, Refs,
     WorkStatus,
 };
+
+/// The logic input problem for a validation error.
+#[must_use]
+pub fn input_problem(error: &validation::ValidationError) -> logic::note::InputProblem {
+    use logic::note::InputProblem as I;
+    use validation::ValidationError as V;
+    match error {
+        V::BranchName(rule) => I::BranchName(branch_name_problem(*rule)),
+        V::NotANumber => I::NotANumber,
+        V::OutOfRange { count } => I::OutOfRange { count: *count },
+        V::EmptySearch => I::EmptySearch,
+        V::EmptyCommitMessage => I::EmptyCommitMessage,
+    }
+}
+
+fn branch_name_problem(rule: validation::BranchNameProblem) -> logic::note::BranchNameProblem {
+    use logic::note::BranchNameProblem as L;
+    use validation::BranchNameProblem as V;
+    match rule {
+        V::Empty => L::Empty,
+        V::Reserved => L::Reserved,
+        V::StartsWithDash => L::StartsWithDash,
+        V::BadSlash => L::BadSlash,
+        V::ComponentStartsWithDot => L::ComponentStartsWithDot,
+        V::ComponentEndsWithLock => L::ComponentEndsWithLock,
+        V::EndsWithDot => L::EndsWithDot,
+        V::DoubleDot => L::DoubleDot,
+        V::AtBrace => L::AtBrace,
+        V::ForbiddenCharacter(c) => L::ForbiddenCharacter(c),
+    }
+}
 
 /// The git base for what the logic layer compares the amended commit with.
 #[must_use]
@@ -124,8 +155,40 @@ pub fn refs(refs: Vec<git::Ref>, head: Option<String>) -> Refs {
 
 #[cfg(test)]
 mod tests {
-    use super::{amend_base, change_kind, changed_files, commit, file_diff, refs, work_status};
+    use super::{
+        amend_base, change_kind, changed_files, commit, file_diff, input_problem, refs, work_status,
+    };
     use logic::model::{ChangeKind, Label, LineKind};
+
+    #[test]
+    fn validation_errors_become_input_problems() {
+        use logic::note::BranchNameProblem as L;
+        use logic::note::InputProblem as I;
+        use validation::BranchNameProblem as V;
+        use validation::ValidationError as E;
+        let rules: [(V, L); 10] = [
+            (V::Empty, L::Empty),
+            (V::Reserved, L::Reserved),
+            (V::StartsWithDash, L::StartsWithDash),
+            (V::BadSlash, L::BadSlash),
+            (V::ComponentStartsWithDot, L::ComponentStartsWithDot),
+            (V::ComponentEndsWithLock, L::ComponentEndsWithLock),
+            (V::EndsWithDot, L::EndsWithDot),
+            (V::DoubleDot, L::DoubleDot),
+            (V::AtBrace, L::AtBrace),
+            (V::ForbiddenCharacter('~'), L::ForbiddenCharacter('~')),
+        ];
+        for (from, to) in rules {
+            assert_eq!(input_problem(&E::BranchName(from)), I::BranchName(to));
+        }
+        assert_eq!(input_problem(&E::NotANumber), I::NotANumber);
+        assert_eq!(
+            input_problem(&E::OutOfRange { count: 3 }),
+            I::OutOfRange { count: 3 }
+        );
+        assert_eq!(input_problem(&E::EmptySearch), I::EmptySearch);
+        assert_eq!(input_problem(&E::EmptyCommitMessage), I::EmptyCommitMessage);
+    }
 
     #[test]
     fn amend_bases() {

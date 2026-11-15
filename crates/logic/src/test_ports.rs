@@ -7,6 +7,7 @@ use crate::model::{
     AmendBase, ChangeKind, ChangedFile, Commit, DiffLine, FileDiff, Hunk, LineKind, Refs, Side,
     WorkStatus,
 };
+use crate::note::{BranchNameProblem, InputProblem};
 use crate::ports::{BranchName, CommitMessage, Failed, Ports, SearchText};
 
 /// Records calls as text and answers from its fields.
@@ -209,9 +210,9 @@ impl Ports for TestPorts {
             .push(format!("{level:?}: {message}"));
     }
 
-    fn validate_search(&self, input: &str) -> Result<SearchText, String> {
+    fn validate_search(&self, input: &str) -> Result<SearchText, InputProblem> {
         if input.is_empty() {
-            Err("search text is empty".to_string())
+            Err(InputProblem::EmptySearch)
         } else {
             Ok(SearchText(input.to_string()))
         }
@@ -299,9 +300,9 @@ impl Ports for TestPorts {
             .ok_or(Failed)
     }
 
-    fn validate_commit_message(&self, text: &str) -> Result<CommitMessage, String> {
+    fn validate_commit_message(&self, text: &str) -> Result<CommitMessage, InputProblem> {
         if text.trim().is_empty() {
-            Err("commit message is empty".to_string())
+            Err(InputProblem::EmptyCommitMessage)
         } else {
             Ok(CommitMessage(text.to_string()))
         }
@@ -346,20 +347,22 @@ impl Ports for TestPorts {
         ])
     }
 
-    fn validate_branch_name(&self, input: &str) -> Result<BranchName, String> {
-        if input.is_empty() || input.contains(' ') {
-            Err("invalid branch name".to_string())
+    fn validate_branch_name(&self, input: &str) -> Result<BranchName, InputProblem> {
+        if input.contains(' ') {
+            Err(InputProblem::BranchName(
+                BranchNameProblem::ForbiddenCharacter(' '),
+            ))
         } else {
             Ok(BranchName(input.to_string()))
         }
     }
 
-    fn validate_checkout_choice(&self, input: &str, count: usize) -> Result<usize, String> {
+    fn validate_checkout_choice(&self, input: &str, count: usize) -> Result<usize, InputProblem> {
         match input.parse::<usize>() {
             // A broken validator, to check that logic does not trust it blindly.
             Ok(99) => Ok(98),
             Ok(n) if n >= 1 && n <= count => Ok(n - 1),
-            _ => Err(format!("choice must be a number from 1 to {count}")),
+            _ => Err(InputProblem::OutOfRange { count }),
         }
     }
 

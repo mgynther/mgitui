@@ -2,6 +2,7 @@
 
 use crate::log::LogLevel;
 use crate::model::{AmendBase, ChangedFile, Commit, FileDiff, Refs, Side, WorkStatus};
+use crate::note::InputProblem;
 
 /// Search text that passed validation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,8 +30,8 @@ pub trait Ports {
     ///
     /// # Errors
     ///
-    /// Returns a short description when the text is not valid.
-    fn validate_search(&self, input: &str) -> Result<SearchText, String>;
+    /// Returns the problem when the text is not valid.
+    fn validate_search(&self, input: &str) -> Result<SearchText, InputProblem>;
 
     /// The staged and unstaged changes.
     ///
@@ -156,8 +157,8 @@ pub trait Ports {
     ///
     /// # Errors
     ///
-    /// Returns a short description when the message is not valid.
-    fn validate_commit_message(&self, text: &str) -> Result<CommitMessage, String>;
+    /// Returns the problem when the message is not valid.
+    fn validate_commit_message(&self, text: &str) -> Result<CommitMessage, InputProblem>;
 
     /// Commits the staged changes, or amends the last commit.
     ///
@@ -205,16 +206,16 @@ pub trait Ports {
     ///
     /// # Errors
     ///
-    /// Returns a short description when the name is not valid.
-    fn validate_branch_name(&self, input: &str) -> Result<BranchName, String>;
+    /// Returns the problem when the name is not valid.
+    fn validate_branch_name(&self, input: &str) -> Result<BranchName, InputProblem>;
 
     /// Validates a number typed to choose one of `count` listed items. Returns the zero-based
     /// index of the item.
     ///
     /// # Errors
     ///
-    /// Returns a short description when the input is not one of the listed numbers.
-    fn validate_checkout_choice(&self, input: &str, count: usize) -> Result<usize, String>;
+    /// Returns the problem when the input is not one of the listed numbers.
+    fn validate_checkout_choice(&self, input: &str, count: usize) -> Result<usize, InputProblem>;
 
     /// Creates a branch at a commit without checking it out.
     ///

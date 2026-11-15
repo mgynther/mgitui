@@ -1,6 +1,7 @@
-use super::{App, DiffPane, Note, Viewports};
+use super::{App, DiffPane, Viewports};
 use crate::event::{Event, ViewId};
 use crate::model::{RowKind, Side, WorkStatus};
+use crate::note::{Info, Note, Operation, Problem};
 use crate::test_ports::{TestPorts, modified};
 
 fn viewports() -> Viewports {
@@ -128,7 +129,7 @@ fn failures_are_shown_in_the_status_line() {
     run(&mut app, &ports, &[Event::Reload]);
     assert_eq!(
         app.note(),
-        &Note::Problem("Reloading changes failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::ReloadingChanges))
     );
     assert_eq!(selected_path(&app), Some("a".to_string()));
     let failing: TestPorts = TestPorts {
@@ -138,7 +139,7 @@ fn failures_are_shown_in_the_status_line() {
     run(&mut app, &failing, &[Event::Reload]);
     assert_eq!(
         app.note(),
-        &Note::Problem("Loading the diff failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::LoadingDiff))
     );
     assert_eq!(app.diff().rows(), &[]);
 }
@@ -159,7 +160,12 @@ fn search_selects_matching_file() {
         &ports,
         &[Event::StartSearch, Event::Input('z'), Event::InputSubmit],
     );
-    assert_eq!(app.note(), &Note::Info("Pattern not found: z".to_string()));
+    assert_eq!(
+        app.note(),
+        &Note::Info(Info::PatternNotFound {
+            term: "z".to_string()
+        })
+    );
 }
 
 #[test]

@@ -2,6 +2,7 @@
 
 use logic::log::LogLevel;
 use logic::model::{AmendBase, ChangedFile, Commit, FileDiff, Refs, Side, WorkStatus};
+use logic::note::InputProblem;
 use logic::ports::{BranchName, CommitMessage, Failed};
 
 use crate::editor::{self, Editor, Handoff};
@@ -49,10 +50,10 @@ impl logic::ports::Ports for SessionPorts<'_> {
         self.log.logic(level, message);
     }
 
-    fn validate_search(&self, input: &str) -> Result<logic::ports::SearchText, String> {
+    fn validate_search(&self, input: &str) -> Result<logic::ports::SearchText, InputProblem> {
         validation::search_text(input, &self.log_validation())
             .map(|text: validation::SearchText| logic::ports::SearchText(text.as_str().to_string()))
-            .map_err(|error: validation::ValidationError| error.to_string())
+            .map_err(|error: validation::ValidationError| model::input_problem(&error))
     }
 
     fn status(&self) -> Result<WorkStatus, Failed> {
@@ -159,10 +160,10 @@ impl logic::ports::Ports for SessionPorts<'_> {
         )
     }
 
-    fn validate_commit_message(&self, text: &str) -> Result<CommitMessage, String> {
+    fn validate_commit_message(&self, text: &str) -> Result<CommitMessage, InputProblem> {
         validation::commit_message(text, &self.log_validation())
             .map(|message: validation::CommitMessage| CommitMessage(message.as_str().to_string()))
-            .map_err(|error: validation::ValidationError| error.to_string())
+            .map_err(|error: validation::ValidationError| model::input_problem(&error))
     }
 
     fn commit(&self, message: &CommitMessage, amend: bool) -> Result<(), Failed> {
@@ -189,16 +190,16 @@ impl logic::ports::Ports for SessionPorts<'_> {
             .map_err(|_| Failed)
     }
 
-    fn validate_branch_name(&self, input: &str) -> Result<BranchName, String> {
+    fn validate_branch_name(&self, input: &str) -> Result<BranchName, InputProblem> {
         validation::branch_name(input, &self.log_validation())
             .map(|name: validation::BranchName| BranchName(name.as_str().to_string()))
-            .map_err(|error: validation::ValidationError| error.to_string())
+            .map_err(|error: validation::ValidationError| model::input_problem(&error))
     }
 
-    fn validate_checkout_choice(&self, input: &str, count: usize) -> Result<usize, String> {
+    fn validate_checkout_choice(&self, input: &str, count: usize) -> Result<usize, InputProblem> {
         validation::checkout_choice(input, count, &self.log_validation())
             .map(validation::CheckoutChoice::index)
-            .map_err(|error: validation::ValidationError| error.to_string())
+            .map_err(|error: validation::ValidationError| model::input_problem(&error))
     }
 
     fn create_branch(&self, name: &BranchName, at: &str) -> Result<(), Failed> {

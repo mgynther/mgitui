@@ -3,13 +3,14 @@
 use std::collections::VecDeque;
 
 use logic::app::{
-    App, BranchesPane, BranchesState, Confirmation, DiffPane, DiffState, Mode, Note, PromptKind,
+    App, BranchesPane, BranchesState, Confirmation, DiffPane, DiffState, Mode, PromptKind,
     Viewports,
 };
 use logic::cursor::Cursor;
 use logic::graph::{Cell, CommitSide, GraphRow, Shape};
 use logic::log::{Layer, LogEntry, LogLevel};
 use logic::model::{ChangeKind, ChangedFile, Commit, DiffRow, Label, LineKind, RowKind, Side};
+use logic::note::Note;
 
 /// The logic event for a ui event.
 #[must_use]
@@ -134,13 +135,129 @@ fn status(mode: &Mode, note: &Note) -> ui::screen::Status {
             kind: prompt_kind(&prompt.kind),
             text: prompt.text.clone(),
             problem: match note {
-                Note::Problem(problem) => Some(problem.clone()),
+                Note::Problem(problem) => Some(ui_problem(problem)),
                 Note::None | Note::Info(_) => None,
             },
         },
         (Mode::Normal, Note::None) => ui::screen::Status::Empty,
-        (Mode::Normal, Note::Info(text)) => ui::screen::Status::Note(text.clone()),
-        (Mode::Normal, Note::Problem(text)) => ui::screen::Status::Problem(text.clone()),
+        (Mode::Normal, Note::Info(info)) => ui::screen::Status::Note(ui_info(info)),
+        (Mode::Normal, Note::Problem(problem)) => ui::screen::Status::Problem(ui_problem(problem)),
+    }
+}
+
+fn ui_info(info: &logic::note::Info) -> ui::status::Info {
+    use logic::note::Info as I;
+    use ui::status::Info as U;
+    match info {
+        I::NoCommitSelected => U::NoCommitSelected,
+        I::CreatedBranch { name } => U::CreatedBranch { name: name.clone() },
+        I::DeletedBranch { name } => U::DeletedBranch { name: name.clone() },
+        I::NoOtherBranchToRebaseOnto => U::NoOtherBranchToRebaseOnto,
+        I::Rebased { branch, onto } => U::Rebased {
+            branch: branch.clone(),
+            onto: onto.clone(),
+        },
+        I::RebasedInteractively { branch, onto } => U::RebasedInteractively {
+            branch: branch.clone(),
+            onto: onto.clone(),
+        },
+        I::CheckedOut { branch } => U::CheckedOut {
+            branch: branch.clone(),
+        },
+        I::UpdatedRemotes => U::UpdatedRemotes,
+        I::FetchedAndPruned => U::FetchedAndPruned,
+        I::ResetBranch { branch, hash } => U::ResetBranch {
+            branch: branch.clone(),
+            hash: hash.clone(),
+        },
+        I::CherryPicked { hash } => U::CherryPicked { hash: hash.clone() },
+        I::NoMainOrMasterBranch => U::NoMainOrMasterBranch,
+        I::OnlyWholeFilesCanBeStagedHere => U::OnlyWholeFilesCanBeStagedHere,
+        I::OnlyUnstagedChangesCanBeDiscarded => U::OnlyUnstagedChangesCanBeDiscarded,
+        I::NothingToStage => U::NothingToStage,
+        I::NoChangedLinesSelected => U::NoChangedLinesSelected,
+        I::DeletedFile { path } => U::DeletedFile { path: path.clone() },
+        I::DiscardedChanges { path } => U::DiscardedChanges { path: path.clone() },
+        I::NoPreviousSearch => U::NoPreviousSearch,
+        I::PatternNotFound { term } => U::PatternNotFound { term: term.clone() },
+        I::SearchWrapped => U::SearchWrapped,
+    }
+}
+
+fn ui_problem(problem: &logic::note::Problem) -> ui::status::Problem {
+    use logic::note::Problem as P;
+    use ui::status::Problem as U;
+    match problem {
+        P::Failed(operation) => U::Failed(ui_operation(*operation)),
+        P::Invalid(input) => U::Invalid(ui_input_problem(input)),
+        P::ChoiceNotListed => U::ChoiceNotListed,
+        P::NoLocalBranchToCheckOut => U::NoLocalBranchToCheckOut,
+        P::NoLocalBranchToDelete => U::NoLocalBranchToDelete,
+        P::CheckedOutBranchCannotBeDeleted => U::CheckedOutBranchCannotBeDeleted,
+        P::NoLocalBranchToRebase => U::NoLocalBranchToRebase,
+        P::NoBranchCheckedOutToReset => U::NoBranchCheckedOutToReset,
+        P::UncommittedChangesBeforeReset => U::UncommittedChangesBeforeReset,
+        P::MergeConflict { path } => U::MergeConflict { path: path.clone() },
+        P::MergeConflictsBeforeStagingAll => U::MergeConflictsBeforeStagingAll,
+        P::NothingToAmend => U::NothingToAmend,
+        P::AmendedCommitWouldBeEmpty => U::AmendedCommitWouldBeEmpty,
+    }
+}
+
+fn ui_operation(operation: logic::note::Operation) -> ui::status::Operation {
+    use logic::note::Operation as O;
+    use ui::status::Operation as U;
+    match operation {
+        O::ReloadingCommits => U::ReloadingCommits,
+        O::LoadingCommit => U::LoadingCommit,
+        O::LoadingDiff => U::LoadingDiff,
+        O::LoadingMoreCommits => U::LoadingMoreCommits,
+        O::CreatingBranch => U::CreatingBranch,
+        O::DeletingBranch => U::DeletingBranch,
+        O::Rebasing => U::Rebasing,
+        O::CheckingOut => U::CheckingOut,
+        O::UpdatingRemotes => U::UpdatingRemotes,
+        O::FetchingAndPruning => U::FetchingAndPruning,
+        O::ShowingCommit => U::ShowingCommit,
+        O::ReadingStatus => U::ReadingStatus,
+        O::ResettingBranch => U::ResettingBranch,
+        O::CherryPicking => U::CherryPicking,
+        O::ReloadingChanges => U::ReloadingChanges,
+        O::DeletingFile => U::DeletingFile,
+        O::DiscardingChanges => U::DiscardingChanges,
+        O::Staging => U::Staging,
+        O::EditingMessage => U::EditingMessage,
+        O::ReadingLastCommit => U::ReadingLastCommit,
+        O::Committing => U::Committing,
+    }
+}
+
+fn ui_input_problem(problem: &logic::note::InputProblem) -> ui::status::InputProblem {
+    use logic::note::InputProblem as I;
+    use ui::status::InputProblem as U;
+    match problem {
+        I::BranchName(rule) => U::BranchName(ui_branch_name_problem(*rule)),
+        I::NotANumber => U::NotANumber,
+        I::OutOfRange { count } => U::OutOfRange { count: *count },
+        I::EmptySearch => U::EmptySearch,
+        I::EmptyCommitMessage => U::EmptyCommitMessage,
+    }
+}
+
+fn ui_branch_name_problem(rule: logic::note::BranchNameProblem) -> ui::status::BranchNameProblem {
+    use logic::note::BranchNameProblem as B;
+    use ui::status::BranchNameProblem as U;
+    match rule {
+        B::Empty => U::Empty,
+        B::Reserved => U::Reserved,
+        B::StartsWithDash => U::StartsWithDash,
+        B::BadSlash => U::BadSlash,
+        B::ComponentStartsWithDot => U::ComponentStartsWithDot,
+        B::ComponentEndsWithLock => U::ComponentEndsWithLock,
+        B::EndsWithDot => U::EndsWithDot,
+        B::DoubleDot => U::DoubleDot,
+        B::AtBrace => U::AtBrace,
+        B::ForbiddenCharacter(c) => U::ForbiddenCharacter(c),
     }
 }
 
@@ -444,7 +561,8 @@ fn diff_row_kind(kind: RowKind) -> ui::views::diff_text::DiffRowKind {
         RowKind::Line(LineKind::Added) => K::Added,
         RowKind::Line(LineKind::Removed) => K::Removed,
         RowKind::Line(LineKind::NoNewline) => K::NoNewline,
-        RowKind::Note => K::Note,
+        RowKind::BinaryFile => K::BinaryFile,
+        RowKind::NoContentChanges => K::NoContentChanges,
     }
 }
 

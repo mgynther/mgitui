@@ -159,8 +159,10 @@ pub enum RowKind {
     HunkHeader,
     /// A line of a hunk.
     Line(LineKind),
-    /// A note instead of content, such as for binary files.
-    Note,
+    /// Instead of content: the file is binary.
+    BinaryFile,
+    /// Instead of content: the file changed, but not its content, as in a mode change.
+    NoContentChanges,
 }
 
 /// A row of a shown diff.
@@ -172,18 +174,19 @@ pub struct DiffRow {
     pub text: String,
     /// The hunk the row belongs to.
     pub hunk: usize,
-    /// The line within the hunk, `None` for hunk headers and notes.
+    /// The line within the hunk, `None` for hunk headers and the rows instead of content.
     pub line: Option<usize>,
 }
 
-/// The rows shown for a diff: hunk headers and lines, or a note when there is no text content.
+/// The rows shown for a diff: hunk headers and lines, or one row saying why there is no text
+/// content.
 #[must_use]
 pub fn diff_rows(diff: &FileDiff) -> Vec<DiffRow> {
     if diff.binary {
-        return vec![note("Binary file")];
+        return vec![instead_of_content(RowKind::BinaryFile)];
     }
     if diff.hunks.is_empty() {
-        return vec![note("No content changes")];
+        return vec![instead_of_content(RowKind::NoContentChanges)];
     }
     let mut rows: Vec<DiffRow> = Vec::new();
     for (hunk_index, hunk) in diff.hunks.iter().enumerate() {
@@ -205,10 +208,10 @@ pub fn diff_rows(diff: &FileDiff) -> Vec<DiffRow> {
     rows
 }
 
-fn note(text: &str) -> DiffRow {
+fn instead_of_content(kind: RowKind) -> DiffRow {
     DiffRow {
-        kind: RowKind::Note,
-        text: text.to_string(),
+        kind,
+        text: String::new(),
         hunk: 0,
         line: None,
     }
@@ -381,15 +384,18 @@ mod tests {
     }
 
     #[test]
-    fn notes_instead_of_content() {
+    fn rows_instead_of_content() {
         let binary: FileDiff = FileDiff {
+            header: vec![],
+            hunks: vec![],
             binary: true,
-            ..FileDiff::default()
         };
-        assert_eq!(diff_rows(&binary)[0].text, "Binary file");
-        assert_eq!(
-            diff_rows(&FileDiff::default())[0].text,
-            "No content changes"
-        );
+        assert_eq!(diff_rows(&binary)[0].kind, RowKind::BinaryFile);
+        let no_hunks: FileDiff = FileDiff {
+            header: vec![],
+            hunks: vec![],
+            binary: false,
+        };
+        assert_eq!(diff_rows(&no_hunks)[0].kind, RowKind::NoContentChanges);
     }
 }

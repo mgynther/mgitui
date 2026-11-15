@@ -1,5 +1,6 @@
-use super::{App, Note};
+use super::App;
 use crate::event::{Event, ViewId};
+use crate::note::{InputProblem, Note, Operation, Problem};
 use crate::test_ports::{TestPorts, modified};
 
 fn app(ports: &TestPorts) -> App {
@@ -49,7 +50,7 @@ fn empty_message_is_refused() {
     run(&mut app, &ports, &[Event::Commit]);
     assert_eq!(
         app.note(),
-        &Note::Problem("commit message is empty".to_string())
+        &Note::Problem(Problem::Invalid(InputProblem::EmptyCommitMessage))
     );
     assert_eq!(ports.calls(), Vec::<String>::new());
 }
@@ -64,7 +65,7 @@ fn failures_keep_the_message() {
     run(&mut app, &ports, &[Event::EditMessage]);
     assert_eq!(
         app.note(),
-        &Note::Problem("Editing failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::EditingMessage))
     );
     let failing: TestPorts = TestPorts {
         commit_fails: true,
@@ -73,7 +74,7 @@ fn failures_keep_the_message() {
     run(&mut app, &failing, &[Event::EditMessage, Event::Commit]);
     assert_eq!(
         app.note(),
-        &Note::Problem("Commit failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::Committing))
     );
     assert_eq!(app.diff().message(), "edited\n");
 }
@@ -120,7 +121,7 @@ fn amend_needs_a_commit() {
     let mut app: App = app(&ports);
     run(&mut app, &ports, &[Event::ToggleAmend]);
     let message: &str = "Nothing to amend: there are no commits yet";
-    assert_eq!(app.note(), &Note::Problem(message.to_string()));
+    assert_eq!(app.note(), &Note::Problem(Problem::NothingToAmend));
     assert_eq!(
         ports.calls(),
         vec!["has commits".to_string(), format!("Warn: {message}")]
@@ -130,8 +131,7 @@ fn amend_needs_a_commit() {
 
 #[test]
 fn amend_failures() {
-    let problem: Note =
-        Note::Problem("Reading the last commit failed, see the Log view".to_string());
+    let problem: Note = Note::Problem(Problem::Failed(Operation::ReadingLastCommit));
     for ports in [
         TestPorts {
             has_commits: None,

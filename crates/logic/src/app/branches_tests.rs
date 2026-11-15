@@ -1,6 +1,7 @@
-use super::{App, BranchesPane, CHUNK, Note, Viewports};
+use super::{App, BranchesPane, CHUNK, Viewports};
 use crate::event::Event;
 use crate::model::{Label, Refs};
+use crate::note::{Info, Note, Operation, Problem};
 use crate::test_ports::{TestPorts, linear_history};
 
 fn ports(count: usize) -> TestPorts {
@@ -126,19 +127,19 @@ fn failures_are_shown() {
     run(&mut app, &ports, &[Event::Bottom]);
     assert_eq!(
         app.note(),
-        &Note::Problem("Loading more commits failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::LoadingMoreCommits))
     );
     run(&mut app, &ports, &[Event::Reload]);
     assert_eq!(
         app.note(),
-        &Note::Problem("Reloading commits failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::ReloadingCommits))
     );
     *ports.refs.borrow_mut() = None;
     *ports.history.borrow_mut() = Some(linear_history(1));
     run(&mut app, &ports, &[Event::Reload]);
     assert_eq!(
         app.note(),
-        &Note::Problem("Reloading commits failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::ReloadingCommits))
     );
     assert_eq!(app.branches().commits().len(), CHUNK);
 }
@@ -158,7 +159,9 @@ fn search_by_subject_hash_and_author() {
     search(&mut app, &ports, "nothing");
     assert_eq!(
         app.note(),
-        &Note::Info("Pattern not found: nothing".to_string())
+        &Note::Info(Info::PatternNotFound {
+            term: "nothing".to_string()
+        })
     );
 }
 
@@ -200,7 +203,7 @@ fn search_by_branch_and_tag_names() {
     assert_eq!(selected_hash(&app), Some("c4".to_string()));
     search(&mut app, &ports, "n/t");
     assert_eq!(selected_hash(&app), Some("c4".to_string()));
-    assert_eq!(app.note(), &Note::Info("search wrapped".to_string()));
+    assert_eq!(app.note(), &Note::Info(Info::SearchWrapped));
 }
 
 #[test]
@@ -258,10 +261,7 @@ fn next_main_branch_without_main_or_master() {
     let mut app: App = app(&ports);
     run(&mut app, &ports, &[Event::NextMainBranch]);
     assert_eq!(selected_hash(&app), Some("c2".to_string()));
-    assert_eq!(
-        app.note(),
-        &Note::Info("No main or master branch".to_string())
-    );
+    assert_eq!(app.note(), &Note::Info(Info::NoMainOrMasterBranch));
 }
 
 #[test]
@@ -357,7 +357,7 @@ fn detail_failures_and_empty_history() {
     run(&mut app, &failing, &[Event::MoveDown]);
     assert_eq!(
         app.note(),
-        &Note::Problem("Loading the commit failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::LoadingCommit))
     );
     let ports: TestPorts = ports(2);
     run(&mut app, &ports, &[Event::MoveUp]);
@@ -365,7 +365,7 @@ fn detail_failures_and_empty_history() {
     run(&mut app, &failing, &[Event::NextPane, Event::MoveDown]);
     assert_eq!(
         app.note(),
-        &Note::Problem("Loading the diff failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::LoadingDiff))
     );
     *ports.history.borrow_mut() = Some(Vec::new());
     run(&mut app, &ports, &[Event::Reload]);

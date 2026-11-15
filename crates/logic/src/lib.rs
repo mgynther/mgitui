@@ -7,6 +7,7 @@ pub mod event;
 pub mod graph;
 pub mod log;
 pub mod model;
+pub mod note;
 pub mod patch;
 pub mod ports;
 pub mod search;

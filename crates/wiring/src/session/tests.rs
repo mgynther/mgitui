@@ -93,7 +93,7 @@ fn log_view_search_with_validation() {
     assert_eq!(s.render(SIZE).row_text(23).trim_end(), "/");
     s.input(b"\r");
     let screen: ui::buffer::Buffer = s.render(SIZE);
-    assert_eq!(screen.row_text(23).trim_end(), "search text is empty");
+    assert_eq!(screen.row_text(23).trim_end(), "The search text is empty");
     let lines: Vec<String> = (0..24).map(|y: usize| screen.row_text(y)).collect();
     let position = |text: &str| lines.iter().position(|l: &String| l.contains(text));
     assert_eq!(position("wiring     Info  started"), Some(2));
@@ -169,7 +169,7 @@ fn edit_message_commit_and_amend() {
     s.input(b"c");
     assert_eq!(
         s.render(SIZE).row_text(23).trim_end(),
-        "commit message is empty"
+        "The commit message is empty"
     );
     s.input(b"e");
     assert!(s.render(SIZE).row_text(16).contains("│New commit"));
@@ -300,7 +300,7 @@ fn create_and_check_out_branches() {
     assert!(
         s.render(SIZE)
             .row_text(23)
-            .starts_with("invalid branch name: it contains")
+            .starts_with("A branch name cannot contain the character ' '")
     );
     s.input(b"cold\r");
     assert_eq!(s.render(SIZE).row_text(23).trim_end(), "Created branch old");
@@ -316,7 +316,7 @@ fn create_and_check_out_branches() {
     s.input(b"7\r");
     assert_eq!(
         s.render(SIZE).row_text(23).trim_end(),
-        "Check out (1 main, 2 new): 7   choice must be a number from 1 to 2"
+        "Check out (1 main, 2 new): 7   The choice must be a number from 1 to 2"
     );
     s.input(b"x");
     let prompt: String = s.render(SIZE).row_text(23);
@@ -397,7 +397,7 @@ fn cherry_pick_commit_under_cursor() {
     s.input(b"p");
     assert_eq!(
         s.render(SIZE).row_text(23).trim_end(),
-        "Cherry-pick failed, see the Log view"
+        "Cherry-picking failed, see the Log view"
     );
 }
 
@@ -619,7 +619,7 @@ fn fetch_all_prune_removes_stale_remote_branches() {
     let screen: ui::buffer::Buffer = s.render(SIZE);
     assert_eq!(
         screen.row_text(23).trim_end(),
-        "Fetched all remotes pruning stale remote branches"
+        "Fetched all remotes and pruned stale remote branches"
     );
     assert_eq!(git_ok(dir.path(), &["branch", "-r"]), "  origin/main\n");
 }
@@ -713,7 +713,7 @@ fn reset_branch_to_selected_commit() {
     s.input(b"kRy");
     assert_eq!(
         s.render(SIZE).row_text(23).trim_end(),
-        "Reset failed, see the Log view"
+        "Resetting the branch failed, see the Log view"
     );
     assert_eq!(git_ok(dir.path(), &["rev-parse", "main"]).trim(), first);
     assert_eq!(

@@ -1,6 +1,7 @@
-use super::{App, Confirmation, DiffPane, Mode, Note, Viewports};
+use super::{App, Confirmation, DiffPane, Mode, Viewports};
 use crate::event::{Event, ViewId};
 use crate::model::{ChangeKind, ChangedFile, DiffLine, FileDiff, Hunk, LineKind, Side, WorkStatus};
+use crate::note::{Info, Note, Operation, Problem};
 use crate::test_ports::{TestPorts, modified};
 
 fn viewports() -> Viewports {
@@ -150,7 +151,7 @@ fn unstaging_without_commits_removes_from_the_index() {
     );
     assert_eq!(
         unknown_app.note(),
-        &Note::Problem("Staging failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::Staging))
     );
 }
 
@@ -177,7 +178,12 @@ fn conflicts_are_refused_and_logged() {
     run(&mut app, &ports, &[Event::Activate]);
     let message: &str = "c has a merge conflict; resolve it outside mgitui";
     assert_eq!(ports.calls(), vec![format!("Error: {message}")]);
-    assert_eq!(app.note(), &Note::Problem(message.to_string()));
+    assert_eq!(
+        app.note(),
+        &Note::Problem(Problem::MergeConflict {
+            path: "c".to_string()
+        })
+    );
     run(&mut app, &ports, &[Event::NextPane, Event::StartSelection]);
     assert_eq!(app.diff().selection(), None);
 }
@@ -192,7 +198,7 @@ fn staging_failure_is_shown() {
     run(&mut app, &ports, &[Event::Activate]);
     assert_eq!(
         app.note(),
-        &Note::Problem("Staging failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::Staging))
     );
 }
 
@@ -249,10 +255,7 @@ fn selecting_only_context_stages_nothing_and_escape_clears() {
     let ports: TestPorts = ports_with(vec![modified("u")], vec![]);
     let mut app: App = app(&ports);
     run(&mut app, &ports, &[Event::NextPane, Event::Activate]);
-    assert_eq!(
-        app.note(),
-        &Note::Info("No changed lines selected".to_string())
-    );
+    assert_eq!(app.note(), &Note::Info(Info::NoChangedLinesSelected));
     run(
         &mut app,
         &ports,
@@ -266,10 +269,7 @@ fn only_whole_files_for_other_kinds() {
     let ports: TestPorts = ports_with(vec![file("n", ChangeKind::Untracked)], vec![]);
     let mut app: App = app(&ports);
     run(&mut app, &ports, &[Event::NextPane, Event::StartSelection]);
-    assert_eq!(
-        app.note(),
-        &Note::Info("Only whole files can be staged here: use Enter in the file list".to_string())
-    );
+    assert_eq!(app.note(), &Note::Info(Info::OnlyWholeFilesCanBeStagedHere));
     run(&mut app, &ports, &[Event::Activate]);
     assert_eq!(ports.calls(), Vec::<String>::new());
 }
@@ -320,7 +320,9 @@ fn d_discards_unstaged_changes_after_confirming() {
     );
     assert_eq!(
         app.note(),
-        &Note::Info("Discarded changes in u".to_string())
+        &Note::Info(Info::DiscardedChanges {
+            path: "u".to_string()
+        })
     );
 }
 
@@ -337,22 +339,27 @@ fn d_deletes_untracked_files_after_confirming() {
     );
     run(&mut app, &ports, &[Event::Yes]);
     assert_eq!(ports.calls()[..2], ["Info: delete n", "delete untracked n"]);
-    assert_eq!(app.note(), &Note::Info("Deleted n".to_string()));
+    assert_eq!(
+        app.note(),
+        &Note::Info(Info::DeletedFile {
+            path: "n".to_string()
+        })
+    );
 }
 
 #[test]
 fn discard_failure_is_shown() {
-    for changed in [modified("u"), file("n", ChangeKind::Untracked)] {
+    for (changed, failed) in [
+        (modified("u"), Operation::DiscardingChanges),
+        (file("n", ChangeKind::Untracked), Operation::DeletingFile),
+    ] {
         let ports: TestPorts = TestPorts {
             stage_fails: true,
             ..ports_with(vec![changed], vec![])
         };
         let mut failing_app: App = app(&ports);
         run(&mut failing_app, &ports, &[Event::DiscardFile, Event::Yes]);
-        assert_eq!(
-            failing_app.note(),
-            &Note::Problem("Discarding failed, see the Log view".to_string())
-        );
+        assert_eq!(failing_app.note(), &Note::Problem(Problem::Failed(failed)));
     }
 }
 
@@ -370,7 +377,7 @@ fn d_is_refused_on_staged_conflicted_and_missing_files_and_in_the_diff() {
     assert_eq!(app.mode(), &Mode::Normal);
     assert_eq!(
         app.note(),
-        &Note::Info("Only unstaged changes can be discarded: unstage the file first".to_string())
+        &Note::Info(Info::OnlyUnstagedChangesCanBeDiscarded)
     );
     run(&mut app, &ports, &[Event::SwitchList, Event::NextPane]);
     assert_eq!(app.diff().pane(), DiffPane::FileDiff);
@@ -406,10 +413,7 @@ fn stage_all_problems() {
     let mut nothing_app: App = app(&nothing);
     run(&mut nothing_app, &nothing, &[Event::StageAll]);
     assert_eq!(nothing.calls(), vec!["status"]);
-    assert_eq!(
-        nothing_app.note(),
-        &Note::Info("Nothing to stage".to_string())
-    );
+    assert_eq!(nothing_app.note(), &Note::Info(Info::NothingToStage));
 
     let conflicted: TestPorts =
         ports_with(vec![file("c", ChangeKind::Conflict), modified("a")], vec![]);
@@ -420,7 +424,10 @@ fn stage_all_problems() {
         conflicted.calls(),
         vec!["status".to_string(), format!("Error: {message}")]
     );
-    assert_eq!(conflicted_app.note(), &Note::Problem(message.to_string()));
+    assert_eq!(
+        conflicted_app.note(),
+        &Note::Problem(Problem::MergeConflictsBeforeStagingAll)
+    );
 
     let failing: TestPorts = TestPorts {
         stage_fails: true,
@@ -430,7 +437,7 @@ fn stage_all_problems() {
     run(&mut failing_app, &failing, &[Event::StageAll]);
     assert_eq!(
         failing_app.note(),
-        &Note::Problem("Staging failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::Staging))
     );
 
     *failing.status.borrow_mut() = None;
@@ -439,6 +446,6 @@ fn stage_all_problems() {
     assert_eq!(failing.calls(), vec!["status"]);
     assert_eq!(
         failing_app.note(),
-        &Note::Problem("Reading the status failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::ReadingStatus))
     );
 }

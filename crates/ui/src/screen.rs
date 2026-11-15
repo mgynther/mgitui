@@ -3,7 +3,9 @@
 use crate::buffer::Buffer;
 use crate::event::ViewId;
 use crate::layout::{MIN_SIZE, Rect, Size};
-use crate::status::{PromptKind, Question, prompt_label, question_label};
+use crate::status::{
+    Info, Problem, PromptKind, Question, info_text, problem_text, prompt_label, question_label,
+};
 use crate::style::{Color, Style};
 use crate::views::branches::BranchesView;
 use crate::views::diff::DiffView;
@@ -37,9 +39,9 @@ pub enum Status {
     /// Nothing to show.
     Empty,
     /// A short note.
-    Note(String),
+    Note(Info),
     /// A short note about a problem, shown in red.
-    Problem(String),
+    Problem(Problem),
     /// A text prompt with the text typed so far.
     Prompt {
         /// What the prompt asks for.
@@ -47,7 +49,7 @@ pub enum Status {
         /// The typed text.
         text: String,
         /// A problem with the last submitted text, shown in red after the prompt.
-        problem: Option<String>,
+        problem: Option<Problem>,
     },
     /// A question answered with y or n.
     Question(Question),
@@ -105,8 +107,14 @@ fn draw_status(buffer: &mut Buffer, status: &Status, size: Size) {
     let y: usize = size.height - 1;
     match status {
         Status::Empty => 0,
-        Status::Note(text) => buffer.put_str(0, y, text, Style::PLAIN, size.width),
-        Status::Problem(text) => buffer.put_str(0, y, text, Style::fg(Color::Red), size.width),
+        Status::Note(info) => buffer.put_str(0, y, &info_text(info), Style::PLAIN, size.width),
+        Status::Problem(problem) => buffer.put_str(
+            0,
+            y,
+            &problem_text(problem),
+            Style::fg(Color::Red),
+            size.width,
+        ),
         Status::Prompt {
             kind,
             text,
@@ -123,7 +131,7 @@ fn draw_prompt(
     buffer: &mut Buffer,
     label: &str,
     text: &str,
-    problem: Option<&String>,
+    problem: Option<&Problem>,
     size: Size,
 ) -> usize {
     let y: usize = size.height - 1;
@@ -131,8 +139,8 @@ fn draw_prompt(
     let typed: usize = buffer.put_str(used, y, text, Style::PLAIN, size.width - used);
     let x: usize = used + typed;
     let cursor: usize = buffer.put_str(x, y, " ", Style::PLAIN.reversed_if(true), 1);
-    problem.map_or(0, |problem: &String| {
-        let shown: String = format!("  {problem}");
+    problem.map_or(0, |problem: &Problem| {
+        let shown: String = format!("  {}", problem_text(problem));
         buffer.put_str(x + cursor, y, &shown, Style::fg(Color::Red), size.width)
     })
 }
@@ -171,7 +179,7 @@ mod tests {
     use crate::buffer::Buffer;
     use crate::event::ViewId;
     use crate::layout::{Rect, Size};
-    use crate::status::{PromptKind, Question};
+    use crate::status::{Info, Problem, PromptKind, Question};
     use crate::style::{Color, Style};
     use crate::views::branches::{BranchesFocus, BranchesView};
     use crate::views::diff::{DiffFocus, DiffView};
@@ -272,16 +280,16 @@ mod tests {
         let note: Buffer = render(
             &screen(
                 ViewId::Log,
-                Status::Note("hello".to_string()),
+                Status::Note(Info::NoCommitSelected),
                 Body::Log(LogView { rows: vec![] }),
             ),
             SIZE,
         );
-        assert_eq!(note.row_text(23).trim_end(), "hello");
+        assert_eq!(note.row_text(23).trim_end(), "No commit selected");
         let problem: Buffer = render(
             &screen(
                 ViewId::Log,
-                Status::Problem("bad".to_string()),
+                Status::Problem(Problem::ChoiceNotListed),
                 Body::Log(LogView { rows: vec![] }),
             ),
             SIZE,
@@ -307,7 +315,7 @@ mod tests {
                 Status::Prompt {
                     kind: PromptKind::BranchName,
                     text: "7".to_string(),
-                    problem: Some("bad".to_string()),
+                    problem: Some(Problem::ChoiceNotListed),
                 },
                 Body::Log(LogView { rows: vec![] }),
             ),
@@ -315,7 +323,7 @@ mod tests {
         );
         assert_eq!(
             with_problem.row_text(23).trim_end(),
-            "New branch name: 7   bad"
+            "New branch name: 7   The choice is not listed"
         );
         assert_eq!(with_problem.cell(21, 23).unwrap().style.fg, Color::Red);
         let question: Buffer = render(

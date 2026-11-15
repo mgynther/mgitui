@@ -2,13 +2,14 @@
 
 use std::collections::BTreeSet;
 
-use super::{App, Confirmation, Mode, Note};
+use super::{App, Confirmation, Mode};
 use crate::cursor::Cursor;
 use crate::event::Event;
 use crate::log::LogLevel;
 use crate::model::{
     AmendBase, ChangeKind, ChangedFile, DiffRow, FileDiff, Side, WorkStatus, diff_rows,
 };
+use crate::note::{Info, Note, Operation, Problem};
 use crate::patch::{LineRef, build_patch};
 use crate::ports::{Failed, Ports};
 use crate::search::{self, Direction, Found};
@@ -150,7 +151,7 @@ impl App {
     /// exist.
     pub(super) fn reload_status(&mut self, ports: &dyn Ports) {
         let Ok(status) = ports.status() else {
-            self.note = Note::Problem("Reloading changes failed, see the Log view".to_string());
+            self.note = Note::Problem(Problem::Failed(Operation::ReloadingChanges));
             return;
         };
         let mut status: WorkStatus = status;
@@ -158,7 +159,7 @@ impl App {
         if self.diff.amend {
             let amended: Result<(AmendBase, Vec<ChangedFile>), Failed> = amended_files(ports);
             let Ok((base, files)) = amended else {
-                self.note = Note::Problem("Reloading changes failed, see the Log view".to_string());
+                self.note = Note::Problem(Problem::Failed(Operation::ReloadingChanges));
                 return;
             };
             status.staged = files;
@@ -224,7 +225,7 @@ impl App {
             None => None,
             Some(Ok(diff)) => Some(diff),
             Some(Err(Failed)) => {
-                self.note = Note::Problem("Loading the diff failed, see the Log view".to_string());
+                self.note = Note::Problem(Problem::Failed(Operation::LoadingDiff));
                 None
             }
         };
@@ -289,12 +290,14 @@ impl App {
     fn file_for_action(&mut self, ports: &dyn Ports) -> Option<ChangedFile> {
         let file: ChangedFile = self.diff.selected_file()?.clone();
         if file.kind == ChangeKind::Conflict {
-            let message: String = format!(
-                "{} has a merge conflict; resolve it outside mgitui",
-                file.path
+            ports.log(
+                LogLevel::Error,
+                &format!(
+                    "{} has a merge conflict; resolve it outside mgitui",
+                    file.path
+                ),
             );
-            ports.log(LogLevel::Error, &message);
-            self.note = Note::Problem(message);
+            self.note = Note::Problem(Problem::MergeConflict { path: file.path });
             return None;
         }
         Some(file)
@@ -306,9 +309,7 @@ impl App {
         };
         let allowed: bool = file.supports_line_staging();
         if !allowed {
-            self.note = Note::Info(
-                "Only whole files can be staged here: use Enter in the file list".to_string(),
-            );
+            self.note = Note::Info(Info::OnlyWholeFilesCanBeStagedHere);
         }
         allowed
     }
@@ -335,7 +336,7 @@ impl App {
     fn stage_all(&mut self, ports: &dyn Ports) {
         let status: Result<WorkStatus, Failed> = ports.status();
         let Ok(status) = status else {
-            self.note = Note::Problem("Reading the status failed, see the Log view".to_string());
+            self.note = Note::Problem(Problem::Failed(Operation::ReadingStatus));
             return;
         };
         if status
@@ -343,13 +344,15 @@ impl App {
             .iter()
             .any(|file: &ChangedFile| file.kind == ChangeKind::Conflict)
         {
-            let message: &str = "Resolve merge conflicts outside mgitui before staging all";
-            ports.log(LogLevel::Error, message);
-            self.note = Note::Problem(message.to_string());
+            ports.log(
+                LogLevel::Error,
+                "Resolve merge conflicts outside mgitui before staging all",
+            );
+            self.note = Note::Problem(Problem::MergeConflictsBeforeStagingAll);
             return;
         }
         if status.unstaged.is_empty() {
-            self.note = Note::Info("Nothing to stage".to_string());
+            self.note = Note::Info(Info::NothingToStage);
             return;
         }
         ports.log(LogLevel::Info, "stage all");
@@ -378,7 +381,7 @@ impl App {
             .as_ref()
             .and_then(|diff: &FileDiff| build_patch(diff, &selected, reverse));
         let Some(patch) = patch else {
-            self.note = Note::Info("No changed lines selected".to_string());
+            self.note = Note::Info(Info::NoChangedLinesSelected);
             return;
         };
         let file_path: String = self
@@ -404,9 +407,7 @@ impl App {
     /// Asks for confirmation before discarding the unstaged changes of the selected file.
     fn start_discard(&mut self, ports: &dyn Ports) {
         if self.diff.side == Side::Staged {
-            self.note = Note::Info(
-                "Only unstaged changes can be discarded: unstage the file first".to_string(),
-            );
+            self.note = Note::Info(Info::OnlyUnstagedChangesCanBeDiscarded);
             return;
         }
         if let Some(file) = self.file_for_action(ports) {
@@ -423,8 +424,10 @@ impl App {
         let result: Result<(), Failed> = ports.delete_untracked(&file.paths(Side::Unstaged));
         self.refresh(ports);
         self.note = match result {
-            Ok(()) => Note::Info(format!("Deleted {}", file.path)),
-            Err(Failed) => Note::Problem("Discarding failed, see the Log view".to_string()),
+            Ok(()) => Note::Info(Info::DeletedFile {
+                path: file.path.clone(),
+            }),
+            Err(Failed) => Note::Problem(Problem::Failed(Operation::DeletingFile)),
         };
     }
 
@@ -433,15 +436,17 @@ impl App {
         let result: Result<(), Failed> = ports.restore_paths(&file.paths(Side::Unstaged));
         self.refresh(ports);
         self.note = match result {
-            Ok(()) => Note::Info(format!("Discarded changes in {}", file.path)),
-            Err(Failed) => Note::Problem("Discarding failed, see the Log view".to_string()),
+            Ok(()) => Note::Info(Info::DiscardedChanges {
+                path: file.path.clone(),
+            }),
+            Err(Failed) => Note::Problem(Problem::Failed(Operation::DiscardingChanges)),
         };
     }
 
     fn after_staging(&mut self, result: Result<(), Failed>, ports: &dyn Ports) {
         self.refresh(ports);
         if result.is_err() {
-            self.note = Note::Problem("Staging failed, see the Log view".to_string());
+            self.note = Note::Problem(Problem::Failed(Operation::Staging));
         }
     }
 
@@ -450,7 +455,7 @@ impl App {
         match ports.edit_message(self.diff.message()) {
             Ok(text) => *self.diff.message_mut() = text,
             Err(Failed) => {
-                self.note = Note::Problem("Editing failed, see the Log view".to_string());
+                self.note = Note::Problem(Problem::Failed(Operation::EditingMessage));
             }
         }
     }
@@ -466,9 +471,8 @@ impl App {
         }
         match ports.has_commits() {
             Ok(false) => {
-                let message: &str = "Nothing to amend: there are no commits yet";
-                ports.log(LogLevel::Warn, message);
-                self.note = Note::Problem(message.to_string());
+                ports.log(LogLevel::Warn, "Nothing to amend: there are no commits yet");
+                self.note = Note::Problem(Problem::NothingToAmend);
             }
             Ok(true) => match ports.last_commit_message() {
                 Ok(message) => {
@@ -483,21 +487,23 @@ impl App {
     }
 
     fn amend_failed(&mut self) {
-        self.note = Note::Problem("Reading the last commit failed, see the Log view".to_string());
+        self.note = Note::Problem(Problem::Failed(Operation::ReadingLastCommit));
     }
 
     fn commit(&mut self, ports: &dyn Ports) {
         if self.diff.amend && self.diff.status.staged.is_empty() {
-            let message: &str = "The amended commit would be empty: stage changes first";
-            ports.log(LogLevel::Error, message);
-            self.note = Note::Problem(message.to_string());
+            ports.log(
+                LogLevel::Error,
+                "The amended commit would be empty: stage changes first",
+            );
+            self.note = Note::Problem(Problem::AmendedCommitWouldBeEmpty);
             return;
         }
         let message: crate::ports::CommitMessage =
             match ports.validate_commit_message(self.diff.message()) {
                 Ok(message) => message,
                 Err(problem) => {
-                    self.note = Note::Problem(problem);
+                    self.note = Note::Problem(Problem::Invalid(problem));
                     return;
                 }
             };
@@ -510,7 +516,7 @@ impl App {
         }
         self.refresh(ports);
         if result.is_err() {
-            self.note = Note::Problem("Commit failed, see the Log view".to_string());
+            self.note = Note::Problem(Problem::Failed(Operation::Committing));
         }
     }
 

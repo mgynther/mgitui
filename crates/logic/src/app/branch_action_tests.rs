@@ -1,6 +1,7 @@
-use super::{App, Confirmation, Mode, Note, Prompt, PromptKind};
+use super::{App, Confirmation, Mode, Prompt, PromptKind};
 use crate::event::Event;
 use crate::model::{ChangeKind, ChangedFile, Label, Refs, WorkStatus};
+use crate::note::{BranchNameProblem, Info, InputProblem, Note, Operation, Problem};
 use crate::test_ports::{TestPorts, linear_history, modified};
 
 fn local(name: &str) -> Label {
@@ -80,7 +81,12 @@ fn create_branch_at_selected_commit() {
         actions(&ports),
         vec!["Info: create branch topic at c1", "create topic at c1"]
     );
-    assert_eq!(app.note(), &Note::Info("Created branch topic".to_string()));
+    assert_eq!(
+        app.note(),
+        &Note::Info(Info::CreatedBranch {
+            name: "topic".to_string()
+        })
+    );
     assert!(ports.calls().contains(&"refs".to_string()));
 }
 
@@ -93,7 +99,9 @@ fn create_branch_problems() {
     run(&mut app, &ports, &[Event::InputSubmit]);
     assert_eq!(
         app.note(),
-        &Note::Problem("invalid branch name".to_string())
+        &Note::Problem(Problem::Invalid(InputProblem::BranchName(
+            BranchNameProblem::ForbiddenCharacter(' ')
+        )))
     );
     assert_eq!(app.mode(), &Mode::Normal);
     let failing: TestPorts = TestPorts {
@@ -107,15 +115,12 @@ fn create_branch_problems() {
     );
     assert_eq!(
         app.note(),
-        &Note::Problem("Creating the branch failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::CreatingBranch))
     );
     let empty: TestPorts = TestPorts::new();
     let mut empty_app: App = loaded_app(&empty);
     run(&mut empty_app, &empty, &[Event::CreateBranch]);
-    assert_eq!(
-        empty_app.note(),
-        &Note::Info("No commit selected".to_string())
-    );
+    assert_eq!(empty_app.note(), &Note::Info(Info::NoCommitSelected));
     assert_eq!(empty_app.mode(), &Mode::Normal);
 }
 
@@ -137,7 +142,12 @@ fn checkout_the_only_local_branch() {
         actions(&ports),
         vec!["Info: check out main", "checkout main"]
     );
-    assert_eq!(app.note(), &Note::Info("Checked out main".to_string()));
+    assert_eq!(
+        app.note(),
+        &Note::Info(Info::CheckedOut {
+            branch: "main".to_string()
+        })
+    );
 }
 
 #[test]
@@ -149,11 +159,14 @@ fn checkout_without_local_branch_is_an_error() {
     run(&mut app, &ports, &[Event::Checkout]);
     let message: &str = "No local branch at this commit to check out";
     assert_eq!(actions(&ports), vec![format!("Error: {message}")]);
-    assert_eq!(app.note(), &Note::Problem(message.to_string()));
+    assert_eq!(app.note(), &Note::Problem(Problem::NoLocalBranchToCheckOut));
     let empty: TestPorts = TestPorts::new();
     let mut empty_app: App = loaded_app(&empty);
     run(&mut empty_app, &empty, &[Event::Checkout]);
-    assert_eq!(empty_app.note(), &Note::Problem(message.to_string()));
+    assert_eq!(
+        empty_app.note(),
+        &Note::Problem(Problem::NoLocalBranchToCheckOut)
+    );
 }
 
 #[test]
@@ -171,7 +184,7 @@ fn choose_between_local_branches() {
     run(&mut app, &ports, &[Event::InputSubmit]);
     assert_eq!(
         app.note(),
-        &Note::Problem("choice must be a number from 1 to 2".to_string())
+        &Note::Problem(Problem::Invalid(InputProblem::OutOfRange { count: 2 }))
     );
     assert_eq!(app.mode(), &Mode::Prompt(prompt));
     run(
@@ -195,10 +208,7 @@ fn checkout_failure_and_cancel() {
     run(&mut app, &failing, &[Event::Checkout]);
     typed(&mut app, &failing, "99");
     run(&mut app, &failing, &[Event::InputSubmit]);
-    assert_eq!(
-        app.note(),
-        &Note::Problem("Choice is not listed".to_string())
-    );
+    assert_eq!(app.note(), &Note::Problem(Problem::ChoiceNotListed));
     run(
         &mut app,
         &failing,
@@ -206,7 +216,7 @@ fn checkout_failure_and_cancel() {
     );
     assert_eq!(
         app.note(),
-        &Note::Problem("Checkout failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::CheckingOut))
     );
 }
 
@@ -219,7 +229,12 @@ fn cherry_pick_selected_commit() {
         actions(&ports),
         vec!["Info: cherry-pick c1", "cherry-pick c1"]
     );
-    assert_eq!(app.note(), &Note::Info("Cherry-picked c1".to_string()));
+    assert_eq!(
+        app.note(),
+        &Note::Info(Info::CherryPicked {
+            hash: "c1".to_string()
+        })
+    );
     let failing: TestPorts = TestPorts {
         branch_fails: true,
         ..labelled_ports(vec![])
@@ -227,15 +242,12 @@ fn cherry_pick_selected_commit() {
     run(&mut app, &failing, &[Event::CherryPick]);
     assert_eq!(
         app.note(),
-        &Note::Problem("Cherry-pick failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::CherryPicking))
     );
     let empty: TestPorts = TestPorts::new();
     let mut empty_app: App = loaded_app(&empty);
     run(&mut empty_app, &empty, &[Event::CherryPick]);
-    assert_eq!(
-        empty_app.note(),
-        &Note::Info("No commit selected".to_string())
-    );
+    assert_eq!(empty_app.note(), &Note::Info(Info::NoCommitSelected));
 }
 
 /// Labels: c2 has `topic`, c1 has `main`, `dev` and `aaa`, c0 has `master`.
@@ -285,7 +297,10 @@ fn rebase_asks_for_target_with_main_and_master_first() {
     );
     assert_eq!(
         app.note(),
-        &Note::Info("Rebased topic onto main".to_string())
+        &Note::Info(Info::Rebased {
+            branch: "topic".to_string(),
+            onto: "main".to_string()
+        })
     );
 }
 
@@ -344,13 +359,13 @@ fn rebase_problems() {
     run(&mut app, &ports, &[Event::Rebase]);
     let message: &str = "No local branch at this commit to rebase";
     assert_eq!(actions(&ports), vec![format!("Error: {message}")]);
-    assert_eq!(app.note(), &Note::Problem(message.to_string()));
+    assert_eq!(app.note(), &Note::Problem(Problem::NoLocalBranchToRebase));
     let alone: TestPorts = labelled_ports(vec![local("only")]);
     let mut alone_app: App = loaded_app(&alone);
     run(&mut alone_app, &alone, &[Event::Rebase]);
     assert_eq!(
         alone_app.note(),
-        &Note::Info("No other branch to rebase onto".to_string())
+        &Note::Info(Info::NoOtherBranchToRebaseOnto)
     );
     let failing: TestPorts = TestPorts {
         branch_fails: true,
@@ -364,7 +379,7 @@ fn rebase_problems() {
     );
     assert_eq!(
         failing_app.note(),
-        &Note::Problem("Rebase failed, see the Log view; resolve it outside mgitui".to_string())
+        &Note::Problem(Problem::Failed(Operation::Rebasing))
     );
     let unlisted: TestPorts = rebase_ports(vec![local("topic")]);
     let mut unlisted_app: App = loaded_app(&unlisted);
@@ -373,7 +388,7 @@ fn rebase_problems() {
     run(&mut unlisted_app, &unlisted, &[Event::InputSubmit]);
     assert_eq!(
         unlisted_app.note(),
-        &Note::Problem("Choice is not listed".to_string())
+        &Note::Problem(Problem::ChoiceNotListed)
     );
 }
 
@@ -413,7 +428,10 @@ fn interactive_rebase_uses_the_same_prompts() {
     );
     assert_eq!(
         app.note(),
-        &Note::Info("Interactively rebased topic onto main".to_string())
+        &Note::Info(Info::RebasedInteractively {
+            branch: "topic".to_string(),
+            onto: "main".to_string()
+        })
     );
 }
 
@@ -516,7 +534,12 @@ fn delete_the_only_branch_that_is_not_checked_out() {
         actions(&ports),
         vec!["Info: delete branch old", "delete old"]
     );
-    assert_eq!(app.note(), &Note::Info("Deleted branch old".to_string()));
+    assert_eq!(
+        app.note(),
+        &Note::Info(Info::DeletedBranch {
+            name: "old".to_string()
+        })
+    );
 }
 
 #[test]
@@ -557,13 +580,16 @@ fn delete_problems() {
     run(&mut app, &head_only, &[Event::DeleteBranch]);
     let checked_out: &str = "The checked out branch cannot be deleted";
     assert_eq!(actions(&head_only), vec![format!("Error: {checked_out}")]);
-    assert_eq!(app.note(), &Note::Problem(checked_out.to_string()));
+    assert_eq!(
+        app.note(),
+        &Note::Problem(Problem::CheckedOutBranchCannotBeDeleted)
+    );
     let none: TestPorts = labelled_ports(vec![]);
     let mut none_app: App = loaded_app(&none);
     run(&mut none_app, &none, &[Event::DeleteBranch]);
     assert_eq!(
         none_app.note(),
-        &Note::Problem("No local branch at this commit to delete".to_string())
+        &Note::Problem(Problem::NoLocalBranchToDelete)
     );
     let failing: TestPorts = TestPorts {
         branch_fails: true,
@@ -577,7 +603,7 @@ fn delete_problems() {
     );
     assert_eq!(
         failing_app.note(),
-        &Note::Problem("Deleting the branch failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::DeletingBranch))
     );
 }
 
@@ -591,7 +617,7 @@ fn remote_update_fetches_and_reloads() {
         vec!["Info: remote update", "remote update"]
     );
     assert!(ports.calls().contains(&"refs".to_string()));
-    assert_eq!(app.note(), &Note::Info("Updated remotes".to_string()));
+    assert_eq!(app.note(), &Note::Info(Info::UpdatedRemotes));
     let failing: TestPorts = TestPorts {
         branch_fails: true,
         ..labelled_ports(vec![])
@@ -599,7 +625,7 @@ fn remote_update_fetches_and_reloads() {
     run(&mut app, &failing, &[Event::RemoteUpdate]);
     assert_eq!(
         app.note(),
-        &Note::Problem("Remote update failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::UpdatingRemotes))
     );
 }
 
@@ -613,10 +639,7 @@ fn fetch_all_prune_fetches_and_reloads() {
         vec!["Info: fetch --all --prune", "fetch --all --prune"]
     );
     assert!(ports.calls().contains(&"refs".to_string()));
-    assert_eq!(
-        app.note(),
-        &Note::Info("Fetched all remotes pruning stale remote branches".to_string())
-    );
+    assert_eq!(app.note(), &Note::Info(Info::FetchedAndPruned));
     let failing: TestPorts = TestPorts {
         branch_fails: true,
         ..labelled_ports(vec![])
@@ -624,7 +647,7 @@ fn fetch_all_prune_fetches_and_reloads() {
     run(&mut app, &failing, &[Event::FetchAllPrune]);
     assert_eq!(
         app.note(),
-        &Note::Problem("Fetch all prune failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::FetchingAndPruning))
     );
 }
 
@@ -669,7 +692,13 @@ fn reset_branch_to_selected_commit_after_confirming() {
         vec!["Info: reset main to c1", "reset --keep c1"]
     );
     assert!(ports.calls().contains(&"refs".to_string()));
-    assert_eq!(app.note(), &Note::Info("Reset main to c1".to_string()));
+    assert_eq!(
+        app.note(),
+        &Note::Info(Info::ResetBranch {
+            branch: "main".to_string(),
+            hash: "c1".to_string()
+        })
+    );
 }
 
 #[test]
@@ -679,7 +708,10 @@ fn reset_branch_problems() {
     run(&mut app, &detached, &[Event::ResetBranch]);
     let no_branch: &str = "No branch is checked out to reset";
     assert_eq!(actions(&detached), vec![format!("Error: {no_branch}")]);
-    assert_eq!(app.note(), &Note::Problem(no_branch.to_string()));
+    assert_eq!(
+        app.note(),
+        &Note::Problem(Problem::NoBranchCheckedOutToReset)
+    );
     assert_eq!(app.mode(), &Mode::Normal);
 
     for status in [
@@ -698,7 +730,10 @@ fn reset_branch_problems() {
         run(&mut changes_app, &changes, &[Event::ResetBranch]);
         let uncommitted: &str = "Commit or discard uncommitted changes before resetting";
         assert_eq!(actions(&changes), vec![format!("Error: {uncommitted}")]);
-        assert_eq!(changes_app.note(), &Note::Problem(uncommitted.to_string()));
+        assert_eq!(
+            changes_app.note(),
+            &Note::Problem(Problem::UncommittedChangesBeforeReset)
+        );
         assert_eq!(changes_app.mode(), &Mode::Normal);
     }
 
@@ -708,7 +743,7 @@ fn reset_branch_problems() {
     run(&mut no_status_app, &no_status, &[Event::ResetBranch]);
     assert_eq!(
         no_status_app.note(),
-        &Note::Problem("Reading the status failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::ReadingStatus))
     );
     assert_eq!(no_status_app.mode(), &Mode::Normal);
 
@@ -724,16 +759,13 @@ fn reset_branch_problems() {
     );
     assert_eq!(
         failing_app.note(),
-        &Note::Problem("Reset failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::ResettingBranch))
     );
 
     let empty: TestPorts = TestPorts::new();
     let mut empty_app: App = loaded_app(&empty);
     run(&mut empty_app, &empty, &[Event::ResetBranch]);
-    assert_eq!(
-        empty_app.note(),
-        &Note::Info("No commit selected".to_string())
-    );
+    assert_eq!(empty_app.note(), &Note::Info(Info::NoCommitSelected));
 }
 
 #[test]
@@ -751,13 +783,10 @@ fn show_selected_commit() {
     run(&mut app, &failing, &[Event::ShowCommit]);
     assert_eq!(
         app.note(),
-        &Note::Problem("Showing the commit failed, see the Log view".to_string())
+        &Note::Problem(Problem::Failed(Operation::ShowingCommit))
     );
     let empty: TestPorts = TestPorts::new();
     let mut empty_app: App = loaded_app(&empty);
     run(&mut empty_app, &empty, &[Event::ShowCommit]);
-    assert_eq!(
-        empty_app.note(),
-        &Note::Info("No commit selected".to_string())
-    );
+    assert_eq!(empty_app.note(), &Note::Info(Info::NoCommitSelected));
 }

@@ -3,6 +3,7 @@ use crate::log::LogBuffer;
 use crate::test_support::{TempDir, fixed_clock, git_ok, init_repo, test_git};
 use logic::log::{Layer, LogEntry, LogLevel};
 use logic::model::{AmendBase, ChangeKind, ChangedFile, FileDiff, LineKind, Side, WorkStatus};
+use logic::note::{BranchNameProblem, InputProblem};
 use logic::ports::{CommitMessage, Failed, Ports, SearchText};
 
 #[expect(
@@ -50,10 +51,7 @@ fn search_is_validated_by_validation_layer() {
         std::path::Path::new("."),
         |ports: &SessionPorts<'_>, log: &LogBuffer| {
             assert_eq!(ports.validate_search("x"), Ok(SearchText("x".to_string())));
-            assert_eq!(
-                ports.validate_search(""),
-                Err("search text is empty".to_string())
-            );
+            assert_eq!(ports.validate_search(""), Err(InputProblem::EmptySearch));
             let entries: Vec<LogEntry> = log.drain();
             assert_eq!(entries.len(), 1);
             assert_eq!(entries[0].layer, Layer::Validation);
@@ -197,7 +195,7 @@ fn edit_validate_commit_and_amend() {
         );
         assert_eq!(
             ports.validate_commit_message(" "),
-            Err("commit message is empty".to_string())
+            Err(InputProblem::EmptyCommitMessage)
         );
         let message: CommitMessage = ports.validate_commit_message("First\n").unwrap();
         ports.commit(&message, false).unwrap();
@@ -261,12 +259,12 @@ fn branch_validation_creation_and_checkout() {
     with_ports(dir.path(), |ports: &SessionPorts<'_>, log: &LogBuffer| {
         assert_eq!(
             ports.validate_branch_name("a..b"),
-            Err("invalid branch name: it contains '..'".to_string())
+            Err(InputProblem::BranchName(BranchNameProblem::DoubleDot))
         );
         assert_eq!(ports.validate_checkout_choice("2", 3), Ok(1));
         assert_eq!(
             ports.validate_checkout_choice("9", 3),
-            Err("choice must be a number from 1 to 3".to_string())
+            Err(InputProblem::OutOfRange { count: 3 })
         );
         let name: logic::ports::BranchName = ports.validate_branch_name("topic").unwrap();
         let head: String = ports.commits(0, 1).unwrap()[0].hash.clone();

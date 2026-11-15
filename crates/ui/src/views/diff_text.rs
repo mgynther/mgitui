@@ -23,8 +23,10 @@ pub enum DiffRowKind {
     Removed,
     /// `\ No newline at end of file`.
     NoNewline,
-    /// A note instead of content.
-    Note,
+    /// Instead of content: the file is binary.
+    BinaryFile,
+    /// Instead of content: the file changed, but not its content.
+    NoContentChanges,
 }
 
 /// A row of a file diff.
@@ -54,8 +56,13 @@ pub fn render(buffer: &mut Buffer, rect: Rect, rows: &[DiffRowView], focused: bo
             ' '
         };
         buffer.set(rect.x, y, gutter, Style::fg(Color::Blue));
-        let text: String = format!("{}{}", prefix(row.kind), row.text);
-        buffer.put_str(rect.x + 1, y, &text, style, rect.width.saturating_sub(1));
+        buffer.put_str(
+            rect.x + 1,
+            y,
+            &shown_text(row),
+            style,
+            rect.width.saturating_sub(1),
+        );
     }
 }
 
@@ -65,17 +72,23 @@ fn color(kind: DiffRowKind) -> Color {
         DiffRowKind::Context => Color::Default,
         DiffRowKind::Added => Color::Green,
         DiffRowKind::Removed => Color::Red,
-        DiffRowKind::NoNewline | DiffRowKind::Note => Color::Gray,
+        DiffRowKind::NoNewline | DiffRowKind::BinaryFile | DiffRowKind::NoContentChanges => {
+            Color::Gray
+        }
     }
 }
 
-fn prefix(kind: DiffRowKind) -> &'static str {
-    match kind {
-        DiffRowKind::HunkHeader | DiffRowKind::Note => "",
-        DiffRowKind::Context => " ",
-        DiffRowKind::Added => "+",
-        DiffRowKind::Removed => "-",
-        DiffRowKind::NoNewline => "\\",
+/// The text of a row: a line with its prefix character, or the wording of a row instead of
+/// content.
+fn shown_text(row: &DiffRowView) -> String {
+    match row.kind {
+        DiffRowKind::HunkHeader => row.text.clone(),
+        DiffRowKind::Context => format!(" {}", row.text),
+        DiffRowKind::Added => format!("+{}", row.text),
+        DiffRowKind::Removed => format!("-{}", row.text),
+        DiffRowKind::NoNewline => format!("\\{}", row.text),
+        DiffRowKind::BinaryFile => "Binary file".to_string(),
+        DiffRowKind::NoContentChanges => "No content changes".to_string(),
     }
 }
 
@@ -108,11 +121,12 @@ mod tests {
                 false,
                 false,
             ),
-            row(DiffRowKind::Note, "Binary file", false, false),
+            row(DiffRowKind::BinaryFile, "", false, false),
+            row(DiffRowKind::NoContentChanges, "", false, false),
         ];
         let mut buffer: Buffer = Buffer::new(Size {
             width: 30,
-            height: 6,
+            height: 7,
         });
         render(
             &mut buffer,
@@ -120,12 +134,12 @@ mod tests {
                 x: 0,
                 y: 0,
                 width: 30,
-                height: 6,
+                height: 7,
             },
             &rows,
             true,
         );
-        let lines: Vec<String> = (0..6)
+        let lines: Vec<String> = (0..7)
             .map(|y| buffer.row_text(y).trim_end().to_string())
             .collect();
         assert_eq!(
@@ -137,6 +151,7 @@ mod tests {
                 "▶+new",
                 " \\ No newline at end of file",
                 " Binary file",
+                " No content changes",
             ]
         );
         assert_eq!(buffer.cell(1, 0).unwrap().style.fg, Color::Cyan);

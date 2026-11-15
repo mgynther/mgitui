@@ -2,21 +2,31 @@ use std::collections::VecDeque;
 
 use super::{
     branches_focus, commit_info, commit_rows, diff_focus, diff_row_kind, event, file_label,
-    graph_cell, input_mode, label_view, layer_name, log_view, logic_view, screen, status, ui_level,
-    ui_view, viewports,
+    graph_cell, input_mode, label_view, layer_name, log_view, logic_view, screen, status,
+    ui_branch_name_problem, ui_info, ui_input_problem, ui_level, ui_operation, ui_problem, ui_view,
+    viewports,
 };
-use logic::app::{
-    App, BranchesPane, Confirmation, DiffPane, Mode, Note, Prompt, PromptKind, Viewports,
-};
+use logic::app::{App, BranchesPane, Confirmation, DiffPane, Mode, Prompt, PromptKind, Viewports};
 use logic::cursor::Cursor;
 use logic::event::Event as L;
 use logic::event::ViewId as LV;
 use logic::graph::{Cell, GraphRow, Shape};
 use logic::log::{Layer, LogEntry, LogLevel};
 use logic::model::{ChangeKind, ChangedFile, Commit, Label, LineKind, RowKind, Side};
+use logic::note::BranchNameProblem as LRule;
+use logic::note::Info as LInfo;
+use logic::note::InputProblem as LInput;
+use logic::note::Note;
+use logic::note::Operation as LOperation;
+use logic::note::Problem as LProblem;
 use ui::event::Event as U;
 use ui::event::ViewId as UV;
 use ui::screen::Status;
+use ui::status::BranchNameProblem as URule;
+use ui::status::Info as UInfo;
+use ui::status::InputProblem as UInput;
+use ui::status::Operation as UOperation;
+use ui::status::Problem as UProblem;
 use ui::status::PromptKind as UPrompt;
 use ui::status::Question;
 use ui::views::branches::{BranchesFocus, CommitInfo, GraphShape, LabelView};
@@ -134,17 +144,17 @@ fn modes_convert() {
 fn status_line_for_notes_and_prompts() {
     assert_eq!(status(&Mode::Normal, &Note::None), Status::Empty);
     assert_eq!(
-        status(&Mode::Normal, &Note::Info("i".to_string())),
-        Status::Note("i".to_string())
+        status(&Mode::Normal, &Note::Info(LInfo::SearchWrapped)),
+        Status::Note(UInfo::SearchWrapped)
     );
     assert_eq!(
-        status(&Mode::Normal, &Note::Problem("p".to_string())),
-        Status::Problem("p".to_string())
+        status(&Mode::Normal, &Note::Problem(LProblem::ChoiceNotListed)),
+        Status::Problem(UProblem::ChoiceNotListed)
     );
     assert_eq!(
         status(
             &prompt(PromptKind::Search, "a"),
-            &Note::Info("i".to_string())
+            &Note::Info(LInfo::SearchWrapped)
         ),
         Status::Prompt {
             kind: UPrompt::Search,
@@ -155,12 +165,12 @@ fn status_line_for_notes_and_prompts() {
     assert_eq!(
         status(
             &prompt(PromptKind::Search, "a"),
-            &Note::Problem("p".to_string())
+            &Note::Problem(LProblem::ChoiceNotListed)
         ),
         Status::Prompt {
             kind: UPrompt::Search,
             text: "a".to_string(),
-            problem: Some("p".to_string()),
+            problem: Some(UProblem::ChoiceNotListed),
         }
     );
     assert_eq!(
@@ -274,10 +284,271 @@ fn confirmations_become_questions() {
         assert_eq!(
             status(
                 &Mode::Confirm(confirmation),
-                &Note::Problem("p".to_string())
+                &Note::Problem(LProblem::ChoiceNotListed)
             ),
             Status::Question(expected)
         );
+    }
+}
+
+#[test]
+fn infos_without_data_convert() {
+    let cases: [(LInfo, UInfo); 11] = [
+        (LInfo::NoCommitSelected, UInfo::NoCommitSelected),
+        (
+            LInfo::NoOtherBranchToRebaseOnto,
+            UInfo::NoOtherBranchToRebaseOnto,
+        ),
+        (LInfo::UpdatedRemotes, UInfo::UpdatedRemotes),
+        (LInfo::FetchedAndPruned, UInfo::FetchedAndPruned),
+        (LInfo::NoMainOrMasterBranch, UInfo::NoMainOrMasterBranch),
+        (
+            LInfo::OnlyWholeFilesCanBeStagedHere,
+            UInfo::OnlyWholeFilesCanBeStagedHere,
+        ),
+        (
+            LInfo::OnlyUnstagedChangesCanBeDiscarded,
+            UInfo::OnlyUnstagedChangesCanBeDiscarded,
+        ),
+        (LInfo::NothingToStage, UInfo::NothingToStage),
+        (LInfo::NoChangedLinesSelected, UInfo::NoChangedLinesSelected),
+        (LInfo::NoPreviousSearch, UInfo::NoPreviousSearch),
+        (LInfo::SearchWrapped, UInfo::SearchWrapped),
+    ];
+    for (from, to) in cases {
+        assert_eq!(ui_info(&from), to);
+    }
+}
+
+#[test]
+fn infos_with_data_convert() {
+    let cases: [(LInfo, UInfo); 10] = [
+        (
+            LInfo::CreatedBranch {
+                name: "name".to_string(),
+            },
+            UInfo::CreatedBranch {
+                name: "name".to_string(),
+            },
+        ),
+        (
+            LInfo::DeletedBranch {
+                name: "name".to_string(),
+            },
+            UInfo::DeletedBranch {
+                name: "name".to_string(),
+            },
+        ),
+        (
+            LInfo::Rebased {
+                branch: "branch".to_string(),
+                onto: "onto".to_string(),
+            },
+            UInfo::Rebased {
+                branch: "branch".to_string(),
+                onto: "onto".to_string(),
+            },
+        ),
+        (
+            LInfo::RebasedInteractively {
+                branch: "branch".to_string(),
+                onto: "onto".to_string(),
+            },
+            UInfo::RebasedInteractively {
+                branch: "branch".to_string(),
+                onto: "onto".to_string(),
+            },
+        ),
+        (
+            LInfo::CheckedOut {
+                branch: "branch".to_string(),
+            },
+            UInfo::CheckedOut {
+                branch: "branch".to_string(),
+            },
+        ),
+        (
+            LInfo::ResetBranch {
+                branch: "branch".to_string(),
+                hash: "hash".to_string(),
+            },
+            UInfo::ResetBranch {
+                branch: "branch".to_string(),
+                hash: "hash".to_string(),
+            },
+        ),
+        (
+            LInfo::CherryPicked {
+                hash: "hash".to_string(),
+            },
+            UInfo::CherryPicked {
+                hash: "hash".to_string(),
+            },
+        ),
+        (
+            LInfo::DeletedFile {
+                path: "path".to_string(),
+            },
+            UInfo::DeletedFile {
+                path: "path".to_string(),
+            },
+        ),
+        (
+            LInfo::DiscardedChanges {
+                path: "path".to_string(),
+            },
+            UInfo::DiscardedChanges {
+                path: "path".to_string(),
+            },
+        ),
+        (
+            LInfo::PatternNotFound {
+                term: "term".to_string(),
+            },
+            UInfo::PatternNotFound {
+                term: "term".to_string(),
+            },
+        ),
+    ];
+    for (from, to) in cases {
+        assert_eq!(ui_info(&from), to);
+    }
+}
+
+#[test]
+fn problems_convert() {
+    let cases: [(LProblem, UProblem); 13] = [
+        (LProblem::ChoiceNotListed, UProblem::ChoiceNotListed),
+        (
+            LProblem::NoLocalBranchToCheckOut,
+            UProblem::NoLocalBranchToCheckOut,
+        ),
+        (
+            LProblem::NoLocalBranchToDelete,
+            UProblem::NoLocalBranchToDelete,
+        ),
+        (
+            LProblem::CheckedOutBranchCannotBeDeleted,
+            UProblem::CheckedOutBranchCannotBeDeleted,
+        ),
+        (
+            LProblem::NoLocalBranchToRebase,
+            UProblem::NoLocalBranchToRebase,
+        ),
+        (
+            LProblem::NoBranchCheckedOutToReset,
+            UProblem::NoBranchCheckedOutToReset,
+        ),
+        (
+            LProblem::UncommittedChangesBeforeReset,
+            UProblem::UncommittedChangesBeforeReset,
+        ),
+        (
+            LProblem::MergeConflict {
+                path: "path".to_string(),
+            },
+            UProblem::MergeConflict {
+                path: "path".to_string(),
+            },
+        ),
+        (
+            LProblem::MergeConflictsBeforeStagingAll,
+            UProblem::MergeConflictsBeforeStagingAll,
+        ),
+        (LProblem::NothingToAmend, UProblem::NothingToAmend),
+        (
+            LProblem::AmendedCommitWouldBeEmpty,
+            UProblem::AmendedCommitWouldBeEmpty,
+        ),
+        (
+            LProblem::Failed(LOperation::Committing),
+            UProblem::Failed(UOperation::Committing),
+        ),
+        (
+            LProblem::Invalid(LInput::EmptySearch),
+            UProblem::Invalid(UInput::EmptySearch),
+        ),
+    ];
+    for (from, to) in cases {
+        assert_eq!(ui_problem(&from), to);
+    }
+}
+
+#[test]
+fn operations_convert() {
+    let cases: [(LOperation, UOperation); 21] = [
+        (LOperation::ReloadingCommits, UOperation::ReloadingCommits),
+        (LOperation::LoadingCommit, UOperation::LoadingCommit),
+        (LOperation::LoadingDiff, UOperation::LoadingDiff),
+        (
+            LOperation::LoadingMoreCommits,
+            UOperation::LoadingMoreCommits,
+        ),
+        (LOperation::CreatingBranch, UOperation::CreatingBranch),
+        (LOperation::DeletingBranch, UOperation::DeletingBranch),
+        (LOperation::Rebasing, UOperation::Rebasing),
+        (LOperation::CheckingOut, UOperation::CheckingOut),
+        (LOperation::UpdatingRemotes, UOperation::UpdatingRemotes),
+        (
+            LOperation::FetchingAndPruning,
+            UOperation::FetchingAndPruning,
+        ),
+        (LOperation::ShowingCommit, UOperation::ShowingCommit),
+        (LOperation::ReadingStatus, UOperation::ReadingStatus),
+        (LOperation::ResettingBranch, UOperation::ResettingBranch),
+        (LOperation::CherryPicking, UOperation::CherryPicking),
+        (LOperation::ReloadingChanges, UOperation::ReloadingChanges),
+        (LOperation::DeletingFile, UOperation::DeletingFile),
+        (LOperation::DiscardingChanges, UOperation::DiscardingChanges),
+        (LOperation::Staging, UOperation::Staging),
+        (LOperation::EditingMessage, UOperation::EditingMessage),
+        (LOperation::ReadingLastCommit, UOperation::ReadingLastCommit),
+        (LOperation::Committing, UOperation::Committing),
+    ];
+    for (from, to) in cases {
+        assert_eq!(ui_operation(from), to);
+    }
+}
+
+#[test]
+fn input_problems_convert() {
+    let cases: [(LInput, UInput); 5] = [
+        (LInput::NotANumber, UInput::NotANumber),
+        (
+            LInput::OutOfRange { count: 3 },
+            UInput::OutOfRange { count: 3 },
+        ),
+        (LInput::EmptySearch, UInput::EmptySearch),
+        (LInput::EmptyCommitMessage, UInput::EmptyCommitMessage),
+        (
+            LInput::BranchName(LRule::DoubleDot),
+            UInput::BranchName(URule::DoubleDot),
+        ),
+    ];
+    for (from, to) in cases {
+        assert_eq!(ui_input_problem(&from), to);
+    }
+}
+
+#[test]
+fn branch_name_problems_convert() {
+    let cases: [(LRule, URule); 10] = [
+        (LRule::Empty, URule::Empty),
+        (LRule::Reserved, URule::Reserved),
+        (LRule::StartsWithDash, URule::StartsWithDash),
+        (LRule::BadSlash, URule::BadSlash),
+        (LRule::ComponentStartsWithDot, URule::ComponentStartsWithDot),
+        (LRule::ComponentEndsWithLock, URule::ComponentEndsWithLock),
+        (LRule::EndsWithDot, URule::EndsWithDot),
+        (LRule::DoubleDot, URule::DoubleDot),
+        (LRule::AtBrace, URule::AtBrace),
+        (
+            LRule::ForbiddenCharacter(' '),
+            URule::ForbiddenCharacter(' '),
+        ),
+    ];
+    for (from, to) in cases {
+        assert_eq!(ui_branch_name_problem(from), to);
     }
 }
 
@@ -477,13 +748,14 @@ fn file_labels() {
 #[test]
 fn diff_row_kinds() {
     use ui::views::diff_text::DiffRowKind as K;
-    let cases: [(RowKind, K); 6] = [
+    let cases: [(RowKind, K); 7] = [
         (RowKind::HunkHeader, K::HunkHeader),
         (RowKind::Line(LineKind::Context), K::Context),
         (RowKind::Line(LineKind::Added), K::Added),
         (RowKind::Line(LineKind::Removed), K::Removed),
         (RowKind::Line(LineKind::NoNewline), K::NoNewline),
-        (RowKind::Note, K::Note),
+        (RowKind::BinaryFile, K::BinaryFile),
+        (RowKind::NoContentChanges, K::NoContentChanges),
     ];
     for (from, to) in cases {
         assert_eq!(diff_row_kind(from), to);

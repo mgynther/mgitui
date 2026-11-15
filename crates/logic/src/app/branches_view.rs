@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use super::{App, Confirmation, Mode, Note, Prompt, PromptKind};
+use super::{App, Confirmation, Mode, Prompt, PromptKind};
 use crate::cursor::Cursor;
 use crate::event::Event;
 use crate::graph::{GraphBuilder, GraphRow};
@@ -10,6 +10,7 @@ use crate::log::LogLevel;
 use crate::model::{
     ChangedFile, Commit, DiffRow, FileDiff, Label, Refs, Side, WorkStatus, diff_rows,
 };
+use crate::note::{Info, Note, Operation, Problem};
 use crate::ports::{BranchName, Failed, Ports};
 use crate::search::{self, Direction, Found};
 
@@ -157,7 +158,7 @@ impl App {
         let selected: Option<String> = self.branches.selected().map(|c: &Commit| c.hash.clone());
         let count: usize = self.branches.commits.len().max(CHUNK);
         let (Ok(refs), Ok(commits)) = (ports.refs(), ports.commits(0, count)) else {
-            self.note = Note::Problem("Reloading commits failed, see the Log view".to_string());
+            self.note = Note::Problem(Problem::Failed(Operation::ReloadingCommits));
             return;
         };
         let refs: Refs = refs;
@@ -201,7 +202,7 @@ impl App {
                 .and_then(|message: String| ports.commit_files(hash).map(|files| (message, files))),
         };
         let (message, files): (String, Vec<ChangedFile>) = details.unwrap_or_else(|Failed| {
-            self.note = Note::Problem("Loading the commit failed, see the Log view".to_string());
+            self.note = Note::Problem(Problem::Failed(Operation::LoadingCommit));
             (String::new(), Vec::new())
         });
         self.branches.message = message;
@@ -224,7 +225,7 @@ impl App {
             None => Vec::new(),
             Some(Ok(diff)) => diff_rows(&diff),
             Some(Err(Failed)) => {
-                self.note = Note::Problem("Loading the diff failed, see the Log view".to_string());
+                self.note = Note::Problem(Problem::Failed(Operation::LoadingDiff));
                 Vec::new()
             }
         };
@@ -242,8 +243,7 @@ impl App {
                 self.add_commits(more);
             }
             Err(Failed) => {
-                self.note =
-                    Note::Problem("Loading more commits failed, see the Log view".to_string());
+                self.note = Note::Problem(Problem::Failed(Operation::LoadingMoreCommits));
             }
         }
     }
@@ -311,7 +311,7 @@ impl App {
                 let at: String = commit.hash.clone();
                 self.open_prompt(PromptKind::BranchName { at });
             }
-            None => self.note = Note::Info("No commit selected".to_string()),
+            None => self.note = Note::Info(Info::NoCommitSelected),
         }
     }
 
@@ -319,7 +319,7 @@ impl App {
         let name: BranchName = match ports.validate_branch_name(input) {
             Ok(name) => name,
             Err(problem) => {
-                self.note = Note::Problem(problem);
+                self.note = Note::Problem(Problem::Invalid(problem));
                 return;
             }
         };
@@ -331,10 +331,10 @@ impl App {
         let result: Result<(), Failed> = ports.create_branch(&name, at);
         self.refresh(ports);
         self.note = match result {
-            Ok(()) => Note::Info(format!("Created branch {}", name.0)),
-            Err(Failed) => {
-                Note::Problem("Creating the branch failed, see the Log view".to_string())
-            }
+            Ok(()) => Note::Info(Info::CreatedBranch {
+                name: name.0.clone(),
+            }),
+            Err(Failed) => Note::Problem(Problem::Failed(Operation::CreatingBranch)),
         };
     }
 
@@ -355,9 +355,11 @@ impl App {
         let branches: Vec<String> = self.local_branches();
         match branches.as_slice() {
             [] => {
-                let message: &str = "No local branch at this commit to check out";
-                ports.log(LogLevel::Error, message);
-                self.note = Note::Problem(message.to_string());
+                ports.log(
+                    LogLevel::Error,
+                    "No local branch at this commit to check out",
+                );
+                self.note = Note::Problem(Problem::NoLocalBranchToCheckOut);
             }
             [branch] => self.checkout(&branch.clone(), ports),
             _ => self.open_prompt(PromptKind::CheckoutChoice { branches }),
@@ -376,12 +378,12 @@ impl App {
             Ok(index) => {
                 let item: Option<String> = items.get(index).cloned();
                 if item.is_none() {
-                    self.note = Note::Problem("Choice is not listed".to_string());
+                    self.note = Note::Problem(Problem::ChoiceNotListed);
                 }
                 item
             }
             Err(problem) => {
-                self.note = Note::Problem(problem);
+                self.note = Note::Problem(Problem::Invalid(problem));
                 self.mode = Mode::Prompt(prompt.clone());
                 None
             }
@@ -405,13 +407,19 @@ impl App {
             .collect();
         match branches.as_slice() {
             [] => {
-                let message: &str = if checked_out {
-                    "The checked out branch cannot be deleted"
+                let (problem, message): (Problem, &str) = if checked_out {
+                    (
+                        Problem::CheckedOutBranchCannotBeDeleted,
+                        "The checked out branch cannot be deleted",
+                    )
                 } else {
-                    "No local branch at this commit to delete"
+                    (
+                        Problem::NoLocalBranchToDelete,
+                        "No local branch at this commit to delete",
+                    )
                 };
                 ports.log(LogLevel::Error, message);
-                self.note = Note::Problem(message.to_string());
+                self.note = Note::Problem(problem);
             }
             [branch] => self.confirm_delete_branch(branch.clone()),
             _ => self.open_prompt(PromptKind::DeleteBranch { branches }),
@@ -428,10 +436,10 @@ impl App {
         let result: Result<(), Failed> = ports.delete_branch(branch);
         self.refresh(ports);
         self.note = match result {
-            Ok(()) => Note::Info(format!("Deleted branch {branch}")),
-            Err(Failed) => {
-                Note::Problem("Deleting the branch failed, see the Log view".to_string())
-            }
+            Ok(()) => Note::Info(Info::DeletedBranch {
+                name: branch.to_string(),
+            }),
+            Err(Failed) => Note::Problem(Problem::Failed(Operation::DeletingBranch)),
         };
     }
 
@@ -439,9 +447,8 @@ impl App {
         let branches: Vec<String> = self.local_branches();
         match branches.as_slice() {
             [] => {
-                let message: &str = "No local branch at this commit to rebase";
-                ports.log(LogLevel::Error, message);
-                self.note = Note::Problem(message.to_string());
+                ports.log(LogLevel::Error, "No local branch at this commit to rebase");
+                self.note = Note::Problem(Problem::NoLocalBranchToRebase);
             }
             [branch] => self.ask_rebase_onto(branch.clone(), interactive),
             _ => self.open_prompt(PromptKind::RebaseBranch {
@@ -486,7 +493,7 @@ impl App {
             .map(|(_, name): (u8, String)| name)
             .collect();
         if onto.is_empty() {
-            self.note = Note::Info("No other branch to rebase onto".to_string());
+            self.note = Note::Info(Info::NoOtherBranchToRebaseOnto);
         } else {
             self.open_prompt(PromptKind::RebaseOnto {
                 branch,
@@ -512,13 +519,15 @@ impl App {
         let result: Result<(), Failed> = ports.rebase(branch, onto, interactive);
         self.refresh(ports);
         self.note = match result {
-            Ok(()) if interactive => {
-                Note::Info(format!("Interactively rebased {branch} onto {onto}"))
-            }
-            Ok(()) => Note::Info(format!("Rebased {branch} onto {onto}")),
-            Err(Failed) => Note::Problem(
-                "Rebase failed, see the Log view; resolve it outside mgitui".to_string(),
-            ),
+            Ok(()) if interactive => Note::Info(Info::RebasedInteractively {
+                branch: branch.to_string(),
+                onto: onto.to_string(),
+            }),
+            Ok(()) => Note::Info(Info::Rebased {
+                branch: branch.to_string(),
+                onto: onto.to_string(),
+            }),
+            Err(Failed) => Note::Problem(Problem::Failed(Operation::Rebasing)),
         };
     }
 
@@ -527,8 +536,10 @@ impl App {
         let result: Result<(), Failed> = ports.checkout(branch);
         self.refresh(ports);
         self.note = match result {
-            Ok(()) => Note::Info(format!("Checked out {branch}")),
-            Err(Failed) => Note::Problem("Checkout failed, see the Log view".to_string()),
+            Ok(()) => Note::Info(Info::CheckedOut {
+                branch: branch.to_string(),
+            }),
+            Err(Failed) => Note::Problem(Problem::Failed(Operation::CheckingOut)),
         };
     }
 
@@ -537,8 +548,8 @@ impl App {
         let result: Result<(), Failed> = ports.remote_update();
         self.refresh(ports);
         self.note = match result {
-            Ok(()) => Note::Info("Updated remotes".to_string()),
-            Err(Failed) => Note::Problem("Remote update failed, see the Log view".to_string()),
+            Ok(()) => Note::Info(Info::UpdatedRemotes),
+            Err(Failed) => Note::Problem(Problem::Failed(Operation::UpdatingRemotes)),
         };
     }
 
@@ -547,8 +558,8 @@ impl App {
         let result: Result<(), Failed> = ports.fetch_all_prune();
         self.refresh(ports);
         self.note = match result {
-            Ok(()) => Note::Info("Fetched all remotes pruning stale remote branches".to_string()),
-            Err(Failed) => Note::Problem("Fetch all prune failed, see the Log view".to_string()),
+            Ok(()) => Note::Info(Info::FetchedAndPruned),
+            Err(Failed) => Note::Problem(Problem::Failed(Operation::FetchingAndPruning)),
         };
     }
 
@@ -556,14 +567,14 @@ impl App {
     /// nothing is reloaded.
     pub(super) fn show_commit(&mut self, ports: &dyn Ports) {
         let Some(hash) = self.branches.selected().map(|c: &Commit| c.hash.clone()) else {
-            self.note = Note::Info("No commit selected".to_string());
+            self.note = Note::Info(Info::NoCommitSelected);
             return;
         };
         let short: &str = hash.get(..7).unwrap_or(&hash);
         ports.log(LogLevel::Info, &format!("show {short}"));
         let result: Result<(), Failed> = ports.show_commit(&hash);
         if result.is_err() {
-            self.note = Note::Problem("Showing the commit failed, see the Log view".to_string());
+            self.note = Note::Problem(Problem::Failed(Operation::ShowingCommit));
         }
     }
 
@@ -584,26 +595,26 @@ impl App {
     /// up; untracked files are left to git, which refuses if one is in the way.
     pub(super) fn start_reset_branch(&mut self, ports: &dyn Ports) {
         let Some(hash) = self.branches.selected().map(|c: &Commit| c.hash.clone()) else {
-            self.note = Note::Info("No commit selected".to_string());
+            self.note = Note::Info(Info::NoCommitSelected);
             return;
         };
         let Some(branch) = self.checked_out_branch() else {
-            let message: &str = "No branch is checked out to reset";
-            ports.log(LogLevel::Error, message);
-            self.note = Note::Problem(message.to_string());
+            ports.log(LogLevel::Error, "No branch is checked out to reset");
+            self.note = Note::Problem(Problem::NoBranchCheckedOutToReset);
             return;
         };
         let status: Result<WorkStatus, Failed> = ports.status();
         match status {
             Ok(status) if status.has_tracked_changes() => {
-                let message: &str = "Commit or discard uncommitted changes before resetting";
-                ports.log(LogLevel::Error, message);
-                self.note = Note::Problem(message.to_string());
+                ports.log(
+                    LogLevel::Error,
+                    "Commit or discard uncommitted changes before resetting",
+                );
+                self.note = Note::Problem(Problem::UncommittedChangesBeforeReset);
             }
             Ok(_) => self.mode = Mode::Confirm(Confirmation::ResetBranch { branch, hash }),
             Err(Failed) => {
-                self.note =
-                    Note::Problem("Reading the status failed, see the Log view".to_string());
+                self.note = Note::Problem(Problem::Failed(Operation::ReadingStatus));
             }
         }
     }
@@ -614,14 +625,17 @@ impl App {
         let result: Result<(), Failed> = ports.reset_keep(hash);
         self.refresh(ports);
         self.note = match result {
-            Ok(()) => Note::Info(format!("Reset {branch} to {short}")),
-            Err(Failed) => Note::Problem("Reset failed, see the Log view".to_string()),
+            Ok(()) => Note::Info(Info::ResetBranch {
+                branch: branch.to_string(),
+                hash: hash.to_string(),
+            }),
+            Err(Failed) => Note::Problem(Problem::Failed(Operation::ResettingBranch)),
         };
     }
 
     pub(super) fn cherry_pick(&mut self, ports: &dyn Ports) {
         let Some(hash) = self.branches.selected().map(|c: &Commit| c.hash.clone()) else {
-            self.note = Note::Info("No commit selected".to_string());
+            self.note = Note::Info(Info::NoCommitSelected);
             return;
         };
         let short: &str = hash.get(..7).unwrap_or(&hash);
@@ -629,8 +643,8 @@ impl App {
         let result: Result<(), Failed> = ports.cherry_pick(&hash);
         self.refresh(ports);
         self.note = match result {
-            Ok(()) => Note::Info(format!("Cherry-picked {short}")),
-            Err(Failed) => Note::Problem("Cherry-pick failed, see the Log view".to_string()),
+            Ok(()) => Note::Info(Info::CherryPicked { hash: hash.clone() }),
+            Err(Failed) => Note::Problem(Problem::Failed(Operation::CherryPicking)),
         };
     }
 
@@ -680,7 +694,7 @@ impl App {
         );
         match found {
             Some(Found { index, .. }) => self.select_commit(index, ports),
-            None => self.note = Note::Info("No main or master branch".to_string()),
+            None => self.note = Note::Info(Info::NoMainOrMasterBranch),
         }
     }
 

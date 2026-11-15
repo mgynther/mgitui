@@ -1,6 +1,7 @@
-use super::{App, Confirmation, Mode, Note, Prompt, PromptKind, Viewports};
+use super::{App, Confirmation, Mode, Prompt, PromptKind, Viewports};
 use crate::event::{Event, ViewId};
 use crate::log::{Layer, LogEntry, LogLevel};
+use crate::note::{Info, InputProblem, Note, Problem};
 use crate::ports::Ports;
 use crate::test_ports::TestPorts;
 
@@ -163,7 +164,7 @@ fn log_search_wraps_and_repeats() {
     assert_eq!(app.note(), &Note::None);
     run(&mut app, &[Event::SearchNext]);
     assert_eq!(app.log_cursor().selected(), 0);
-    assert_eq!(app.note(), &Note::Info("search wrapped".to_string()));
+    assert_eq!(app.note(), &Note::Info(Info::SearchWrapped));
     run(&mut app, &[Event::SearchPrevious]);
     assert_eq!(app.log_cursor().selected(), 2);
 }
@@ -172,17 +173,22 @@ fn log_search_wraps_and_repeats() {
 fn search_problems() {
     let mut app: App = log_app(&["a"]);
     run(&mut app, &[Event::SearchNext]);
-    assert_eq!(app.note(), &Note::Info("No previous search".to_string()));
+    assert_eq!(app.note(), &Note::Info(Info::NoPreviousSearch));
     run(&mut app, &[Event::StartSearch, Event::InputSubmit]);
     assert_eq!(
         app.note(),
-        &Note::Problem("search text is empty".to_string())
+        &Note::Problem(Problem::Invalid(InputProblem::EmptySearch))
     );
     run(
         &mut app,
         &[Event::StartSearch, Event::Input('z'), Event::InputSubmit],
     );
-    assert_eq!(app.note(), &Note::Info("Pattern not found: z".to_string()));
+    assert_eq!(
+        app.note(),
+        &Note::Info(Info::PatternNotFound {
+            term: "z".to_string()
+        })
+    );
 }
 
 #[test]
@@ -192,9 +198,19 @@ fn search_in_views_without_lists_finds_nothing() {
         &mut app,
         &[Event::StartSearch, Event::Input('a'), Event::InputSubmit],
     );
-    assert_eq!(app.note(), &Note::Info("Pattern not found: a".to_string()));
+    assert_eq!(
+        app.note(),
+        &Note::Info(Info::PatternNotFound {
+            term: "a".to_string()
+        })
+    );
     run(&mut app, &[Event::SearchPrevious]);
-    assert_eq!(app.note(), &Note::Info("Pattern not found: a".to_string()));
+    assert_eq!(
+        app.note(),
+        &Note::Info(Info::PatternNotFound {
+            term: "a".to_string()
+        })
+    );
     run(
         &mut app,
         &[
@@ -203,12 +219,17 @@ fn search_in_views_without_lists_finds_nothing() {
             Event::SearchNext,
         ],
     );
-    assert_eq!(app.note(), &Note::Info("No previous search".to_string()));
+    assert_eq!(app.note(), &Note::Info(Info::NoPreviousSearch));
     run(
         &mut app,
         &[Event::StartSearch, Event::Input('b'), Event::InputSubmit],
     );
-    assert_eq!(app.note(), &Note::Info("Pattern not found: b".to_string()));
+    assert_eq!(
+        app.note(),
+        &Note::Info(Info::PatternNotFound {
+            term: "b".to_string()
+        })
+    );
 }
 
 #[test]

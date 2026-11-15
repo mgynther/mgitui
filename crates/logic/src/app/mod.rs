@@ -26,6 +26,7 @@ use crate::cursor::Cursor;
 use crate::event::{Event, ViewId};
 use crate::log::{DEFAULT_CAPACITY, LogLevel, LogStore};
 use crate::model::ChangedFile;
+use crate::note::{Info, Note, Problem};
 use crate::ports::{Ports, SearchText};
 use crate::search::{Direction, Found};
 
@@ -114,17 +115,6 @@ pub enum PromptKind {
         /// Whether the rebase is interactive.
         interactive: bool,
     },
-}
-
-/// A short message for the status line.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Note {
-    /// Nothing to show.
-    None,
-    /// Information.
-    Info(String),
-    /// A problem.
-    Problem(String),
 }
 
 /// How many rows each list is shown in. Logic needs these to scroll.
@@ -386,7 +376,7 @@ impl App {
                     self.terms.set(self.view, term.clone());
                     self.search(&term, Direction::Forward, ports);
                 }
-                Err(problem) => self.note = Note::Problem(problem),
+                Err(problem) => self.note = Note::Problem(Problem::Invalid(problem)),
             },
         }
     }
@@ -394,7 +384,7 @@ impl App {
     fn search_again(&mut self, direction: Direction, ports: &dyn Ports) {
         match self.terms.get(self.view).cloned() {
             Some(term) => self.search(&term, direction, ports),
-            None => self.note = Note::Info("No previous search".to_string()),
+            None => self.note = Note::Info(Info::NoPreviousSearch),
         }
     }
 
@@ -405,8 +395,10 @@ impl App {
             ViewId::Branches => self.search_branches(&term.0, direction, ports),
         };
         self.note = match found {
-            None => Note::Info(format!("Pattern not found: {}", term.0)),
-            Some(Found { wrapped: true, .. }) => Note::Info("search wrapped".to_string()),
+            None => Note::Info(Info::PatternNotFound {
+                term: term.0.clone(),
+            }),
+            Some(Found { wrapped: true, .. }) => Note::Info(Info::SearchWrapped),
             Some(Found { wrapped: false, .. }) => Note::None,
         };
     }

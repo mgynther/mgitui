@@ -1,6 +1,7 @@
-use super::{App, Note};
+use super::App;
 use crate::event::{Event, ViewId};
 use crate::model::{ChangedFile, Side, WorkStatus};
+use crate::note::{Note, Operation, Problem};
 use crate::test_ports::{TestPorts, modified};
 
 /// Ports where `s` is staged and the amended commit would contain `a` and `s`. The selection
@@ -105,7 +106,7 @@ fn reloading_the_amended_commit_can_fail() {
         run(&mut app, &ports, &[Event::ToggleAmend]);
         assert_eq!(
             app.note(),
-            &Note::Problem("Reloading changes failed, see the Log view".to_string())
+            &Note::Problem(Problem::Failed(Operation::ReloadingChanges))
         );
         assert!(app.diff().amend());
     }
@@ -123,6 +124,9 @@ fn an_amend_that_would_leave_the_commit_empty_is_refused() {
     run(&mut app, &ports, &[Event::Commit]);
     let message: &str = "The amended commit would be empty: stage changes first";
     assert_eq!(ports.calls(), vec![format!("Error: {message}")]);
-    assert_eq!(app.note(), &Note::Problem(message.to_string()));
+    assert_eq!(
+        app.note(),
+        &Note::Problem(Problem::AmendedCommitWouldBeEmpty)
+    );
     assert!(app.diff().amend());
 }

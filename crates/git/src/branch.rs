@@ -84,6 +84,21 @@ impl Git {
         Ok(())
     }
 
+    /// Moves the checked out branch to commit `hash` and updates the working tree to match.
+    /// Git refuses, changing nothing, when this would overwrite local changes or untracked
+    /// files.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails, for example when an untracked file is in the way.
+    pub fn reset_keep(&self, hash: &str, log: &Log<'_>) -> Result<(), GitError> {
+        let command: Command = Command::ResetKeep {
+            hash: hash.to_string(),
+        };
+        self.run(&command, None, log)?;
+        Ok(())
+    }
+
     /// Checks out `branch` and rebases it onto `onto` interactively. Git runs Vim on the
     /// terminal for the todo list and messages, so the caller must hand the terminal over. A
     /// conflict leaves the rebase in progress for the user to resolve.
@@ -329,5 +344,35 @@ mod tests {
             repo.git().fetch_all_prune(&logged.log()),
             Err(GitError::Failed { .. })
         ));
+    }
+
+    #[test]
+    fn reset_keep_moves_the_branch_and_keeps_untracked_files() {
+        let repo: TestRepo = TestRepo::new();
+        repo.git_ok(&["commit", "-q", "--allow-empty", "-m", "one"]);
+        let first: String = repo.git_ok(&["rev-parse", "HEAD"]).trim().to_string();
+        repo.write("a.txt", "a\n");
+        repo.git_ok(&["add", "."]);
+        repo.git_ok(&["commit", "-q", "-m", "two"]);
+        let second: String = repo.git_ok(&["rev-parse", "HEAD"]).trim().to_string();
+        let logged: Logged = Logged::new();
+        repo.git().reset_keep(&first, &logged.log()).unwrap();
+        assert_eq!(repo.git_ok(&["rev-parse", "main"]).trim(), first);
+        assert!(!repo.path().join("a.txt").exists());
+        assert_eq!(
+            logged.lines()[0],
+            format!("Info: git reset --keep {first} (exit 0)")
+        );
+
+        repo.write("a.txt", "untracked\n");
+        assert!(matches!(
+            repo.git().reset_keep(&second, &logged.log()),
+            Err(GitError::Failed { .. })
+        ));
+        assert_eq!(repo.git_ok(&["rev-parse", "main"]).trim(), first);
+        assert_eq!(
+            std::fs::read_to_string(repo.path().join("a.txt")).unwrap(),
+            "untracked\n"
+        );
     }
 }

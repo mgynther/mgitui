@@ -188,6 +188,14 @@ pub trait Ports {
     /// Fails when git fails, for example when a remote cannot be reached.
     fn fetch_all_prune(&self) -> Result<(), Failed>;
 
+    /// Resets the checked out branch to a commit with `git reset --keep`, which updates the
+    /// working tree but refuses to overwrite local changes and untracked files.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails, for example when an untracked file is in the way.
+    fn reset_keep(&self, hash: &str) -> Result<(), Failed>;
+
     /// Cherry-picks a commit onto the checked out branch.
     ///
     /// # Errors

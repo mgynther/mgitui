@@ -7,7 +7,7 @@ use crate::cursor::Cursor;
 use crate::event::Event;
 use crate::graph::{GraphBuilder, GraphRow};
 use crate::log::LogLevel;
-use crate::model::{ChangedFile, Commit, DiffRow, FileDiff, Label, Refs, diff_rows};
+use crate::model::{ChangedFile, Commit, DiffRow, FileDiff, Label, Refs, WorkStatus, diff_rows};
 use crate::ports::{BranchName, Failed, Ports};
 use crate::search::{self, Direction, Found};
 
@@ -534,6 +534,58 @@ impl App {
         self.note = match result {
             Ok(()) => Note::Info("Fetched all remotes pruning stale remote branches".to_string()),
             Err(Failed) => Note::Problem("Fetch all prune failed, see the Log view".to_string()),
+        };
+    }
+
+    /// The checked out local branch, or `None` when `HEAD` is detached.
+    fn checked_out_branch(&self) -> Option<String> {
+        self.branches
+            .labels
+            .values()
+            .flatten()
+            .find_map(|label: &Label| match label {
+                Label::Local { name, head: true } => Some(name.clone()),
+                Label::Local { .. } | Label::Remote { .. } | Label::Tag { .. } => None,
+            })
+    }
+
+    /// Asks for confirmation before resetting the checked out branch to the selected commit.
+    /// Refuses when files git tracks have changes, because the reset would lose or mix them
+    /// up; untracked files are left to git, which refuses if one is in the way.
+    pub(super) fn start_reset_branch(&mut self, ports: &dyn Ports) {
+        let Some(hash) = self.branches.selected().map(|c: &Commit| c.hash.clone()) else {
+            self.note = Note::Info("No commit selected".to_string());
+            return;
+        };
+        let Some(branch) = self.checked_out_branch() else {
+            let message: &str = "No branch is checked out to reset";
+            ports.log(LogLevel::Error, message);
+            self.note = Note::Problem(message.to_string());
+            return;
+        };
+        let status: Result<WorkStatus, Failed> = ports.status();
+        match status {
+            Ok(status) if status.has_tracked_changes() => {
+                let message: &str = "Commit or discard uncommitted changes before resetting";
+                ports.log(LogLevel::Error, message);
+                self.note = Note::Problem(message.to_string());
+            }
+            Ok(_) => self.mode = Mode::Confirm(Confirmation::ResetBranch { branch, hash }),
+            Err(Failed) => {
+                self.note =
+                    Note::Problem("Reading the status failed, see the Log view".to_string());
+            }
+        }
+    }
+
+    pub(super) fn reset_branch(&mut self, branch: &str, hash: &str, ports: &dyn Ports) {
+        let short: &str = hash.get(..7).unwrap_or(hash);
+        ports.log(LogLevel::Info, &format!("reset {branch} to {short}"));
+        let result: Result<(), Failed> = ports.reset_keep(hash);
+        self.refresh(ports);
+        self.note = match result {
+            Ok(()) => Note::Info(format!("Reset {branch} to {short}")),
+            Err(Failed) => Note::Problem("Reset failed, see the Log view".to_string()),
         };
     }
 

@@ -604,6 +604,58 @@ fn fetch_all_prune_removes_stale_remote_branches() {
 }
 
 #[test]
+fn reset_branch_to_selected_commit() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    std::fs::write(dir.path().join("a.txt"), "a\n").unwrap();
+    git_ok(dir.path(), &["add", "."]);
+    git_ok(dir.path(), &["commit", "-q", "-m", "one"]);
+    let first: String = git_ok(dir.path(), &["rev-parse", "HEAD"])
+        .trim()
+        .to_string();
+    std::fs::write(dir.path().join("c.txt"), "c\n").unwrap();
+    git_ok(dir.path(), &["add", "."]);
+    git_ok(dir.path(), &["commit", "-q", "-m", "two"]);
+    git_ok(dir.path(), &["branch", "later"]);
+    let mut s: Session = session_in(&dir);
+
+    std::fs::write(dir.path().join("a.txt"), "changed\n").unwrap();
+    s.input(b"jR");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "Commit or discard uncommitted changes before resetting"
+    );
+
+    git_ok(dir.path(), &["checkout", "--", "a.txt"]);
+    std::fs::write(dir.path().join("b.txt"), "untracked\n").unwrap();
+    s.input(b"R");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        format!("Reset main to {}? y/n", &first[..7])
+    );
+    s.input(b"y");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        format!("Reset main to {}", &first[..7])
+    );
+    assert_eq!(git_ok(dir.path(), &["rev-parse", "main"]).trim(), first);
+    assert!(!dir.path().join("c.txt").exists());
+    assert!(dir.path().join("b.txt").exists());
+
+    std::fs::write(dir.path().join("c.txt"), "mine\n").unwrap();
+    s.input(b"kRy");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "Reset failed, see the Log view"
+    );
+    assert_eq!(git_ok(dir.path(), &["rev-parse", "main"]).trim(), first);
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("c.txt")).unwrap(),
+        "mine\n"
+    );
+}
+
+#[test]
 fn d_discards_changes_and_deletes_untracked_files_after_confirming() {
     let dir: TempDir = TempDir::new();
     init_repo(dir.path());

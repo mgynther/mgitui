@@ -1,7 +1,7 @@
 use super::{App, Confirmation, Mode, Note, Prompt, PromptKind};
 use crate::event::Event;
-use crate::model::{Label, Refs};
-use crate::test_ports::{TestPorts, linear_history};
+use crate::model::{ChangeKind, ChangedFile, Label, Refs, WorkStatus};
+use crate::test_ports::{TestPorts, linear_history, modified};
 
 fn local(name: &str) -> Label {
     Label::Local {
@@ -51,6 +51,7 @@ fn actions(ports: &TestPorts) -> Vec<String> {
                 || c.starts_with("delete")
                 || c.starts_with("remote")
                 || c.starts_with("fetch")
+                || c.starts_with("reset")
                 || c.starts_with("rebase")
                 || c.contains(": ")
         })
@@ -622,5 +623,113 @@ fn fetch_all_prune_fetches_and_reloads() {
     assert_eq!(
         app.note(),
         &Note::Problem("Fetch all prune failed, see the Log view".to_string())
+    );
+}
+
+fn head(name: &str) -> Label {
+    Label::Local {
+        name: name.to_string(),
+        head: true,
+    }
+}
+
+fn changed(path: &str, kind: ChangeKind) -> ChangedFile {
+    ChangedFile {
+        path: path.to_string(),
+        original_path: None,
+        kind,
+        mode_changed: false,
+    }
+}
+
+#[test]
+fn reset_branch_to_selected_commit_after_confirming() {
+    let ports: TestPorts = labelled_ports(vec![head("main")]);
+    *ports.status.borrow_mut() = Some(WorkStatus {
+        staged: vec![],
+        unstaged: vec![changed("new.txt", ChangeKind::Untracked)],
+    });
+    let mut app: App = loaded_app(&ports);
+    run(&mut app, &ports, &[Event::MoveDown, Event::ResetBranch]);
+    assert_eq!(
+        app.mode(),
+        &Mode::Confirm(Confirmation::ResetBranch {
+            branch: "main".to_string(),
+            hash: "c1".to_string(),
+        })
+    );
+    run(&mut app, &ports, &[Event::No]);
+    assert_eq!(app.mode(), &Mode::Normal);
+    assert_eq!(actions(&ports), Vec::<String>::new());
+    run(&mut app, &ports, &[Event::ResetBranch, Event::Yes]);
+    assert_eq!(
+        actions(&ports),
+        vec!["Info: reset main to c1", "reset --keep c1"]
+    );
+    assert!(ports.calls().contains(&"refs".to_string()));
+    assert_eq!(app.note(), &Note::Info("Reset main to c1".to_string()));
+}
+
+#[test]
+fn reset_branch_problems() {
+    let detached: TestPorts = labelled_ports(vec![local("main")]);
+    let mut app: App = loaded_app(&detached);
+    run(&mut app, &detached, &[Event::ResetBranch]);
+    let no_branch: &str = "No branch is checked out to reset";
+    assert_eq!(actions(&detached), vec![format!("Error: {no_branch}")]);
+    assert_eq!(app.note(), &Note::Problem(no_branch.to_string()));
+    assert_eq!(app.mode(), &Mode::Normal);
+
+    for status in [
+        WorkStatus {
+            staged: vec![modified("a.txt")],
+            unstaged: vec![],
+        },
+        WorkStatus {
+            staged: vec![],
+            unstaged: vec![modified("a.txt")],
+        },
+    ] {
+        let changes: TestPorts = labelled_ports(vec![head("main")]);
+        *changes.status.borrow_mut() = Some(status);
+        let mut changes_app: App = loaded_app(&changes);
+        run(&mut changes_app, &changes, &[Event::ResetBranch]);
+        let uncommitted: &str = "Commit or discard uncommitted changes before resetting";
+        assert_eq!(actions(&changes), vec![format!("Error: {uncommitted}")]);
+        assert_eq!(changes_app.note(), &Note::Problem(uncommitted.to_string()));
+        assert_eq!(changes_app.mode(), &Mode::Normal);
+    }
+
+    let no_status: TestPorts = labelled_ports(vec![head("main")]);
+    let mut no_status_app: App = loaded_app(&no_status);
+    *no_status.status.borrow_mut() = None;
+    run(&mut no_status_app, &no_status, &[Event::ResetBranch]);
+    assert_eq!(
+        no_status_app.note(),
+        &Note::Problem("Reading the status failed, see the Log view".to_string())
+    );
+    assert_eq!(no_status_app.mode(), &Mode::Normal);
+
+    let failing: TestPorts = TestPorts {
+        branch_fails: true,
+        ..labelled_ports(vec![head("main")])
+    };
+    let mut failing_app: App = loaded_app(&failing);
+    run(
+        &mut failing_app,
+        &failing,
+        &[Event::ResetBranch, Event::Yes],
+    );
+    assert_eq!(
+        failing_app.note(),
+        &Note::Problem("Reset failed, see the Log view".to_string())
+    );
+
+    let empty: TestPorts = TestPorts::new();
+    let mut empty_app: App = loaded_app(&empty);
+    run(&mut empty_app, &empty, &[Event::ResetBranch]);
+    assert_eq!(
+        empty_app.note(),
+        &Note::Info("No commit selected".to_string())
     );
 }

@@ -48,6 +48,13 @@ pub enum Confirmation {
         /// The branch name.
         name: String,
     },
+    /// Resetting the checked out branch to a commit.
+    ResetBranch {
+        /// The checked out branch.
+        branch: String,
+        /// The commit hash.
+        hash: String,
+    },
     /// Discarding the unstaged changes of a file, or deleting it when untracked.
     DiscardFile {
         /// The file in the unstaged list.
@@ -260,6 +267,9 @@ impl App {
                     match confirmation {
                         Confirmation::Quit => self.quit = true,
                         Confirmation::DeleteBranch { name } => self.delete_branch(&name, ports),
+                        Confirmation::ResetBranch { branch, hash } => {
+                            self.reset_branch(&branch, &hash, ports);
+                        }
                         Confirmation::DiscardFile { file } => self.discard_file(&file, ports),
                     }
                 }
@@ -298,6 +308,7 @@ impl App {
                     Event::CherryPick => self.cherry_pick(ports),
                     Event::RemoteUpdate => self.remote_update(ports),
                     Event::FetchAllPrune => self.fetch_all_prune(ports),
+                    Event::ResetBranch => self.start_reset_branch(ports),
                     Event::DeleteBranch => self.start_delete_branch(ports),
                     Event::Rebase => self.start_rebase(false, ports),
                     Event::InteractiveRebase => self.start_rebase(true, ports),

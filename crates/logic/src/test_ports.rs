@@ -38,7 +38,8 @@ pub struct TestPorts {
     pub refs: RefCell<Option<Refs>>,
     /// Whether loading commit details fails.
     pub details_fail: bool,
-    /// Whether creating branches and checking out fail.
+    /// Whether branch actions fail: creating, checking out, deleting, fetching, resetting,
+    /// cherry-picking and rebasing.
     pub branch_fails: bool,
 }
 
@@ -299,6 +300,10 @@ impl Ports for TestPorts {
 
     fn fetch_all_prune(&self) -> Result<(), Failed> {
         self.branch_result("fetch --all --prune".to_string())
+    }
+
+    fn reset_keep(&self, hash: &str) -> Result<(), Failed> {
+        self.branch_result(format!("reset --keep {hash}"))
     }
 
     fn cherry_pick(&self, hash: &str) -> Result<(), Failed> {

@@ -97,6 +97,12 @@ pub enum Command {
     RemoteUpdate,
     /// `git fetch --all --prune`: fetches all remotes pruning stale remote branches.
     FetchAllPrune,
+    /// `git reset --keep <commit>`: moves the checked out branch to a commit and updates the
+    /// working tree. Unlike `--hard`, it refuses to overwrite local changes and untracked files.
+    ResetKeep {
+        /// The commit hash.
+        hash: String,
+    },
     /// `git cherry-pick <commit>`: applies a commit onto the checked out branch.
     CherryPick {
         /// The commit hash.
@@ -180,6 +186,7 @@ impl Command {
             Command::CreateBranch { .. } => &["branch"],
             Command::Switch { .. } => &["switch"],
             Command::CherryPick { .. } => &["cherry-pick"],
+            Command::ResetKeep { .. } => &["reset", "--keep"],
             Command::RemoteUpdate => &["remote", "update"],
             Command::FetchAllPrune => &["fetch", "--all", "--prune"],
             Command::DeleteBranch { .. } => &["branch", "-D"],
@@ -226,7 +233,7 @@ impl Command {
                 args.push(at.clone());
             }
             Command::Switch { branch } => args.push(branch.clone()),
-            Command::CherryPick { hash } => args.push(hash.clone()),
+            Command::CherryPick { hash } | Command::ResetKeep { hash } => args.push(hash.clone()),
             Command::DeleteBranch { name } => args.push(name.clone()),
             Command::Rebase { onto, branch } | Command::RebaseInteractive { onto, branch } => {
                 args.push(onto.clone());
@@ -406,6 +413,12 @@ mod tests {
         );
         assert_eq!(args(&Command::RemoteUpdate), "remote update");
         assert_eq!(args(&Command::FetchAllPrune), "fetch --all --prune");
+        assert_eq!(
+            args(&Command::ResetKeep {
+                hash: "abc".to_string()
+            }),
+            "reset --keep abc"
+        );
         assert_eq!(
             args(&Command::DeleteBranch {
                 name: "old".to_string()

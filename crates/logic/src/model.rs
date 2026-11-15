@@ -58,6 +58,17 @@ impl WorkStatus {
     pub fn has_changes(&self) -> bool {
         !self.staged.is_empty() || !self.unstaged.is_empty()
     }
+
+    /// Whether there are changes to tracked files: anything staged, or unstaged changes other
+    /// than untracked files. Merge conflicts count as changes.
+    #[must_use]
+    pub fn has_tracked_changes(&self) -> bool {
+        !self.staged.is_empty()
+            || self
+                .unstaged
+                .iter()
+                .any(|file: &ChangedFile| file.kind != ChangeKind::Untracked)
+    }
 }
 
 /// Which list of changes.
@@ -266,6 +277,30 @@ mod tests {
             unstaged: vec![file(ChangeKind::Added, false)],
         };
         assert!(unstaged.has_changes());
+    }
+
+    #[test]
+    fn has_tracked_changes_ignores_untracked_files() {
+        assert!(!WorkStatus::default().has_tracked_changes());
+        let untracked: WorkStatus = WorkStatus {
+            staged: vec![],
+            unstaged: vec![file(ChangeKind::Untracked, false)],
+        };
+        assert!(untracked.has_changes());
+        assert!(!untracked.has_tracked_changes());
+        let staged: WorkStatus = WorkStatus {
+            staged: vec![file(ChangeKind::Added, false)],
+            unstaged: vec![],
+        };
+        assert!(staged.has_tracked_changes());
+        let unstaged: WorkStatus = WorkStatus {
+            staged: vec![],
+            unstaged: vec![
+                file(ChangeKind::Untracked, false),
+                file(ChangeKind::Modified, false),
+            ],
+        };
+        assert!(unstaged.has_tracked_changes());
     }
 
     #[test]

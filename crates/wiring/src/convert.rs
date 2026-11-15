@@ -35,6 +35,7 @@ pub fn event(event: ui::event::Event) -> logic::event::Event {
         U::CherryPick => L::CherryPick,
         U::RemoteUpdate => L::RemoteUpdate,
         U::FetchAllPrune => L::FetchAllPrune,
+        U::ResetBranch => L::ResetBranch,
         U::DeleteBranch => L::DeleteBranch,
         U::DiscardFile => L::DiscardFile,
         U::Rebase => L::Rebase,
@@ -122,6 +123,9 @@ fn status(app: &App) -> ui::screen::Status {
                 Confirmation::Quit => "Quit? y/n".to_string(),
                 Confirmation::DeleteBranch { name } => {
                     format!("Delete branch {name} even if it is not merged? y/n")
+                }
+                Confirmation::ResetBranch { branch, hash } => {
+                    format!("Reset {branch} to {}? y/n", hash.get(..7).unwrap_or(hash))
                 }
                 Confirmation::DiscardFile { file } if file.kind == ChangeKind::Untracked => {
                     format!("Delete untracked file {}? y/n", file.path)

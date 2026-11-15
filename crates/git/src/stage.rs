@@ -41,18 +41,28 @@ impl Git {
         Ok(output.code == 0)
     }
 
-    /// Unstages all changes of `paths`. In a repository without commits the paths are removed
-    /// from the index instead.
+    /// Unstages all changes of `paths` with `git restore --staged`, restoring them in the index
+    /// from `HEAD`.
     ///
     /// # Errors
     ///
-    /// Fails when git fails.
-    pub fn unstage(&self, paths: &[String], log: &Log<'_>) -> Result<(), GitError> {
-        let paths: Vec<String> = paths.to_vec();
-        let command: Command = if self.has_head(log)? {
-            Command::RestoreStaged { paths }
-        } else {
-            Command::RemoveCached { paths }
+    /// Fails when git fails, for example when there is no commit yet.
+    pub fn restore_staged(&self, paths: &[String], log: &Log<'_>) -> Result<(), GitError> {
+        let command: Command = Command::RestoreStaged {
+            paths: paths.to_vec(),
+        };
+        self.run(&command, None, log)?;
+        Ok(())
+    }
+
+    /// Removes `paths` from the index with `git rm --cached`, keeping the files.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails, for example when a path is not in the index.
+    pub fn remove_cached(&self, paths: &[String], log: &Log<'_>) -> Result<(), GitError> {
+        let command: Command = Command::RemoveCached {
+            paths: paths.to_vec(),
         };
         self.run(&command, None, log)?;
         Ok(())
@@ -124,8 +134,13 @@ mod tests {
         assert!(!repo.git().has_head(&logged.log()).unwrap());
         repo.git().add(&paths(&["a.txt"]), &logged.log()).unwrap();
         assert_eq!(status(&repo).staged[0].kind, ChangeKind::Added);
+        assert!(
+            repo.git()
+                .restore_staged(&paths(&["a.txt"]), &logged.log())
+                .is_err()
+        );
         repo.git()
-            .unstage(&paths(&["a.txt"]), &logged.log())
+            .remove_cached(&paths(&["a.txt"]), &logged.log())
             .unwrap();
         assert_eq!(status(&repo).unstaged[0].kind, ChangeKind::Untracked);
         assert!(
@@ -147,7 +162,7 @@ mod tests {
         repo.git().add(&paths(&["a.txt"]), &logged.log()).unwrap();
         assert_eq!(status(&repo).staged[0].kind, ChangeKind::Deleted);
         repo.git()
-            .unstage(&paths(&["a.txt"]), &logged.log())
+            .restore_staged(&paths(&["a.txt"]), &logged.log())
             .unwrap();
         assert_eq!(status(&repo).unstaged[0].kind, ChangeKind::Deleted);
         assert!(
@@ -213,13 +228,14 @@ mod tests {
         let git: crate::runner::Git = repo.git().with_program("/nonexistent/git");
         assert!(git.add(&paths(&["x"]), &logged.log()).is_err());
         assert!(git.has_head(&logged.log()).is_err());
-        assert!(git.unstage(&paths(&["x"]), &logged.log()).is_err());
+        assert!(git.restore_staged(&paths(&["x"]), &logged.log()).is_err());
+        assert!(git.remove_cached(&paths(&["x"]), &logged.log()).is_err());
         assert!(git.apply_cached("", false, &logged.log()).is_err());
         assert!(git.restore(&paths(&["x"]), &logged.log()).is_err());
         assert!(git.clean(&paths(&["x"]), &logged.log()).is_err());
         assert!(
             repo.git()
-                .unstage(&paths(&["missing"]), &logged.log())
+                .remove_cached(&paths(&["missing"]), &logged.log())
                 .is_err()
         );
     }

@@ -81,6 +81,19 @@ impl TestPorts {
         }
     }
 
+    /// Records `call` and returns the prepared diff, or one built from `path`.
+    fn diff_result(&self, call: String, path: Option<&String>) -> Result<FileDiff, Failed> {
+        self.calls.borrow_mut().push(call);
+        if self.diff_fails {
+            Err(Failed)
+        } else {
+            Ok(self
+                .diff
+                .clone()
+                .unwrap_or_else(|| diff_of(path.map_or("", String::as_str))))
+        }
+    }
+
     fn details<T>(&self, value: T) -> Result<T, Failed> {
         if self.details_fail {
             Err(Failed)
@@ -177,31 +190,36 @@ impl Ports for TestPorts {
         self.status.borrow().clone().ok_or(Failed)
     }
 
-    fn file_diff(&self, file: &ChangedFile, side: Side) -> Result<FileDiff, Failed> {
-        self.calls
-            .borrow_mut()
-            .push(format!("diff {side:?} {}", file.path));
-        if self.diff_fails {
-            Err(Failed)
-        } else {
-            Ok(self.diff.clone().unwrap_or_else(|| diff_of(&file.path)))
-        }
+    fn file_diff(&self, paths: &[String], side: Side) -> Result<FileDiff, Failed> {
+        self.diff_result(format!("diff {side:?} {}", paths.join(" ")), paths.last())
     }
 
-    fn stage_file(&self, file: &ChangedFile) -> Result<(), Failed> {
-        self.record(format!("stage {}", file.path))
+    fn untracked_file_diff(&self, path: &str) -> Result<FileDiff, Failed> {
+        self.diff_result(format!("diff untracked {path}"), Some(&path.to_string()))
+    }
+
+    fn stage_paths(&self, paths: &[String]) -> Result<(), Failed> {
+        self.record(format!("stage {}", paths.join(" ")))
     }
 
     fn stage_all(&self) -> Result<(), Failed> {
         self.record("stage all".to_string())
     }
 
-    fn unstage_file(&self, file: &ChangedFile) -> Result<(), Failed> {
-        self.record(format!("unstage {}", file.path))
+    fn unstage_paths(&self, paths: &[String]) -> Result<(), Failed> {
+        self.record(format!("unstage {}", paths.join(" ")))
     }
 
-    fn discard_file(&self, file: &ChangedFile) -> Result<(), Failed> {
-        self.record(format!("discard {}", file.path))
+    fn remove_from_index(&self, paths: &[String]) -> Result<(), Failed> {
+        self.record(format!("remove from index {}", paths.join(" ")))
+    }
+
+    fn restore_paths(&self, paths: &[String]) -> Result<(), Failed> {
+        self.record(format!("restore {}", paths.join(" ")))
+    }
+
+    fn delete_untracked(&self, paths: &[String]) -> Result<(), Failed> {
+        self.record(format!("delete untracked {}", paths.join(" ")))
     }
 
     fn apply_to_index(&self, patch: &str, reverse: bool) -> Result<(), Failed> {
@@ -328,10 +346,9 @@ impl Ports for TestPorts {
         self.branch_result(format!("checkout {branch}"))
     }
 
-    fn commit_file_diff(&self, hash: &str, file: &ChangedFile) -> Result<FileDiff, Failed> {
-        self.calls
-            .borrow_mut()
-            .push(format!("show {hash} {}", file.path));
-        self.details(diff_of(&format!("{hash}|{}|x|y", file.path)))
+    fn commit_file_diff(&self, hash: &str, paths: &[String]) -> Result<FileDiff, Failed> {
+        let shown: String = paths.join(" ");
+        self.calls.borrow_mut().push(format!("show {hash} {shown}"));
+        self.details(diff_of(&format!("{hash}|{shown}|x|y")))
     }
 }

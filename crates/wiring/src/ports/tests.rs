@@ -1,4 +1,4 @@
-use super::{SessionPorts, diff_paths};
+use super::SessionPorts;
 use crate::log::LogBuffer;
 use crate::test_support::{TempDir, fixed_clock, git_ok, init_repo};
 use logic::log::{Layer, LogEntry, LogLevel};
@@ -29,15 +29,6 @@ fn with_ports(dir: &std::path::Path, test: impl Fn(&SessionPorts<'_>, &LogBuffer
         handoff: &run_here,
     };
     test(&ports, &log);
-}
-
-fn file(path: &str, kind: ChangeKind) -> ChangedFile {
-    ChangedFile {
-        path: path.to_string(),
-        original_path: None,
-        kind,
-        mode_changed: false,
-    }
 }
 
 #[test]
@@ -85,15 +76,15 @@ fn status_and_diffs_from_real_repository() {
         let status: WorkStatus = ports.status().unwrap();
         assert_eq!(status.staged[0].path, "moved.txt");
         assert_eq!(status.staged[0].kind, ChangeKind::Renamed);
-        let renamed: FileDiff = ports.file_diff(&status.staged[0], Side::Staged).unwrap();
+        let renamed: FileDiff = ports
+            .file_diff(&status.staged[0].paths(Side::Staged), Side::Staged)
+            .unwrap();
         assert!(renamed.header.contains(&"rename from a.txt".to_string()));
         let changed: FileDiff = ports
-            .file_diff(&status.unstaged[0], Side::Unstaged)
+            .file_diff(&status.unstaged[0].paths(Side::Unstaged), Side::Unstaged)
             .unwrap();
         assert_eq!(changed.hunks[0].lines[0].kind, LineKind::Removed);
-        let untracked: FileDiff = ports
-            .file_diff(&file("new.txt", ChangeKind::Untracked), Side::Unstaged)
-            .unwrap();
+        let untracked: FileDiff = ports.untracked_file_diff("new.txt").unwrap();
         assert_eq!(untracked.hunks[0].lines[0].text, "n");
         assert!(log.drain().iter().all(|e: &LogEntry| e.layer == Layer::Git));
     });
@@ -113,27 +104,15 @@ fn git_failures_become_failed() {
         handoff: &run_here,
     };
     assert_eq!(ports.status(), Err(Failed));
-    assert_eq!(
-        ports.file_diff(&file("x", ChangeKind::Modified), Side::Unstaged),
-        Err(Failed)
-    );
-    assert_eq!(
-        ports.stage_file(&file("x", ChangeKind::Modified)),
-        Err(Failed)
-    );
+    let x: Vec<String> = vec!["x".to_string()];
+    assert_eq!(ports.file_diff(&x, Side::Unstaged), Err(Failed));
+    assert_eq!(ports.untracked_file_diff("x"), Err(Failed));
+    assert_eq!(ports.stage_paths(&x), Err(Failed));
     assert_eq!(ports.stage_all(), Err(Failed));
-    assert_eq!(
-        ports.unstage_file(&file("x", ChangeKind::Modified)),
-        Err(Failed)
-    );
-    assert_eq!(
-        ports.discard_file(&file("x", ChangeKind::Untracked)),
-        Err(Failed)
-    );
-    assert_eq!(
-        ports.discard_file(&file("x", ChangeKind::Modified)),
-        Err(Failed)
-    );
+    assert_eq!(ports.unstage_paths(&x), Err(Failed));
+    assert_eq!(ports.remove_from_index(&x), Err(Failed));
+    assert_eq!(ports.restore_paths(&x), Err(Failed));
+    assert_eq!(ports.delete_untracked(&x), Err(Failed));
     assert_eq!(ports.apply_to_index("", false), Err(Failed));
     assert_eq!(ports.has_commits(), Err(Failed));
     assert_eq!(ports.commits(0, 1), Err(Failed));
@@ -153,10 +132,7 @@ fn git_failures_become_failed() {
     assert_eq!(ports.rebase("b", "main", false), Err(Failed));
     assert_eq!(ports.rebase("b", "main", true), Err(Failed));
     assert_eq!(ports.commit_files("h"), Err(Failed));
-    assert_eq!(
-        ports.commit_file_diff("h", &file("x", ChangeKind::Modified)),
-        Err(Failed)
-    );
+    assert_eq!(ports.commit_file_diff("h", &x), Err(Failed));
     assert_eq!(ports.last_commit_message(), Err(Failed));
     assert_eq!(ports.edit_message("x"), Err(Failed));
     assert_eq!(
@@ -166,16 +142,6 @@ fn git_failures_become_failed() {
     let logged: Vec<LogEntry> = log.drain();
     assert!(logged.iter().any(|e: &LogEntry| e.layer == Layer::Wiring
         && e.message.starts_with("editing the commit message failed: ")));
-}
-
-#[test]
-fn rename_diffs_need_both_paths_in_the_index() {
-    let renamed: ChangedFile = ChangedFile {
-        original_path: Some("old".to_string()),
-        ..file("new", ChangeKind::Renamed)
-    };
-    assert_eq!(diff_paths(&renamed, Side::Staged), vec!["old", "new"]);
-    assert_eq!(diff_paths(&renamed, Side::Unstaged), vec!["new"]);
 }
 
 #[test]
@@ -190,15 +156,17 @@ fn staging_a_renamed_file_back_and_forth() {
         let first: String = ports.commits(0, 1).unwrap()[0].hash.clone();
         let files: Vec<ChangedFile> = ports.commit_files(&first).unwrap();
         assert_eq!(files[0].kind, ChangeKind::Added);
-        let shown: FileDiff = ports.commit_file_diff(&first, &files[0]).unwrap();
+        let shown: FileDiff = ports
+            .commit_file_diff(&first, &files[0].paths(Side::Staged))
+            .unwrap();
         assert_eq!(shown.hunks[0].lines[0].text, "a");
         let renamed: ChangedFile = ports.status().unwrap().staged[0].clone();
-        ports.unstage_file(&renamed).unwrap();
+        ports.unstage_paths(&renamed.paths(Side::Staged)).unwrap();
         let status: WorkStatus = ports.status().unwrap();
         assert_eq!(status.staged, vec![]);
         assert_eq!(status.unstaged.len(), 2);
         for changed in &status.unstaged {
-            ports.stage_file(changed).unwrap();
+            ports.stage_paths(&changed.paths(Side::Unstaged)).unwrap();
         }
         assert_eq!(ports.status().unwrap().staged[0].kind, ChangeKind::Renamed);
         ports
@@ -274,10 +242,7 @@ fn refs_fail_when_head_fails() {
         );
         assert_eq!(ports.checkout("b"), Err(Failed));
         assert_eq!(ports.commit_files("h"), Err(Failed));
-        assert_eq!(
-            ports.commit_file_diff("h", &file("x", ChangeKind::Modified)),
-            Err(Failed)
-        );
+        assert_eq!(ports.commit_file_diff("h", &["x".to_string()]), Err(Failed));
     });
 }
 

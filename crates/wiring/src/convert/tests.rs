@@ -25,13 +25,20 @@ impl logic::ports::Ports for NoPorts {
 
     fn file_diff(
         &self,
-        _file: &logic::model::ChangedFile,
+        _paths: &[String],
         _side: logic::model::Side,
     ) -> Result<logic::model::FileDiff, logic::ports::Failed> {
         Err(logic::ports::Failed)
     }
 
-    fn stage_file(&self, _file: &logic::model::ChangedFile) -> Result<(), logic::ports::Failed> {
+    fn untracked_file_diff(
+        &self,
+        _path: &str,
+    ) -> Result<logic::model::FileDiff, logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
+    fn stage_paths(&self, _paths: &[String]) -> Result<(), logic::ports::Failed> {
         Err(logic::ports::Failed)
     }
 
@@ -39,11 +46,19 @@ impl logic::ports::Ports for NoPorts {
         Err(logic::ports::Failed)
     }
 
-    fn unstage_file(&self, _file: &logic::model::ChangedFile) -> Result<(), logic::ports::Failed> {
+    fn unstage_paths(&self, _paths: &[String]) -> Result<(), logic::ports::Failed> {
         Err(logic::ports::Failed)
     }
 
-    fn discard_file(&self, _file: &logic::model::ChangedFile) -> Result<(), logic::ports::Failed> {
+    fn remove_from_index(&self, _paths: &[String]) -> Result<(), logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
+    fn restore_paths(&self, _paths: &[String]) -> Result<(), logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
+    fn delete_untracked(&self, _paths: &[String]) -> Result<(), logic::ports::Failed> {
         Err(logic::ports::Failed)
     }
 
@@ -154,7 +169,7 @@ impl logic::ports::Ports for NoPorts {
     fn commit_file_diff(
         &self,
         _hash: &str,
-        _file: &logic::model::ChangedFile,
+        _paths: &[String],
     ) -> Result<logic::model::FileDiff, logic::ports::Failed> {
         Err(logic::ports::Failed)
     }

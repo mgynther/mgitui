@@ -39,19 +39,26 @@ pub trait Ports {
     /// Fails when git fails.
     fn status(&self) -> Result<WorkStatus, Failed>;
 
-    /// The diff of a changed file in the staged or unstaged list.
+    /// The diff of tracked `paths` in the staged or unstaged list.
     ///
     /// # Errors
     ///
     /// Fails when git fails.
-    fn file_diff(&self, file: &ChangedFile, side: Side) -> Result<FileDiff, Failed>;
+    fn file_diff(&self, paths: &[String], side: Side) -> Result<FileDiff, Failed>;
 
-    /// Stages all changes of a file in the unstaged list.
+    /// The diff of an untracked file, showing all of it as added.
     ///
     /// # Errors
     ///
     /// Fails when git fails.
-    fn stage_file(&self, file: &ChangedFile) -> Result<(), Failed>;
+    fn untracked_file_diff(&self, path: &str) -> Result<FileDiff, Failed>;
+
+    /// Stages all changes of `paths`, including deletions.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn stage_paths(&self, paths: &[String]) -> Result<(), Failed>;
 
     /// Stages all changes in the working tree, including deletions and untracked files.
     ///
@@ -60,20 +67,33 @@ pub trait Ports {
     /// Fails when git fails.
     fn stage_all(&self) -> Result<(), Failed>;
 
-    /// Unstages all changes of a file in the staged list.
+    /// Unstages all changes of `paths`, restoring them in the index from the last commit.
     ///
     /// # Errors
     ///
-    /// Fails when git fails.
-    fn unstage_file(&self, file: &ChangedFile) -> Result<(), Failed>;
+    /// Fails when git fails, for example when there are no commits.
+    fn unstage_paths(&self, paths: &[String]) -> Result<(), Failed>;
 
-    /// Discards the unstaged changes of a file in the unstaged list: an untracked file is
-    /// deleted, a tracked file is restored from the index.
+    /// Removes `paths` from the index, keeping the files: unstaging when there are no commits.
     ///
     /// # Errors
     ///
     /// Fails when git fails.
-    fn discard_file(&self, file: &ChangedFile) -> Result<(), Failed>;
+    fn remove_from_index(&self, paths: &[String]) -> Result<(), Failed>;
+
+    /// Discards the unstaged changes of tracked `paths`, restoring them from the index.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn restore_paths(&self, paths: &[String]) -> Result<(), Failed>;
+
+    /// Deletes untracked `paths`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn delete_untracked(&self, paths: &[String]) -> Result<(), Failed>;
 
     /// Applies a patch to the index, in reverse when `reverse` is true.
     ///
@@ -145,12 +165,12 @@ pub trait Ports {
     /// Fails when git fails.
     fn commit_files(&self, hash: &str) -> Result<Vec<ChangedFile>, Failed>;
 
-    /// The diff of one file of a commit, compared with its first parent.
+    /// The diff of one file of a commit, given by its `paths`, compared with its first parent.
     ///
     /// # Errors
     ///
     /// Fails when git fails.
-    fn commit_file_diff(&self, hash: &str, file: &ChangedFile) -> Result<FileDiff, Failed>;
+    fn commit_file_diff(&self, hash: &str, paths: &[String]) -> Result<FileDiff, Failed>;
 
     /// Validates a branch name typed by the user.
     ///

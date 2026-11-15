@@ -194,10 +194,14 @@ impl App {
     /// Loads the diff of the selected file.
     fn load_file_diff(&mut self, ports: &dyn Ports) {
         let side: Side = self.diff.side;
-        let diff: Option<Result<FileDiff, Failed>> = self
-            .diff
-            .selected_file()
-            .map(|file: &ChangedFile| ports.file_diff(file, side));
+        let diff: Option<Result<FileDiff, Failed>> =
+            self.diff.selected_file().map(|file: &ChangedFile| {
+                if file.kind == ChangeKind::Untracked {
+                    ports.untracked_file_diff(&file.path)
+                } else {
+                    ports.file_diff(&file.paths(side), side)
+                }
+            });
         self.diff.file_diff = match diff {
             None => None,
             Some(Ok(diff)) => Some(diff),
@@ -298,11 +302,11 @@ impl App {
         let result: Result<(), Failed> = match self.diff.side {
             Side::Unstaged => {
                 ports.log(LogLevel::Info, &format!("stage {}", file.path));
-                ports.stage_file(&file)
+                ports.stage_paths(&file.paths(Side::Unstaged))
             }
             Side::Staged => {
                 ports.log(LogLevel::Info, &format!("unstage {}", file.path));
-                ports.unstage_file(&file)
+                unstage_whole_file(&file, ports)
             }
         };
         self.after_staging(result, ports);
@@ -400,7 +404,12 @@ impl App {
             "discard changes in"
         };
         ports.log(LogLevel::Info, &format!("{action} {}", file.path));
-        let result: Result<(), Failed> = ports.discard_file(file);
+        let paths: Vec<String> = file.paths(Side::Unstaged);
+        let result: Result<(), Failed> = if untracked {
+            ports.delete_untracked(&paths)
+        } else {
+            ports.restore_paths(&paths)
+        };
         self.refresh(ports);
         self.note = match (result, untracked) {
             (Ok(()), true) => Note::Info(format!("Deleted {}", file.path)),
@@ -512,5 +521,17 @@ pub(super) fn move_cursor(cursor: &mut Cursor, event: Event, len: usize, height:
         Event::Top => cursor.top(),
         Event::Bottom => cursor.bottom(len, height),
         _ => {}
+    }
+}
+
+/// Unstages all changes of a file in the staged list. Without commits there is nothing to
+/// restore the index from, so the file is removed from the index instead.
+fn unstage_whole_file(file: &ChangedFile, ports: &dyn Ports) -> Result<(), Failed> {
+    let paths: Vec<String> = file.paths(Side::Staged);
+    let has_commits: Result<bool, Failed> = ports.has_commits();
+    match has_commits {
+        Ok(true) => ports.unstage_paths(&paths),
+        Ok(false) => ports.remove_from_index(&paths),
+        Err(Failed) => Err(Failed),
     }
 }

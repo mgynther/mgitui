@@ -1,7 +1,7 @@
 //! The functions wiring provides to the logic layer.
 
 use logic::log::LogLevel;
-use logic::model::{ChangeKind, ChangedFile, Commit, FileDiff, Refs, Side, WorkStatus};
+use logic::model::{ChangedFile, Commit, FileDiff, Refs, Side, WorkStatus};
 use logic::ports::{BranchName, CommitMessage, Failed};
 
 use crate::editor::{self, Editor, Handoff};
@@ -44,14 +44,6 @@ impl SessionPorts<'_> {
     }
 }
 
-/// The paths git needs for the diff of `file`: renames in the index need both paths.
-fn diff_paths(file: &ChangedFile, side: Side) -> Vec<String> {
-    match (&file.original_path, side) {
-        (Some(original), Side::Staged) => vec![original.clone(), file.path.clone()],
-        _ => vec![file.path.clone()],
-    }
-}
-
 impl logic::ports::Ports for SessionPorts<'_> {
     fn log(&self, level: logic::log::LogLevel, message: &str) {
         self.log.logic(level, message);
@@ -70,43 +62,46 @@ impl logic::ports::Ports for SessionPorts<'_> {
             .map_err(|_| Failed)
     }
 
-    fn file_diff(&self, file: &ChangedFile, side: Side) -> Result<FileDiff, Failed> {
-        let diff: Result<git::FileDiff, git::GitError> = if file.kind == ChangeKind::Untracked {
-            self.git.diff_untracked(&file.path, &self.log_git())
-        } else {
-            self.git.diff(
-                &diff_paths(file, side),
-                side == Side::Staged,
-                &self.log_git(),
-            )
-        };
-        diff.map(model::file_diff).map_err(|_| Failed)
+    fn file_diff(&self, paths: &[String], side: Side) -> Result<FileDiff, Failed> {
+        self.git
+            .diff(paths, side == Side::Staged, &self.log_git())
+            .map(model::file_diff)
+            .map_err(|_| Failed)
     }
 
-    fn stage_file(&self, file: &ChangedFile) -> Result<(), Failed> {
+    fn untracked_file_diff(&self, path: &str) -> Result<FileDiff, Failed> {
         self.git
-            .add(&diff_paths(file, Side::Unstaged), &self.log_git())
+            .diff_untracked(path, &self.log_git())
+            .map(model::file_diff)
             .map_err(|_| Failed)
+    }
+
+    fn stage_paths(&self, paths: &[String]) -> Result<(), Failed> {
+        self.git.add(paths, &self.log_git()).map_err(|_| Failed)
     }
 
     fn stage_all(&self) -> Result<(), Failed> {
         self.git.add_all(&self.log_git()).map_err(|_| Failed)
     }
 
-    fn unstage_file(&self, file: &ChangedFile) -> Result<(), Failed> {
+    fn unstage_paths(&self, paths: &[String]) -> Result<(), Failed> {
         self.git
-            .unstage(&diff_paths(file, Side::Staged), &self.log_git())
+            .restore_staged(paths, &self.log_git())
             .map_err(|_| Failed)
     }
 
-    fn discard_file(&self, file: &ChangedFile) -> Result<(), Failed> {
-        let paths: Vec<String> = diff_paths(file, Side::Unstaged);
-        let result: Result<(), git::GitError> = if file.kind == ChangeKind::Untracked {
-            self.git.clean(&paths, &self.log_git())
-        } else {
-            self.git.restore(&paths, &self.log_git())
-        };
-        result.map_err(|_| Failed)
+    fn remove_from_index(&self, paths: &[String]) -> Result<(), Failed> {
+        self.git
+            .remove_cached(paths, &self.log_git())
+            .map_err(|_| Failed)
+    }
+
+    fn restore_paths(&self, paths: &[String]) -> Result<(), Failed> {
+        self.git.restore(paths, &self.log_git()).map_err(|_| Failed)
+    }
+
+    fn delete_untracked(&self, paths: &[String]) -> Result<(), Failed> {
+        self.git.clean(paths, &self.log_git()).map_err(|_| Failed)
     }
 
     fn apply_to_index(&self, patch: &str, reverse: bool) -> Result<(), Failed> {
@@ -261,9 +256,9 @@ impl logic::ports::Ports for SessionPorts<'_> {
             .map_err(|_| Failed)
     }
 
-    fn commit_file_diff(&self, hash: &str, file: &ChangedFile) -> Result<FileDiff, Failed> {
+    fn commit_file_diff(&self, hash: &str, paths: &[String]) -> Result<FileDiff, Failed> {
         self.git
-            .commit_file_diff(hash, &diff_paths(file, Side::Staged), &self.log_git())
+            .commit_file_diff(hash, paths, &self.log_git())
             .map(model::file_diff)
             .map_err(|_| Failed)
     }

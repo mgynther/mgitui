@@ -97,6 +97,7 @@ fn enter_stages_and_unstages_whole_files() {
         vec![
             "diff Staged s",
             "Info: unstage s",
+            "has commits",
             "unstage s",
             "refs",
             "commits 0 2000",
@@ -104,6 +105,61 @@ fn enter_stages_and_unstages_whole_files() {
             "diff Staged s"
         ]
     );
+}
+
+#[test]
+fn unstaging_without_commits_removes_from_the_index() {
+    let renamed: ChangedFile = ChangedFile {
+        original_path: Some("old".to_string()),
+        ..file("new", ChangeKind::Renamed)
+    };
+    let ports: TestPorts = TestPorts {
+        has_commits: Some(false),
+        ..ports_with(vec![], vec![renamed])
+    };
+    let mut no_commits_app: App = app(&ports);
+    run(
+        &mut no_commits_app,
+        &ports,
+        &[Event::SwitchList, Event::Activate],
+    );
+    assert_eq!(
+        ports.calls()[..4],
+        [
+            "diff Staged old new",
+            "Info: unstage new",
+            "has commits",
+            "remove from index old new"
+        ]
+    );
+    let unknown: TestPorts = TestPorts {
+        has_commits: None,
+        ..ports_with(vec![], vec![modified("s")])
+    };
+    let mut unknown_app: App = app(&unknown);
+    run(
+        &mut unknown_app,
+        &unknown,
+        &[Event::SwitchList, Event::Activate],
+    );
+    assert!(
+        !unknown
+            .calls()
+            .iter()
+            .any(|c: &String| c.starts_with("unstage"))
+    );
+    assert_eq!(
+        unknown_app.note(),
+        &Note::Problem("Staging failed, see the Log view".to_string())
+    );
+}
+
+#[test]
+fn untracked_files_have_their_own_diff() {
+    let ports: TestPorts = ports_with(vec![file("n", ChangeKind::Untracked)], vec![]);
+    let mut app: App = app(&ports);
+    run(&mut app, &ports, &[Event::Reload]);
+    assert_eq!(ports.calls().last(), Some(&"diff untracked n".to_string()));
 }
 
 #[test]
@@ -255,7 +311,7 @@ fn d_discards_unstaged_changes_after_confirming() {
         ports.calls(),
         vec![
             "Info: discard changes in u",
-            "discard u",
+            "restore u",
             "refs",
             "commits 0 2000",
             "status",
@@ -273,7 +329,7 @@ fn d_deletes_untracked_files_after_confirming() {
     let ports: TestPorts = ports_with(vec![file("n", ChangeKind::Untracked)], vec![]);
     let mut app: App = app(&ports);
     run(&mut app, &ports, &[Event::DiscardFile, Event::Yes]);
-    assert_eq!(ports.calls()[..2], ["Info: delete n", "discard n"]);
+    assert_eq!(ports.calls()[..2], ["Info: delete n", "delete untracked n"]);
     assert_eq!(app.note(), &Note::Info("Deleted n".to_string()));
 }
 

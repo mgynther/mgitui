@@ -35,6 +35,17 @@ pub struct ChangedFile {
 }
 
 impl ChangedFile {
+    /// The paths git needs for this file in the `side` list. A rename in the staged list needs
+    /// the original path too: the diff then shows the rename, and unstaging restores the
+    /// original path in the index.
+    #[must_use]
+    pub fn paths(&self, side: Side) -> Vec<String> {
+        match (&self.original_path, side) {
+            (Some(original), Side::Staged) => vec![original.clone(), self.path.clone()],
+            (_, Side::Staged | Side::Unstaged) => vec![self.path.clone()],
+        }
+    }
+
     /// Whether single lines of this file can be staged: only content changes of files git
     /// already tracks.
     #[must_use]
@@ -244,8 +255,8 @@ pub struct Refs {
 #[cfg(test)]
 mod tests {
     use super::{
-        ChangeKind, ChangedFile, DiffLine, DiffRow, FileDiff, Hunk, LineKind, RowKind, WorkStatus,
-        diff_rows,
+        ChangeKind, ChangedFile, DiffLine, DiffRow, FileDiff, Hunk, LineKind, RowKind, Side,
+        WorkStatus, diff_rows,
     };
 
     fn file(kind: ChangeKind, mode_changed: bool) -> ChangedFile {
@@ -262,6 +273,18 @@ mod tests {
         assert!(file(ChangeKind::Modified, false).supports_line_staging());
         assert!(!file(ChangeKind::Modified, true).supports_line_staging());
         assert!(!file(ChangeKind::Untracked, false).supports_line_staging());
+    }
+
+    #[test]
+    fn a_staged_rename_needs_both_paths() {
+        let renamed: ChangedFile = ChangedFile {
+            original_path: Some("old".to_string()),
+            ..file(ChangeKind::Renamed, false)
+        };
+        assert_eq!(renamed.paths(Side::Staged), vec!["old", "p"]);
+        assert_eq!(renamed.paths(Side::Unstaged), vec!["p"]);
+        let modified: ChangedFile = file(ChangeKind::Modified, false);
+        assert_eq!(modified.paths(Side::Staged), vec!["p"]);
     }
 
     #[test]

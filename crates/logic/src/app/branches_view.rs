@@ -7,7 +7,9 @@ use crate::cursor::Cursor;
 use crate::event::Event;
 use crate::graph::{GraphBuilder, GraphRow};
 use crate::log::LogLevel;
-use crate::model::{ChangedFile, Commit, DiffRow, FileDiff, Label, Refs, WorkStatus, diff_rows};
+use crate::model::{
+    ChangedFile, Commit, DiffRow, FileDiff, Label, Refs, Side, WorkStatus, diff_rows,
+};
 use crate::ports::{BranchName, Failed, Ports};
 use crate::search::{self, Direction, Found};
 
@@ -205,7 +207,9 @@ impl App {
             self.branches.details_for.as_deref(),
             self.branches.selected_file(),
         ) {
-            (Some(hash), Some(file)) => Some(ports.commit_file_diff(hash, file)),
+            (Some(hash), Some(file)) => {
+                Some(ports.commit_file_diff(hash, &file.paths(Side::Staged)))
+            }
             _ => None,
         };
         self.branches.diff_rows = match diff {

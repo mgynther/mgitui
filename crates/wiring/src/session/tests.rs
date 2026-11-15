@@ -252,10 +252,21 @@ fn branches_view_shows_graph_details_and_panes() {
             .starts_with("Author: Ada Author  Date: 2025-01-02 03:04")
     );
     assert!(
-        second_selected.row_text(11).starts_with("first"),
-        "{}",
-        second_selected.row_text(11)
+        second_selected
+            .row_text(11)
+            .starts_with("Committer: Cy Committer  Date: 2025-01-02 03:04")
     );
+    assert!(
+        second_selected.row_text(12).starts_with("first"),
+        "{}",
+        second_selected.row_text(12)
+    );
+    assert_eq!(
+        second_selected.cell(7, 9).unwrap().style.fg,
+        ui::style::Color::Blue,
+        "the hash has the color of the commit's lane"
+    );
+    assert!(second_selected.cell(7, 9).unwrap().style.bold);
     assert!(second_selected.row_text(9).contains("│A a.txt"));
     s.input(b"w");
     assert!(s.render(SIZE).cell(55, 9).unwrap().style.reverse);

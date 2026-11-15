@@ -92,6 +92,8 @@ pub fn commit(commit: git::Commit) -> Commit {
         parents: commit.parents,
         author: commit.author,
         date: commit.date,
+        committer: commit.committer,
+        committer_date: commit.committer_date,
         subject: commit.subject,
     }
 }
@@ -143,6 +145,8 @@ mod tests {
             parents: vec!["p".to_string()],
             author: "a".to_string(),
             date: "d".to_string(),
+            committer: "c".to_string(),
+            committer_date: "cd".to_string(),
             subject: "s".to_string(),
         });
         assert_eq!(
@@ -151,6 +155,8 @@ mod tests {
                 converted_commit.parents,
                 converted_commit.author,
                 converted_commit.date,
+                converted_commit.committer,
+                converted_commit.committer_date,
                 converted_commit.subject
             ),
             (
@@ -158,6 +164,8 @@ mod tests {
                 vec!["p".to_string()],
                 "a".to_string(),
                 "d".to_string(),
+                "c".to_string(),
+                "cd".to_string(),
                 "s".to_string()
             )
         );

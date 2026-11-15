@@ -19,6 +19,10 @@ pub struct Commit {
     pub author: String,
     /// The author date as `YYYY-MM-DD HH:MM` in local time.
     pub date: String,
+    /// The committer name.
+    pub committer: String,
+    /// The committer date as `YYYY-MM-DD HH:MM` in local time.
+    pub committer_date: String,
     /// The first line of the message.
     pub subject: String,
 }
@@ -192,8 +196,17 @@ pub fn parse_log(output: &str) -> Result<Vec<Commit>, GitError> {
         .map(|record: &str| record.trim_start_matches('\n'))
         .filter(|record: &&str| !record.is_empty())
         .map(|record: &str| {
-            let fields: Vec<&str> = record.splitn(5, '\u{1f}').collect();
-            let [hash, parents, author, date, subject] = fields[..] else {
+            let fields: Vec<&str> = record.splitn(7, '\u{1f}').collect();
+            let [
+                hash,
+                parents,
+                author,
+                date,
+                committer,
+                committer_date,
+                subject,
+            ] = fields[..]
+            else {
                 return Err(GitError::Parse(format!("unexpected log record {record:?}")));
             };
             Ok(Commit {
@@ -201,6 +214,8 @@ pub fn parse_log(output: &str) -> Result<Vec<Commit>, GitError> {
                 parents: parents.split_whitespace().map(str::to_string).collect(),
                 author: author.to_string(),
                 date: date.to_string(),
+                committer: committer.to_string(),
+                committer_date: committer_date.to_string(),
                 subject: subject.to_string(),
             })
         })

@@ -93,6 +93,14 @@ impl BranchesState {
         self.commits.get(self.cursor.selected())
     }
 
+    /// The lane of the selected commit in the graph, whose color its line has.
+    #[must_use]
+    pub fn selected_lane(&self) -> Option<usize> {
+        self.rows
+            .get(self.cursor.selected())
+            .and_then(GraphRow::commit_lane)
+    }
+
     /// The focused pane.
     #[must_use]
     pub fn pane(&self) -> BranchesPane {

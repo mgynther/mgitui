@@ -275,6 +275,7 @@ fn resize_clamps_the_commit_selection() {
 fn details_of_the_selected_commit() {
     let ports: TestPorts = ports(3);
     let mut app: App = app(&ports);
+    assert_eq!(app.branches().selected_lane(), Some(0));
     assert_eq!(app.branches().message(), "Message of c2\n\nBody\n");
     assert_eq!(app.branches().files().len(), 2);
     assert_eq!(app.branches().diff_rows()[1].text, "c2");
@@ -357,4 +358,5 @@ fn detail_failures_and_empty_history() {
     run(&mut app, &ports, &[Event::Reload]);
     assert_eq!(app.branches().message(), "");
     assert_eq!(app.branches().diff_rows(), &[]);
+    assert_eq!(app.branches().selected_lane(), None);
 }

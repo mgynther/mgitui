@@ -55,6 +55,17 @@ pub struct GraphRow {
     pub cells: Vec<Cell>,
 }
 
+impl GraphRow {
+    /// The lane of the row's commit, whose color the commit's line has.
+    #[must_use]
+    pub fn commit_lane(&self) -> Option<usize> {
+        self.cells
+            .iter()
+            .find(|cell: &&Cell| cell.shape == Shape::Commit)
+            .map(|cell: &Cell| cell.lane)
+    }
+}
+
 /// Builds graph rows commit by commit, so that loading more commits continues the graph.
 #[derive(Debug, Clone, Default)]
 pub struct GraphBuilder {

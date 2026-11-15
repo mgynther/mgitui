@@ -8,6 +8,8 @@ fn commit(hash: &str, parents: &str) -> Commit {
         parents: parents.split_whitespace().map(str::to_string).collect(),
         author: String::new(),
         date: String::new(),
+        committer: String::new(),
+        committer_date: String::new(),
         subject: String::new(),
     }
 }
@@ -40,6 +42,14 @@ fn draw(row: &GraphRow) -> String {
 
 fn drawn(commits: &[Commit]) -> Vec<String> {
     layout(commits).iter().map(draw).collect()
+}
+
+#[test]
+fn the_commit_lane_is_the_lane_of_the_commit_cell() {
+    let rows: Vec<GraphRow> = layout(&[commit("m", "d f"), commit("f", "b"), commit("d", "b")]);
+    assert_eq!(rows[1].commit_lane(), Some(1));
+    assert_eq!(rows[2].commit_lane(), Some(0));
+    assert_eq!(GraphRow::default().commit_lane(), None);
 }
 
 #[test]

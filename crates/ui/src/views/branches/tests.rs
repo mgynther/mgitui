@@ -1,10 +1,10 @@
 use super::{
-    BranchesFocus, BranchesView, CommitRow, CommitSide, GraphCell, GraphShape, LabelView, glyph,
-    lane_color, render,
+    BranchesFocus, BranchesView, CommitInfo, CommitRow, CommitSide, GraphCell, GraphShape,
+    LabelView, glyph, lane_color, render,
 };
 use crate::buffer::Buffer;
 use crate::layout::Size;
-use crate::style::Color;
+use crate::style::{Color, Style};
 use crate::views::diff_text::{DiffRowKind, DiffRowView};
 use crate::views::file_list::FileRow;
 
@@ -37,7 +37,15 @@ fn view(focus: BranchesFocus, rows: Vec<CommitRow>) -> BranchesView {
     BranchesView {
         focus,
         rows,
-        info: vec!["commit abc".to_string(), "Author: Ada".to_string()],
+        info: Some(CommitInfo {
+            hash: "abc".to_string(),
+            lane: Some(1),
+            author: "Ada".to_string(),
+            author_date: "2025-01-02 03:04".to_string(),
+            committer: "Cy".to_string(),
+            committer_date: "2025-01-03 04:05".to_string(),
+            message: vec!["Subject".to_string(), String::new(), "Body".to_string()],
+        }),
         files: vec![FileRow {
             label: "M a.txt".to_string(),
             selected: true,
@@ -119,6 +127,20 @@ fn unfocused_selection_is_bold_and_other_panes_are_drawn() {
     assert!(!buffer.cell(3, 3).unwrap().style.bold);
     assert!(buffer.row_text(10).starts_with("─ Commit ─"));
     assert!(buffer.row_text(11).starts_with("commit abc"));
+    assert_eq!(buffer.cell(0, 11).unwrap().style, Style::PLAIN);
+    assert_eq!(buffer.cell(7, 11).unwrap().style.fg, Color::Magenta);
+    assert!(buffer.cell(7, 11).unwrap().style.bold);
+    assert!(
+        buffer
+            .row_text(12)
+            .starts_with("Author: Ada  Date: 2025-01-02 03:04")
+    );
+    assert!(
+        buffer
+            .row_text(13)
+            .starts_with("Committer: Cy  Date: 2025-01-03 04:05")
+    );
+    assert!(buffer.row_text(14).starts_with("Subject"));
     assert!(buffer.row_text(10).contains("│─ Files ─"));
     assert!(buffer.row_text(11).contains("│M a.txt"));
     assert!(buffer.row_text(19).starts_with("─ Diff a.txt ─"));

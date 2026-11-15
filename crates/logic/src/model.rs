@@ -225,6 +225,10 @@ pub struct Commit {
     pub author: String,
     /// The author date, formatted for display.
     pub date: String,
+    /// The committer name.
+    pub committer: String,
+    /// The committer date, formatted for display.
+    pub committer_date: String,
     /// The first line of the message.
     pub subject: String,
 }

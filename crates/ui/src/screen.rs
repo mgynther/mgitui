@@ -164,7 +164,7 @@ mod tests {
         BranchesView {
             focus: BranchesFocus::Graph,
             rows: vec![],
-            info: vec![],
+            info: None,
             files: vec![],
             diff_title: "Diff".to_string(),
             diff: vec![],

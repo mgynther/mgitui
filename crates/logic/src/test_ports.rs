@@ -141,6 +141,8 @@ pub fn linear_history(count: usize) -> Vec<Commit> {
             },
             author: if n.is_multiple_of(2) { "Ada" } else { "Bo" }.to_string(),
             date: "2025-01-02 03:04".to_string(),
+            committer: "Cy".to_string(),
+            committer_date: "2025-01-03 04:05".to_string(),
             subject: format!("commit {n}"),
         })
         .collect()

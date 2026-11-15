@@ -252,16 +252,18 @@ fn branches_view(app: &App) -> ui::views::branches::BranchesView {
             },
         )
         .collect();
-    let info: Vec<String> = branches
-        .selected()
-        .map_or_else(Vec::new, |commit: &Commit| {
-            let mut lines: Vec<String> = vec![
-                format!("commit {}", commit.hash),
-                format!("Author: {}  Date: {}", commit.author, commit.date),
-            ];
-            lines.extend(branches.message().lines().map(str::to_string));
-            lines
-        });
+    let info: Option<ui::views::branches::CommitInfo> =
+        branches
+            .selected()
+            .map(|commit: &Commit| ui::views::branches::CommitInfo {
+                hash: commit.hash.clone(),
+                lane: branches.selected_lane(),
+                author: commit.author.clone(),
+                author_date: commit.date.clone(),
+                committer: commit.committer.clone(),
+                committer_date: commit.committer_date.clone(),
+                message: branches.message().lines().map(str::to_string).collect(),
+            });
     BranchesView {
         focus: match branches.pane() {
             BranchesPane::Graph => BranchesFocus::Graph,

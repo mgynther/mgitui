@@ -205,7 +205,7 @@ impl Command {
                 "--topo-order",
                 "-z",
                 "--date=format-local:%Y-%m-%d %H:%M",
-                "--format=%H%x1f%P%x1f%an%x1f%ad%x1f%s",
+                "--format=%H%x1f%P%x1f%an%x1f%ad%x1f%cn%x1f%cd%x1f%s",
             ],
             Command::CommitMessage { .. } => &["show", "-s", "--format=%B"],
             Command::CommitFiles { .. } => &[
@@ -431,7 +431,7 @@ mod tests {
         assert_eq!(
             args(&Command::Log { skip: 10, count: 5 }),
             "log --all --topo-order -z --date=format-local:%Y-%m-%d %H:%M \
-             --format=%H%x1f%P%x1f%an%x1f%ad%x1f%s --skip=10 --max-count=5"
+             --format=%H%x1f%P%x1f%an%x1f%ad%x1f%cn%x1f%cd%x1f%s --skip=10 --max-count=5"
         );
         assert!(args(&Command::Refs).starts_with("for-each-ref --format=%(HEAD)"));
     }

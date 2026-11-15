@@ -83,6 +83,25 @@ pub enum LabelView {
     Tag(String),
 }
 
+/// The information about the selected commit shown in the commit box.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommitInfo {
+    /// The full hash, drawn bold in the color of the commit's line.
+    pub hash: String,
+    /// The lane of the commit in the graph.
+    pub lane: Option<usize>,
+    /// The author name.
+    pub author: String,
+    /// The author date.
+    pub author_date: String,
+    /// The committer name.
+    pub committer: String,
+    /// The committer date.
+    pub committer_date: String,
+    /// The lines of the full commit message.
+    pub message: Vec<String>,
+}
+
 /// One commit row.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommitRow {
@@ -120,8 +139,8 @@ pub struct BranchesView {
     pub focus: BranchesFocus,
     /// The visible commit rows.
     pub rows: Vec<CommitRow>,
-    /// Lines of the commit information box.
-    pub info: Vec<String>,
+    /// The selected commit, for the commit information box.
+    pub info: Option<CommitInfo>,
     /// The visible files of the selected commit.
     pub files: Vec<FileRow>,
     /// The title of the file diff pane.
@@ -155,9 +174,8 @@ pub fn render(buffer: &mut Buffer, view: &BranchesView, size: Size) {
         );
     }
     draw_title(buffer, panes.info, "Commit", false);
-    let info: Rect = panes.info.content();
-    for (y, line) in (info.y..info.y + info.height).zip(&view.info) {
-        buffer.put_str(info.x, y, line, Style::PLAIN, info.width);
+    if let Some(commit) = &view.info {
+        draw_info(buffer, panes.info.content(), commit);
     }
     draw_title(
         buffer,
@@ -291,6 +309,50 @@ fn draw_label(
         used += buffer.put_str(x + used, y, &text, style, max_width.saturating_sub(used));
     }
     used
+}
+
+/// Draws the commit box: the hash in the color of the commit's line, then author, committer
+/// and the message.
+fn draw_info(buffer: &mut Buffer, area: Rect, commit: &CommitInfo) {
+    let hash: Style = commit
+        .lane
+        .map_or(Style::PLAIN, |lane: usize| Style::fg(lane_color(lane)))
+        .bold();
+    let mut lines: Vec<Vec<(String, Style)>> = vec![
+        vec![
+            ("commit ".to_string(), Style::PLAIN),
+            (commit.hash.clone(), hash),
+        ],
+        vec![(
+            format!("Author: {}  Date: {}", commit.author, commit.author_date),
+            Style::PLAIN,
+        )],
+        vec![(
+            format!(
+                "Committer: {}  Date: {}",
+                commit.committer, commit.committer_date
+            ),
+            Style::PLAIN,
+        )],
+    ];
+    lines.extend(
+        commit
+            .message
+            .iter()
+            .map(|line: &String| vec![(line.clone(), Style::PLAIN)]),
+    );
+    for (y, parts) in (area.y..area.y + area.height).zip(&lines) {
+        let mut used: usize = 0;
+        for (text, style) in parts {
+            used += buffer.put_str(
+                area.x + used,
+                y,
+                text,
+                *style,
+                area.width.saturating_sub(used),
+            );
+        }
+    }
 }
 
 fn lane_color(lane: usize) -> Color {

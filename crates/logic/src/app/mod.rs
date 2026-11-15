@@ -308,6 +308,7 @@ impl App {
                     Event::CherryPick => self.cherry_pick(ports),
                     Event::RemoteUpdate => self.remote_update(ports),
                     Event::FetchAllPrune => self.fetch_all_prune(ports),
+                    Event::NextMainBranch => self.next_main_branch(ports),
                     Event::ShowCommit => self.show_commit(ports),
                     Event::ResetBranch => self.start_reset_branch(ports),
                     Event::DeleteBranch => self.start_delete_branch(ports),

@@ -643,15 +643,41 @@ impl App {
             },
         );
         if let Some(Found { index, .. }) = found {
-            let len: usize = self.branches.commits.len();
-            self.branches
-                .cursor
-                .select(index, len, self.viewports.branches_graph);
-            self.branches.pane = BranchesPane::Graph;
-            self.load_more_if_needed(ports);
-            self.load_details(ports);
+            self.select_commit(index, ports);
         }
         found
+    }
+
+    /// Selects the next commit with a local or remote branch named exactly `main` or
+    /// `master`, wrapping around, to find the main branches among long feature branches.
+    pub(super) fn next_main_branch(&mut self, ports: &dyn Ports) {
+        let branches: &BranchesState = &self.branches;
+        let found: Option<Found> = search::find(
+            branches.commits.len(),
+            branches.cursor.selected(),
+            Direction::Forward,
+            |i: usize| {
+                branches
+                    .commits
+                    .get(i)
+                    .is_some_and(|c: &Commit| branches.labels(&c.hash).iter().any(is_main_label))
+            },
+        );
+        match found {
+            Some(Found { index, .. }) => self.select_commit(index, ports),
+            None => self.note = Note::Info("No main or master branch".to_string()),
+        }
+    }
+
+    /// Selects commit `index` in the graph and loads what it needs.
+    fn select_commit(&mut self, index: usize, ports: &dyn Ports) {
+        let len: usize = self.branches.commits.len();
+        self.branches
+            .cursor
+            .select(index, len, self.viewports.branches_graph);
+        self.branches.pane = BranchesPane::Graph;
+        self.load_more_if_needed(ports);
+        self.load_details(ports);
     }
 }
 
@@ -663,6 +689,16 @@ fn label_matches(label: &Label, term: &str) -> bool {
         Label::Remote { remote, branch } => {
             search::text_matches(&format!("{remote}/{branch}"), term)
         }
+    }
+}
+
+/// Whether a label is a local or remote branch named exactly `main` or `master`. The remote
+/// name is ignored, so `origin/main` and `upstream/master` count.
+fn is_main_label(label: &Label) -> bool {
+    match label {
+        Label::Local { name, .. } => is_main(name),
+        Label::Remote { branch, .. } => is_main(branch),
+        Label::Tag { .. } => false,
     }
 }
 

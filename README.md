@@ -127,6 +127,7 @@ If per-layer coverage reports well-tested code as uncovered, the coverage data f
 | p | Branches | cherry-pick the selected commit onto the checked out branch |
 | u | Branches | fetch all remotes with `git remote update` |
 | U | Branches | fetch all remotes pruning stale remote branches with `git fetch --all --prune` |
+| M | Branches | jump to the next commit with a local or remote branch named exactly main or master, wrapping around |
 | s | Branches | show the selected commit with `git show` in your pager (less by default); quit the pager to return |
 | R | Branches | reset the checked out branch to the selected commit with `git reset --keep`, after confirming with y (refused when tracked files have uncommitted changes) |
 | d | Branches | delete a local branch of the selected commit that is not checked out, after confirming with y (also when not merged) |

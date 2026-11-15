@@ -158,7 +158,7 @@ impl logic::ports::Ports for NoPorts {
 
 #[test]
 fn every_event_converts() {
-    let cases: [(U, L); 35] = [
+    let cases: [(U, L); 36] = [
         (U::SwitchView(UV::Log), L::SwitchView(LV::Log)),
         (U::Quit, L::Quit),
         (U::Yes, L::Yes),
@@ -179,6 +179,7 @@ fn every_event_converts() {
         (U::CherryPick, L::CherryPick),
         (U::RemoteUpdate, L::RemoteUpdate),
         (U::FetchAllPrune, L::FetchAllPrune),
+        (U::NextMainBranch, L::NextMainBranch),
         (U::ShowCommit, L::ShowCommit),
         (U::ResetBranch, L::ResetBranch),
         (U::DeleteBranch, L::DeleteBranch),

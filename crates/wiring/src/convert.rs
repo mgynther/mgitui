@@ -35,6 +35,7 @@ pub fn event(event: ui::event::Event) -> logic::event::Event {
         U::CherryPick => L::CherryPick,
         U::RemoteUpdate => L::RemoteUpdate,
         U::FetchAllPrune => L::FetchAllPrune,
+        U::NextMainBranch => L::NextMainBranch,
         U::ShowCommit => L::ShowCommit,
         U::ResetBranch => L::ResetBranch,
         U::DeleteBranch => L::DeleteBranch,

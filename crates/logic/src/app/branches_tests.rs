@@ -204,6 +204,67 @@ fn search_by_branch_and_tag_names() {
 }
 
 #[test]
+fn next_main_branch_cycles_through_exact_main_and_master_names() {
+    let ports: TestPorts = ports(10);
+    let local = |hash: &str, name: &str| {
+        (
+            hash.to_string(),
+            Label::Local {
+                name: name.to_string(),
+                head: false,
+            },
+        )
+    };
+    let remote = |hash: &str, remote: &str, branch: &str| {
+        (
+            hash.to_string(),
+            Label::Remote {
+                remote: remote.to_string(),
+                branch: branch.to_string(),
+            },
+        )
+    };
+    *ports.refs.borrow_mut() = Some(Refs {
+        labels: vec![
+            local("c8", "main-feature"),
+            (
+                "c7".to_string(),
+                Label::Tag {
+                    name: "main".to_string(),
+                },
+            ),
+            local("c6", "Main"),
+            remote("c5", "origin", "master"),
+            remote("c4", "origin", "feature/main"),
+            remote("c3", "upstream", "main"),
+            local("c2", "main"),
+            remote("c2", "origin", "main"),
+        ],
+        head: None,
+    });
+    let mut app: App = app(&ports);
+    let mut visited: Vec<String> = Vec::new();
+    for _ in 0..4 {
+        run(&mut app, &ports, &[Event::NextMainBranch]);
+        visited.extend(selected_hash(&app));
+    }
+    assert_eq!(visited, vec!["c5", "c3", "c2", "c5"]);
+    assert_eq!(app.note(), &Note::None);
+}
+
+#[test]
+fn next_main_branch_without_main_or_master() {
+    let ports: TestPorts = ports(3);
+    let mut app: App = app(&ports);
+    run(&mut app, &ports, &[Event::NextMainBranch]);
+    assert_eq!(selected_hash(&app), Some("c2".to_string()));
+    assert_eq!(
+        app.note(),
+        &Note::Info("No main or master branch".to_string())
+    );
+}
+
+#[test]
 fn resize_clamps_the_commit_selection() {
     let ports: TestPorts = ports(30);
     let mut app: App = app(&ports);

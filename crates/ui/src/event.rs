@@ -67,6 +67,8 @@ pub enum Event {
     RemoteUpdate,
     /// Fetch all remotes pruning stale remote branches.
     FetchAllPrune,
+    /// Select the next commit with a local or remote `main` or `master` branch.
+    NextMainBranch,
     /// Show the selected commit with `git show` in the user's pager.
     ShowCommit,
     /// Reset the checked out branch to the selected commit.
@@ -151,6 +153,7 @@ fn view_event(key: Key, view: ViewId) -> Option<Event> {
         (ViewId::Branches, Key::Char('p')) => Some(Event::CherryPick),
         (ViewId::Branches, Key::Char('u')) => Some(Event::RemoteUpdate),
         (ViewId::Branches, Key::Char('U')) => Some(Event::FetchAllPrune),
+        (ViewId::Branches, Key::Char('M')) => Some(Event::NextMainBranch),
         (ViewId::Branches, Key::Char('s')) => Some(Event::ShowCommit),
         (ViewId::Branches, Key::Char('R')) => Some(Event::ResetBranch),
         (ViewId::Branches, Key::Char('d')) => Some(Event::DeleteBranch),
@@ -199,7 +202,7 @@ mod tests {
 
     #[test]
     fn view_specific_keys() {
-        let cases: [(ViewId, Key, Option<Event>); 25] = [
+        let cases: [(ViewId, Key, Option<Event>); 27] = [
             (ViewId::Branches, Key::Char('w'), Some(Event::NextPane)),
             (ViewId::Diff, Key::Char('w'), Some(Event::NextPane)),
             (ViewId::Log, Key::Char('w'), None),
@@ -210,6 +213,12 @@ mod tests {
             (ViewId::Branches, Key::Char('p'), Some(Event::CherryPick)),
             (ViewId::Branches, Key::Char('u'), Some(Event::RemoteUpdate)),
             (ViewId::Branches, Key::Char('U'), Some(Event::FetchAllPrune)),
+            (
+                ViewId::Branches,
+                Key::Char('M'),
+                Some(Event::NextMainBranch),
+            ),
+            (ViewId::Diff, Key::Char('M'), None),
             (ViewId::Branches, Key::Char('s'), Some(Event::ShowCommit)),
             (ViewId::Branches, Key::Char('R'), Some(Event::ResetBranch)),
             (ViewId::Branches, Key::Char('d'), Some(Event::DeleteBranch)),

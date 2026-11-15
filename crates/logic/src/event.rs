@@ -54,6 +54,8 @@ pub enum Event {
     RemoteUpdate,
     /// Fetch all remotes pruning stale remote branches.
     FetchAllPrune,
+    /// Select the next commit with a local or remote `main` or `master` branch.
+    NextMainBranch,
     /// Show the selected commit with `git show` in the user's pager.
     ShowCommit,
     /// Reset the checked out branch to the selected commit.

@@ -1,18 +1,14 @@
 use super::{Cell, CommitSide, GraphBuilder, GraphRow, Shape, layout};
 use crate::model::Commit;
+use crate::test_ports::placeholder_commit;
 
-/// A commit `hash` with parents given as a space separated list.
+/// A commit `hash` with parents given as a space separated list. The graph reads nothing
+/// else, so the rest comes from [`placeholder_commit`].
 fn commit(hash: &str, parents: &str) -> Commit {
     Commit {
         hash: hash.to_string(),
         parents: parents.split_whitespace().map(str::to_string).collect(),
-        author: String::new(),
-        author_email: String::new(),
-        date: String::new(),
-        committer: String::new(),
-        committer_email: String::new(),
-        committer_date: String::new(),
-        subject: String::new(),
+        ..placeholder_commit()
     }
 }
 
@@ -51,7 +47,7 @@ fn the_commit_lane_is_the_lane_of_the_commit_cell() {
     let rows: Vec<GraphRow> = layout(&[commit("m", "d f"), commit("f", "b"), commit("d", "b")]);
     assert_eq!(rows[1].commit_lane(), Some(1));
     assert_eq!(rows[2].commit_lane(), Some(0));
-    assert_eq!(GraphRow::default().commit_lane(), None);
+    assert_eq!(GraphRow { cells: vec![] }.commit_lane(), None);
 }
 
 #[test]

@@ -40,6 +40,7 @@ fn typed(app: &mut App, ports: &TestPorts, text: &str) {
     }
 }
 
+/// The recorded branch actions and log messages, without the reloads.
 fn actions(ports: &TestPorts) -> Vec<String> {
     ports
         .calls()

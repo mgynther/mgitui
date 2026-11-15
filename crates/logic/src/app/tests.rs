@@ -27,8 +27,13 @@ fn typed(text: &str) -> Vec<Event> {
 fn log_app(messages: &[&str]) -> App {
     let mut app: App = App::new();
     app.set_viewports(Viewports {
+        branches_graph: 0,
+        branches_files: 0,
+        branches_diff: 0,
         log: 3,
-        ..Viewports::default()
+        diff_unstaged: 0,
+        diff_staged: 0,
+        diff_file: 0,
     });
     for message in messages {
         app.push_log(&entry(LogLevel::Info, message));
@@ -117,8 +122,13 @@ fn log_navigation() {
     run(&mut app, &[Event::Cancel]);
     assert_eq!(app.log_cursor().selected(), 3);
     app.set_viewports(Viewports {
+        branches_graph: 0,
+        branches_files: 0,
+        branches_diff: 0,
         log: 1,
-        ..Viewports::default()
+        diff_unstaged: 0,
+        diff_staged: 0,
+        diff_file: 0,
     });
     assert_eq!(app.log_cursor().offset(), 3);
     assert_eq!(app.viewports().log, 1);

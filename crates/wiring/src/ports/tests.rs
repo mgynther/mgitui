@@ -1,6 +1,6 @@
 use super::SessionPorts;
 use crate::log::LogBuffer;
-use crate::test_support::{TempDir, fixed_clock, git_ok, init_repo};
+use crate::test_support::{TempDir, fixed_clock, git_ok, init_repo, test_git};
 use logic::log::{Layer, LogEntry, LogLevel};
 use logic::model::{AmendBase, ChangeKind, ChangedFile, FileDiff, LineKind, Side, WorkStatus};
 use logic::ports::{CommitMessage, Failed, Ports, SearchText};
@@ -21,7 +21,7 @@ fn append_line(path: &std::path::Path) -> std::io::Result<()> {
 
 fn with_ports(dir: &std::path::Path, test: impl Fn(&SessionPorts<'_>, &LogBuffer)) {
     let log: LogBuffer = LogBuffer::new(fixed_clock);
-    let git: git::Git = git::Git::new(dir).with_temp_dir(dir);
+    let git: git::Git = test_git(dir).with_temp_dir(dir);
     let ports: SessionPorts<'_> = SessionPorts {
         log: &log,
         git: &git,
@@ -94,7 +94,7 @@ fn status_and_diffs_from_real_repository() {
 fn git_failures_become_failed() {
     let dir: TempDir = TempDir::new();
     let log: LogBuffer = LogBuffer::new(fixed_clock);
-    let git: git::Git = git::Git::new(dir.path())
+    let git: git::Git = test_git(dir.path())
         .with_program("/nonexistent/git")
         .with_temp_dir(&dir.path().join("missing"));
     let ports: SessionPorts<'_> = SessionPorts {
@@ -296,7 +296,7 @@ fn interactive_rebase_hands_the_terminal_to_git() {
         &["commit", "-q", "--allow-empty", "-m", "main work"],
     );
     let log: LogBuffer = LogBuffer::new(fixed_clock);
-    let git: git::Git = git::Git::new(dir.path())
+    let git: git::Git = test_git(dir.path())
         .with_env("GIT_SEQUENCE_EDITOR", "sed -i 2s/^pick/fixup/")
         .with_env("GIT_EDITOR", "true");
     let handed: std::cell::Cell<usize> = std::cell::Cell::new(0);

@@ -1,6 +1,6 @@
 use super::Session;
 use crate::log::LogBuffer;
-use crate::test_support::{TEST_PAGER, TempDir, fixed_clock, git_ok, init_repo};
+use crate::test_support::{TempDir, fixed_clock, git_ok, init_repo, test_git};
 use ui::layout::Size;
 
 const SIZE: Size = Size {
@@ -20,9 +20,7 @@ fn run_here(run: &mut dyn FnMut()) -> std::io::Result<()> {
 fn session_in(dir: &TempDir) -> Session {
     let log: LogBuffer = LogBuffer::new(fixed_clock);
     log.wiring(logic::log::LogLevel::Info, "started");
-    let git: git::Git = git::Git::new(dir.path())
-        .with_temp_dir(dir.path())
-        .with_env("GIT_PAGER", TEST_PAGER);
+    let git: git::Git = test_git(dir.path()).with_temp_dir(dir.path());
     let editor = |path: &std::path::Path| -> std::io::Result<()> {
         let old: String = std::fs::read_to_string(path).unwrap();
         let new: String = if old.is_empty() {
@@ -37,6 +35,8 @@ fn session_in(dir: &TempDir) -> Session {
     session
 }
 
+/// A session in a new empty repository. Keep the returned directory alive: dropping it removes
+/// the repository.
 fn session() -> (TempDir, Session) {
     let dir: TempDir = TempDir::new();
     init_repo(dir.path());
@@ -210,7 +210,7 @@ fn branches_view_shows_graph_details_and_panes() {
     git_ok(dir.path(), &["add", "."]);
     git_ok(dir.path(), &["commit", "-q", "-m", "second"]);
     let log: LogBuffer = LogBuffer::new(fixed_clock);
-    let git: git::Git = git::Git::new(dir.path()).with_env("TZ", "UTC");
+    let git: git::Git = test_git(dir.path());
     let mut s: Session = Session::new(
         git,
         log,
@@ -455,7 +455,7 @@ fn interactive_rebase_prompt() {
         &["commit", "-q", "--allow-empty", "-m", "main work"],
     );
     let log: LogBuffer = LogBuffer::new(fixed_clock);
-    let git: git::Git = git::Git::new(dir.path()).with_env("GIT_SEQUENCE_EDITOR", "true");
+    let git: git::Git = test_git(dir.path()).with_env("GIT_SEQUENCE_EDITOR", "true");
     let mut s: Session = Session::new(
         git,
         log,
@@ -639,7 +639,7 @@ fn s_shows_the_selected_commit_with_the_terminal_handed_over() {
         dir.path(),
         &["commit", "-q", "--allow-empty", "-m", "second"],
     );
-    let handed: std::rc::Rc<std::cell::Cell<usize>> = std::rc::Rc::default();
+    let handed: std::rc::Rc<std::cell::Cell<usize>> = std::rc::Rc::new(std::cell::Cell::new(0));
     let counter: std::rc::Rc<std::cell::Cell<usize>> = std::rc::Rc::clone(&handed);
     let handoff = move |run: &mut dyn FnMut()| -> std::io::Result<()> {
         counter.set(counter.get() + 1);
@@ -647,7 +647,7 @@ fn s_shows_the_selected_commit_with_the_terminal_handed_over() {
         Ok(())
     };
     let mut s: Session = Session::new(
-        git::Git::new(dir.path()).with_env("GIT_PAGER", TEST_PAGER),
+        test_git(dir.path()),
         LogBuffer::new(fixed_clock),
         Box::new(|_: &std::path::Path| Ok(())),
         Box::new(handoff),

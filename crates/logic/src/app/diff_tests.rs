@@ -15,6 +15,7 @@ fn viewports() -> Viewports {
     }
 }
 
+/// Unlike the app helpers of other test files, this one keeps the calls recorded while loading.
 fn diff_app(ports: &TestPorts) -> App {
     let mut app: App = App::new();
     app.set_viewports(viewports());

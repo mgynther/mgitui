@@ -31,7 +31,7 @@ mod tests {
 
     use super::open_repository;
     use crate::log::LogBuffer;
-    use crate::test_support::{TempDir, fixed_clock, init_repo};
+    use crate::test_support::{TempDir, fixed_clock, init_repo, test_git};
 
     #[test]
     fn opens_repository_from_subdirectory_at_its_root() {
@@ -40,7 +40,7 @@ mod tests {
         let sub: PathBuf = dir.path().join("sub");
         std::fs::create_dir(&sub).unwrap();
         let log: LogBuffer = LogBuffer::new(fixed_clock);
-        let git: git::Git = open_repository(&git::Git::new(&sub), &log).unwrap();
+        let git: git::Git = open_repository(&test_git(&sub), &log).unwrap();
         assert_eq!(git.dir(), dir.path().canonicalize().unwrap());
         assert_eq!(log.drain().len(), 1);
     }
@@ -49,7 +49,7 @@ mod tests {
     fn outside_repository_is_an_error() {
         let dir: TempDir = TempDir::new();
         let log: LogBuffer = LogBuffer::new(fixed_clock);
-        let git: git::Git = git::Git::new(dir.path()).with_env("GIT_CEILING_DIRECTORIES", "/");
+        let git: git::Git = test_git(dir.path()).with_env("GIT_CEILING_DIRECTORIES", "/");
         let message: String = open_repository(&git, &log).unwrap_err();
         assert!(message.starts_with(&format!(
             "mgitui: {} is not inside a git repository (git failed",

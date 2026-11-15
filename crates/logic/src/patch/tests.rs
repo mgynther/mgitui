@@ -16,6 +16,7 @@ fn line(spec: &str) -> DiffLine {
     }
 }
 
+/// A hunk whose old and new ranges are given as (start, count).
 fn hunk(old: (usize, usize), new: (usize, usize), lines: &[&str]) -> Hunk {
     Hunk {
         header: String::new(),

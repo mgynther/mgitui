@@ -10,6 +10,8 @@ use logic::model::{ChangeKind, ChangedFile, LineKind, RowKind};
 use ui::event::Event as U;
 use ui::event::ViewId as UV;
 
+/// Ports for conversions that need an [`App`] but no git: search text is accepted as typed,
+/// and every other call fails.
 struct NoPorts;
 
 impl logic::ports::Ports for NoPorts {
@@ -323,8 +325,13 @@ fn startup_screen() {
 fn log_screen_shows_visible_rows_and_status() {
     let mut app: App = App::new();
     app.set_viewports(Viewports {
+        branches_graph: 0,
+        branches_files: 0,
+        branches_diff: 0,
         log: 2,
-        ..Viewports::default()
+        diff_unstaged: 0,
+        diff_staged: 0,
+        diff_file: 0,
     });
     for message in ["a", "b", "c"] {
         app.push_log(&LogEntry {

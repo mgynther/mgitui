@@ -52,7 +52,10 @@ impl TestPorts {
     pub fn new() -> Self {
         TestPorts {
             calls: RefCell::new(Vec::new()),
-            status: RefCell::new(Some(WorkStatus::default())),
+            status: RefCell::new(Some(WorkStatus {
+                staged: vec![],
+                unstaged: vec![],
+            })),
             diff_fails: false,
             diff: None,
             stage_fails: false,
@@ -63,7 +66,10 @@ impl TestPorts {
             editor_appends: Some("edited\n".to_string()),
             commit_fails: false,
             history: RefCell::new(Some(Vec::new())),
-            refs: RefCell::new(Some(Refs::default())),
+            refs: RefCell::new(Some(Refs {
+                labels: vec![],
+                head: None,
+            })),
             details_fail: false,
             branch_fails: false,
         }
@@ -127,6 +133,24 @@ impl TestPorts {
     }
 }
 
+/// A fixture builder: a commit whose values are placeholders, only so that a fixture
+/// compiles. Never assume anything about an instance beyond that it compiles: a test sets
+/// every field it depends on, for example `Commit { hash, ..placeholder_commit() }`, and
+/// relies on nothing else. A new field then needs a value only here.
+pub fn placeholder_commit() -> Commit {
+    Commit {
+        hash: "placeholder hash".to_string(),
+        parents: vec!["placeholder parent".to_string()],
+        author: "placeholder author".to_string(),
+        author_email: "placeholder author email".to_string(),
+        date: "placeholder date".to_string(),
+        committer: "placeholder committer".to_string(),
+        committer_email: "placeholder committer email".to_string(),
+        committer_date: "placeholder committer date".to_string(),
+        subject: "placeholder subject".to_string(),
+    }
+}
+
 /// A linear history of `count` commits, newest first, with hashes `c<n>` and subjects
 /// `commit <n>`.
 pub fn linear_history(count: usize) -> Vec<Commit> {
@@ -140,16 +164,13 @@ pub fn linear_history(count: usize) -> Vec<Commit> {
                 vec![format!("c{}", n - 1)]
             },
             author: if n.is_multiple_of(2) { "Ada" } else { "Bo" }.to_string(),
-            author_email: "author@example.com".to_string(),
-            date: "2025-01-02 03:04".to_string(),
-            committer: "Cy".to_string(),
-            committer_email: "cy@example.com".to_string(),
-            committer_date: "2025-01-03 04:05".to_string(),
             subject: format!("commit {n}"),
+            ..placeholder_commit()
         })
         .collect()
 }
 
+/// A plain content change, so that single lines of the file can be staged.
 pub fn modified(path: &str) -> ChangedFile {
     ChangedFile {
         path: path.to_string(),

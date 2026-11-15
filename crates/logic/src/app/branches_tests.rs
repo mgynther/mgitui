@@ -13,7 +13,12 @@ fn app(ports: &TestPorts) -> App {
     let mut app: App = App::new();
     app.set_viewports(Viewports {
         branches_graph: 10,
-        ..Viewports::default()
+        branches_files: 0,
+        branches_diff: 0,
+        log: 0,
+        diff_unstaged: 0,
+        diff_staged: 0,
+        diff_file: 0,
     });
     app.handle(Event::Reload, ports);
     ports.clear();
@@ -266,7 +271,12 @@ fn resize_clamps_the_commit_selection() {
     run(&mut app, &ports, &[Event::Bottom]);
     app.set_viewports(Viewports {
         branches_graph: 5,
-        ..Viewports::default()
+        branches_files: 0,
+        branches_diff: 0,
+        log: 0,
+        diff_unstaged: 0,
+        diff_staged: 0,
+        diff_file: 0,
     });
     assert_eq!(app.branches().cursor().offset(), 25);
 }
@@ -328,7 +338,10 @@ fn panes_cycle_and_move_separately() {
         branches_graph: 1,
         branches_files: 1,
         branches_diff: 1,
-        ..Viewports::default()
+        log: 0,
+        diff_unstaged: 0,
+        diff_staged: 0,
+        diff_file: 0,
     });
     assert_eq!(app.branches().cursor().offset(), 1);
 }

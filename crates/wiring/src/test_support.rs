@@ -34,19 +34,25 @@ impl Drop for TempDir {
     }
 }
 
-/// Runs raw git in `dir` with a configuration isolated from the user's, for test setup.
+/// The environment that isolates git in tests from the user's configuration and makes commits
+/// reproducible.
+const ISOLATED: [(&str, &str); 8] = [
+    ("GIT_CONFIG_GLOBAL", "/dev/null"),
+    ("GIT_CONFIG_NOSYSTEM", "1"),
+    ("GIT_AUTHOR_NAME", "Ada Author"),
+    ("GIT_AUTHOR_EMAIL", "ada@example.com"),
+    ("GIT_AUTHOR_DATE", "1735787045 +0000"),
+    ("GIT_COMMITTER_NAME", "Cy Committer"),
+    ("GIT_COMMITTER_EMAIL", "cy@example.com"),
+    ("GIT_COMMITTER_DATE", "1735787045 +0000"),
+];
+
+/// Runs raw git in `dir` for test setup, with the [`ISOLATED`] environment.
 pub fn git_ok(dir: &Path, args: &[&str]) -> String {
     let output: process::Output = process::Command::new("git")
         .args(args)
         .current_dir(dir)
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("GIT_AUTHOR_NAME", "Ada Author")
-        .env("GIT_AUTHOR_EMAIL", "ada@example.com")
-        .env("GIT_AUTHOR_DATE", "1735787045 +0000")
-        .env("GIT_COMMITTER_NAME", "Cy Committer")
-        .env("GIT_COMMITTER_EMAIL", "cy@example.com")
-        .env("GIT_COMMITTER_DATE", "1735787045 +0000")
+        .envs(ISOLATED)
         .output()
         .unwrap();
     assert!(
@@ -60,6 +66,21 @@ pub fn git_ok(dir: &Path, args: &[&str]) -> String {
 /// The pager for git in tests. It reads and drops the output: when tests run in a terminal,
 /// commands that page, like `git show`, would otherwise wait in less until q is pressed.
 pub const TEST_PAGER: &str = "cat >/dev/null";
+
+/// The application's git runner for `dir` in tests. It is isolated like [`git_ok`], so the
+/// application's commits match those of the test setup, and it also fixes the timezone, the
+/// locale and the pager, so that output does not depend on the machine running the tests.
+pub fn test_git(dir: &Path) -> git::Git {
+    ISOLATED
+        .iter()
+        .fold(
+            git::Git::new(dir),
+            |git: git::Git, (key, value): &(&str, &str)| git.with_env(key, value),
+        )
+        .with_env("TZ", "UTC")
+        .with_env("LC_ALL", "C")
+        .with_env("GIT_PAGER", TEST_PAGER)
+}
 
 /// Creates an empty repository in `dir` with `main` as the initial branch.
 pub fn init_repo(dir: &Path) {

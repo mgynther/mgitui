@@ -128,6 +128,7 @@ mod tests {
     use crate::error::ValidationError;
     use crate::log::LogLevel;
 
+    /// Validates `input`, also checking that a refused name is logged as one error.
     fn check(input: &str) -> Result<String, ValidationError> {
         let logged: RefCell<Vec<(LogLevel, String)>> = RefCell::new(Vec::new());
         let log = |level: LogLevel, message: &str| {

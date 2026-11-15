@@ -49,8 +49,11 @@ impl TestRepo {
     }
 
     /// Adds settings that make git independent of the user's configuration and environment.
+    /// The pager reads and drops the output: when tests run in a terminal, commands that page,
+    /// like `git show`, would otherwise wait in less until q is pressed.
     pub fn isolated(git: Git) -> Git {
         git.with_env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .with_env("GIT_PAGER", "cat >/dev/null")
             .with_env("GIT_CONFIG_NOSYSTEM", "1")
             .with_env("GIT_AUTHOR_NAME", "Ada Author")
             .with_env("GIT_AUTHOR_EMAIL", "ada@example.com")
@@ -121,4 +124,21 @@ impl Logged {
     pub fn lines(&self) -> Vec<String> {
         self.0.borrow().clone()
     }
+}
+
+/// Creates an executable shell script that stands in for git. The file is written by a
+/// child process: if this process wrote it, another test thread could fork while the file
+/// is open for writing, and running the script would fail with "Text file busy".
+pub fn fake_git(dir: &TempDir, body: &str) -> String {
+    let path: PathBuf = dir.path().join("fake-git");
+    let status: std::process::ExitStatus = std::process::Command::new("sh")
+        .arg("-c")
+        .arg("printf '#!/bin/sh\\n%s\\n' \"$1\" > \"$2\" && chmod +x \"$2\"")
+        .arg("sh")
+        .arg(body)
+        .arg(&path)
+        .status()
+        .unwrap();
+    assert!(status.success());
+    path.to_string_lossy().into_owned()
 }

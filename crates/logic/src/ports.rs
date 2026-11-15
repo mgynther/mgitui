@@ -188,6 +188,13 @@ pub trait Ports {
     /// Fails when git fails, for example when a remote cannot be reached.
     fn fetch_all_prune(&self) -> Result<(), Failed>;
 
+    /// Shows a commit with `git show` on the terminal, in the user's pager.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails or the terminal cannot be handed over.
+    fn show_commit(&self, hash: &str) -> Result<(), Failed>;
+
     /// Resets the checked out branch to a commit with `git reset --keep`, which updates the
     /// working tree but refuses to overwrite local changes and untracked files.
     ///

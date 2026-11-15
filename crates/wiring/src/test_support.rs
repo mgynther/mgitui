@@ -57,6 +57,10 @@ pub fn git_ok(dir: &Path, args: &[&str]) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
+/// The pager for git in tests. It reads and drops the output: when tests run in a terminal,
+/// commands that page, like `git show`, would otherwise wait in less until q is pressed.
+pub const TEST_PAGER: &str = "cat >/dev/null";
+
 /// Creates an empty repository in `dir` with `main` as the initial branch.
 pub fn init_repo(dir: &Path) {
     git_ok(dir, &["init", "-q", "-b", "main"]);

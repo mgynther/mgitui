@@ -1,6 +1,6 @@
 use super::Session;
 use crate::log::LogBuffer;
-use crate::test_support::{TempDir, fixed_clock, git_ok, init_repo};
+use crate::test_support::{TEST_PAGER, TempDir, fixed_clock, git_ok, init_repo};
 use ui::layout::Size;
 
 const SIZE: Size = Size {
@@ -20,7 +20,9 @@ fn run_here(run: &mut dyn FnMut()) -> std::io::Result<()> {
 fn session_in(dir: &TempDir) -> Session {
     let log: LogBuffer = LogBuffer::new(fixed_clock);
     log.wiring(logic::log::LogLevel::Info, "started");
-    let git: git::Git = git::Git::new(dir.path()).with_temp_dir(dir.path());
+    let git: git::Git = git::Git::new(dir.path())
+        .with_temp_dir(dir.path())
+        .with_env("GIT_PAGER", TEST_PAGER);
     let editor = |path: &std::path::Path| -> std::io::Result<()> {
         let old: String = std::fs::read_to_string(path).unwrap();
         let new: String = if old.is_empty() {
@@ -601,6 +603,52 @@ fn fetch_all_prune_removes_stale_remote_branches() {
         "Fetched all remotes pruning stale remote branches"
     );
     assert_eq!(git_ok(dir.path(), &["branch", "-r"]), "  origin/main\n");
+}
+
+#[test]
+fn s_shows_the_selected_commit_with_the_terminal_handed_over() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    git_ok(
+        dir.path(),
+        &["commit", "-q", "--allow-empty", "-m", "first"],
+    );
+    let first: String = git_ok(dir.path(), &["rev-parse", "HEAD"])
+        .trim()
+        .to_string();
+    git_ok(
+        dir.path(),
+        &["commit", "-q", "--allow-empty", "-m", "second"],
+    );
+    let handed: std::rc::Rc<std::cell::Cell<usize>> = std::rc::Rc::default();
+    let counter: std::rc::Rc<std::cell::Cell<usize>> = std::rc::Rc::clone(&handed);
+    let handoff = move |run: &mut dyn FnMut()| -> std::io::Result<()> {
+        counter.set(counter.get() + 1);
+        run();
+        Ok(())
+    };
+    let mut s: Session = Session::new(
+        git::Git::new(dir.path()).with_env("GIT_PAGER", TEST_PAGER),
+        LogBuffer::new(fixed_clock),
+        Box::new(|_: &std::path::Path| Ok(())),
+        Box::new(handoff),
+    );
+    s.resize(SIZE);
+    s.input(b"js");
+    assert_eq!(handed.get(), 1);
+    assert_eq!(s.render(SIZE).row_text(23).trim_end(), "");
+    let wide: Size = Size {
+        width: 160,
+        height: 24,
+    };
+    s.resize(wide);
+    s.input(b"\x1bOR");
+    let screen: ui::buffer::Buffer = s.render(wide);
+    let shown: String = format!("git show {first} (exit 0)");
+    assert!(
+        (0..wide.height).any(|row: usize| screen.row_text(row).contains(&shown)),
+        "{shown} not in the Log view"
+    );
 }
 
 #[test]

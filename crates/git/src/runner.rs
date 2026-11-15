@@ -19,6 +19,15 @@ const FIXED_CONFIG: [&str; 5] = [
     "log.showSignature=false",
 ];
 
+/// The configuration to run `command` with: [`FIXED_CONFIG`] for output this application
+/// parses, none for output the user reads, so that their colors and other settings apply.
+fn fixed_config(command: &Command) -> &'static [&'static str] {
+    match command {
+        Command::ShowCommit { .. } => &[],
+        _ => &FIXED_CONFIG,
+    }
+}
+
 /// The result of a git command that succeeded.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Output {
@@ -139,7 +148,7 @@ impl Git {
         let args: Vec<String> = command.args();
         let shown: String = format!("git {}", args.join(" "));
         let mut process: process::Command = process::Command::new(&self.program);
-        for config in FIXED_CONFIG {
+        for config in fixed_config(command) {
             process.arg("-c").arg(config);
         }
         self.prepare(&mut process, command, &args);
@@ -199,7 +208,7 @@ impl Git {
         let args: Vec<String> = command.args();
         let shown: String = format!("git {}", args.join(" "));
         let mut process: process::Command = process::Command::new(&self.program);
-        for config in FIXED_CONFIG {
+        for config in fixed_config(command) {
             process.arg("-c").arg(config);
         }
         self.prepare(&mut process, command, &args);
@@ -266,9 +275,9 @@ fn spawn_and_wait(
 mod tests {
     use std::path::PathBuf;
 
-    use super::{Git, GitError, Output};
+    use super::{FIXED_CONFIG, Git, GitError, Output, fixed_config};
     use crate::command::Command;
-    use crate::test_repo::{Logged, TempDir, TestRepo};
+    use crate::test_repo::{Logged, TempDir, TestRepo, fake_git};
 
     #[test]
     fn toplevel_of_repository_and_subdirectory() {
@@ -322,23 +331,6 @@ mod tests {
             logged.lines()[0]
                 .starts_with("Error: git rev-parse --show-toplevel: could not run git")
         );
-    }
-
-    /// Creates an executable shell script that stands in for git. The file is written by a
-    /// child process: if this process wrote it, another test thread could fork while the file
-    /// is open for writing, and running the script would fail with "Text file busy".
-    fn fake_git(dir: &TempDir, body: &str) -> String {
-        let path: PathBuf = dir.path().join("fake-git");
-        let status: std::process::ExitStatus = std::process::Command::new("sh")
-            .arg("-c")
-            .arg("printf '#!/bin/sh\\n%s\\n' \"$1\" > \"$2\" && chmod +x \"$2\"")
-            .arg("sh")
-            .arg(body)
-            .arg(&path)
-            .status()
-            .unwrap();
-        assert!(status.success());
-        path.to_string_lossy().into_owned()
     }
 
     #[test]
@@ -483,5 +475,15 @@ mod tests {
     fn dir_is_where_git_runs() {
         let dir: TempDir = TempDir::new();
         assert_eq!(Git::new(dir.path()).dir(), dir.path());
+    }
+
+    #[test]
+    fn output_for_the_user_keeps_the_user_configuration() {
+        assert_eq!(fixed_config(&Command::Status), FIXED_CONFIG);
+        let show: Command = Command::ShowCommit {
+            hash: "abc".to_string(),
+        };
+        let none: &[&str] = &[];
+        assert_eq!(fixed_config(&show), none);
     }
 }

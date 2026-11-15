@@ -36,7 +36,7 @@ pub struct TestPorts {
     pub history: RefCell<Option<Vec<Commit>>>,
     /// The answer to `refs`; `None` fails.
     pub refs: RefCell<Option<Refs>>,
-    /// Whether loading commit details fails.
+    /// Whether loading commit details and showing a commit fail.
     pub details_fail: bool,
     /// Whether branch actions fail: creating, checking out, deleting, fetching, resetting,
     /// cherry-picking and rebasing.
@@ -300,6 +300,11 @@ impl Ports for TestPorts {
 
     fn fetch_all_prune(&self) -> Result<(), Failed> {
         self.branch_result("fetch --all --prune".to_string())
+    }
+
+    fn show_commit(&self, hash: &str) -> Result<(), Failed> {
+        self.calls.borrow_mut().push(format!("show-commit {hash}"));
+        self.details(())
     }
 
     fn reset_keep(&self, hash: &str) -> Result<(), Failed> {

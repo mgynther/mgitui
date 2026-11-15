@@ -1,7 +1,10 @@
-use super::{Commit, Ref, RefKind, parse_log, parse_name_status, parse_refs};
-use crate::runner::GitError;
+use std::ffi::OsStr;
+
+use super::{Commit, Ref, RefKind, parse_log, parse_name_status, parse_refs, with_less_default};
+use crate::command::Command;
+use crate::runner::{Git, GitError, Output};
 use crate::status::{ChangeKind, FileChange};
-use crate::test_repo::{Logged, TestRepo};
+use crate::test_repo::{Logged, TempDir, TestRepo, fake_git};
 
 #[test]
 fn parses_log_records() {
@@ -156,4 +159,40 @@ fn commit_details_of_real_repository() {
     assert!(git.commit_message(&head, &logged.log()).is_err());
     assert!(git.commit_files(&head, &logged.log()).is_err());
     assert!(git.commit_file_diff(&head, &[], &logged.log()).is_err());
+}
+
+#[test]
+fn show_commit_runs_git_show() {
+    let repo: TestRepo = TestRepo::new();
+    repo.git_ok(&["commit", "-q", "--allow-empty", "-m", "shown"]);
+    let hash: String = repo.git_ok(&["rev-parse", "HEAD"]).trim().to_string();
+    let logged: Logged = Logged::new();
+    repo.git().show_commit(&hash, &logged.log()).unwrap();
+    assert_eq!(
+        logged.lines(),
+        vec![format!("Info: git show {hash} (exit 0)")]
+    );
+    assert!(matches!(
+        repo.git().show_commit("0000000", &logged.log()),
+        Err(GitError::Failed { .. })
+    ));
+}
+
+#[test]
+fn less_keeps_the_user_setting_or_stays_open() {
+    let dir: TempDir = TempDir::new();
+    let program: String = fake_git(&dir, "printf %s \"$LESS\"");
+    // A fixed value stands in for whatever LESS the environment running the tests has.
+    let git: Git = Git::new(dir.path())
+        .with_program(&program)
+        .with_env("LESS", "user");
+    let logged: Logged = Logged::new();
+    let less = |user: Option<&OsStr>| -> String {
+        let output: Output = with_less_default(git.clone(), user)
+            .run(&Command::Status, None, &logged.log())
+            .unwrap();
+        output.stdout
+    };
+    assert_eq!(less(None), "R");
+    assert_eq!(less(Some(OsStr::new("user"))), "user");
 }

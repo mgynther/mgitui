@@ -200,6 +200,14 @@ impl logic::ports::Ports for SessionPorts<'_> {
         })
     }
 
+    fn show_commit(&self, hash: &str) -> Result<(), Failed> {
+        self.with_terminal(&mut || {
+            self.git
+                .show_commit(hash, &self.log_git())
+                .map_err(|_| Failed)
+        })
+    }
+
     fn reset_keep(&self, hash: &str) -> Result<(), Failed> {
         self.git
             .reset_keep(hash, &self.log_git())

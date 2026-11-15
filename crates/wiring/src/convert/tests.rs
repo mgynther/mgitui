@@ -111,6 +111,10 @@ impl logic::ports::Ports for NoPorts {
         Err(logic::ports::Failed)
     }
 
+    fn show_commit(&self, _hash: &str) -> Result<(), logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
     fn reset_keep(&self, _hash: &str) -> Result<(), logic::ports::Failed> {
         Err(logic::ports::Failed)
     }
@@ -154,7 +158,7 @@ impl logic::ports::Ports for NoPorts {
 
 #[test]
 fn every_event_converts() {
-    let cases: [(U, L); 34] = [
+    let cases: [(U, L); 35] = [
         (U::SwitchView(UV::Log), L::SwitchView(LV::Log)),
         (U::Quit, L::Quit),
         (U::Yes, L::Yes),
@@ -175,6 +179,7 @@ fn every_event_converts() {
         (U::CherryPick, L::CherryPick),
         (U::RemoteUpdate, L::RemoteUpdate),
         (U::FetchAllPrune, L::FetchAllPrune),
+        (U::ShowCommit, L::ShowCommit),
         (U::ResetBranch, L::ResetBranch),
         (U::DeleteBranch, L::DeleteBranch),
         (U::DiscardFile, L::DiscardFile),

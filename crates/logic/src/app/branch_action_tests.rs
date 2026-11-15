@@ -52,6 +52,7 @@ fn actions(ports: &TestPorts) -> Vec<String> {
                 || c.starts_with("remote")
                 || c.starts_with("fetch")
                 || c.starts_with("reset")
+                || c.starts_with("show-commit")
                 || c.starts_with("rebase")
                 || c.contains(": ")
         })
@@ -728,6 +729,32 @@ fn reset_branch_problems() {
     let empty: TestPorts = TestPorts::new();
     let mut empty_app: App = loaded_app(&empty);
     run(&mut empty_app, &empty, &[Event::ResetBranch]);
+    assert_eq!(
+        empty_app.note(),
+        &Note::Info("No commit selected".to_string())
+    );
+}
+
+#[test]
+fn show_selected_commit() {
+    let ports: TestPorts = labelled_ports(vec![]);
+    let mut app: App = loaded_app(&ports);
+    run(&mut app, &ports, &[Event::MoveDown, Event::ShowCommit]);
+    assert_eq!(actions(&ports), vec!["Info: show c1", "show-commit c1"]);
+    assert!(!ports.calls().contains(&"refs".to_string()));
+    assert_eq!(app.note(), &Note::None);
+    let failing: TestPorts = TestPorts {
+        details_fail: true,
+        ..labelled_ports(vec![])
+    };
+    run(&mut app, &failing, &[Event::ShowCommit]);
+    assert_eq!(
+        app.note(),
+        &Note::Problem("Showing the commit failed, see the Log view".to_string())
+    );
+    let empty: TestPorts = TestPorts::new();
+    let mut empty_app: App = loaded_app(&empty);
+    run(&mut empty_app, &empty, &[Event::ShowCommit]);
     assert_eq!(
         empty_app.note(),
         &Note::Info("No commit selected".to_string())

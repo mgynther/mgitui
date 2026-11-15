@@ -147,6 +147,7 @@ fn git_failures_become_failed() {
     assert_eq!(ports.remote_update(), Err(Failed));
     assert_eq!(ports.fetch_all_prune(), Err(Failed));
     assert_eq!(ports.reset_keep("h"), Err(Failed));
+    assert_eq!(ports.show_commit("h"), Err(Failed));
     assert_eq!(ports.delete_branch("b"), Err(Failed));
     assert_eq!(ports.rebase("b", "main", false), Err(Failed));
     assert_eq!(ports.rebase("b", "main", true), Err(Failed));

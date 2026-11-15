@@ -1,5 +1,7 @@
 //! Reading the commit history and refs.
 
+use std::ffi::{OsStr, OsString};
+
 use crate::command::Command;
 use crate::diff::{FileDiff, parse_diff};
 use crate::log::Log;
@@ -82,6 +84,22 @@ impl Git {
 }
 
 impl Git {
+    /// Shows commit `hash` with `git show` on the terminal, in the user's pager, so the caller
+    /// must hand the terminal over. When `LESS` is not set, git would run less with `FRX`,
+    /// where `F` quits at once when the commit fits on one screen and the application would
+    /// redraw over it. `LESS=R` keeps less open until the user quits it, with colors.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails, for example when the commit does not exist.
+    pub fn show_commit(&self, hash: &str, log: &Log<'_>) -> Result<(), GitError> {
+        let command: Command = Command::ShowCommit {
+            hash: hash.to_string(),
+        };
+        let less: Option<OsString> = std::env::var_os("LESS");
+        with_less_default(self.clone(), less.as_deref()).run_interactive(&command, log)
+    }
+
     /// The full message of a commit.
     ///
     /// # Errors
@@ -225,6 +243,14 @@ pub fn parse_refs(output: &str) -> Result<Vec<Ref>, GitError> {
         }
     }
     Ok(refs)
+}
+
+/// `git` with `LESS=R` when the user has not set `LESS` (`less`), see [`Git::show_commit`].
+fn with_less_default(git: Git, less: Option<&OsStr>) -> Git {
+    match less {
+        Some(_) => git,
+        None => git.with_env("LESS", "R"),
+    }
 }
 
 #[cfg(test)]

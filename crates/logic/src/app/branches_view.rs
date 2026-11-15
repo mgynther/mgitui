@@ -537,6 +537,21 @@ impl App {
         };
     }
 
+    /// Shows the selected commit with `git show` in the user's pager. Nothing changes, so
+    /// nothing is reloaded.
+    pub(super) fn show_commit(&mut self, ports: &dyn Ports) {
+        let Some(hash) = self.branches.selected().map(|c: &Commit| c.hash.clone()) else {
+            self.note = Note::Info("No commit selected".to_string());
+            return;
+        };
+        let short: &str = hash.get(..7).unwrap_or(&hash);
+        ports.log(LogLevel::Info, &format!("show {short}"));
+        let result: Result<(), Failed> = ports.show_commit(&hash);
+        if result.is_err() {
+            self.note = Note::Problem("Showing the commit failed, see the Log view".to_string());
+        }
+    }
+
     /// The checked out local branch, or `None` when `HEAD` is detached.
     fn checked_out_branch(&self) -> Option<String> {
         self.branches

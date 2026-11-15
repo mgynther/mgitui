@@ -103,6 +103,12 @@ pub enum Command {
         /// The commit hash.
         hash: String,
     },
+    /// `git show <commit>`: shows a commit in the user's pager, with the user's own git
+    /// configuration. Run with [`crate::Git::run_interactive`].
+    ShowCommit {
+        /// The commit hash.
+        hash: String,
+    },
     /// `git cherry-pick <commit>`: applies a commit onto the checked out branch.
     CherryPick {
         /// The commit hash.
@@ -187,6 +193,7 @@ impl Command {
             Command::Switch { .. } => &["switch"],
             Command::CherryPick { .. } => &["cherry-pick"],
             Command::ResetKeep { .. } => &["reset", "--keep"],
+            Command::ShowCommit { .. } => &["show"],
             Command::RemoteUpdate => &["remote", "update"],
             Command::FetchAllPrune => &["fetch", "--all", "--prune"],
             Command::DeleteBranch { .. } => &["branch", "-D"],
@@ -233,7 +240,9 @@ impl Command {
                 args.push(at.clone());
             }
             Command::Switch { branch } => args.push(branch.clone()),
-            Command::CherryPick { hash } | Command::ResetKeep { hash } => args.push(hash.clone()),
+            Command::CherryPick { hash }
+            | Command::ResetKeep { hash }
+            | Command::ShowCommit { hash } => args.push(hash.clone()),
             Command::DeleteBranch { name } => args.push(name.clone()),
             Command::Rebase { onto, branch } | Command::RebaseInteractive { onto, branch } => {
                 args.push(onto.clone());
@@ -418,6 +427,12 @@ mod tests {
                 hash: "abc".to_string()
             }),
             "reset --keep abc"
+        );
+        assert_eq!(
+            args(&Command::ShowCommit {
+                hash: "abc".to_string()
+            }),
+            "show abc"
         );
         assert_eq!(
             args(&Command::DeleteBranch {

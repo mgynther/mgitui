@@ -54,6 +54,8 @@ pub enum Event {
     RemoteUpdate,
     /// Fetch all remotes pruning stale remote branches.
     FetchAllPrune,
+    /// Show the selected commit with `git show` in the user's pager.
+    ShowCommit,
     /// Reset the checked out branch to the selected commit.
     ResetBranch,
     /// Delete a local branch of the selected commit that is not checked out.

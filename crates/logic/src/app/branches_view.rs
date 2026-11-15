@@ -625,21 +625,25 @@ impl App {
         direction: Direction,
         ports: &dyn Ports,
     ) -> Option<Found> {
-        let commits: &[Commit] = &self.branches.commits;
+        let branches: &BranchesState = &self.branches;
         let found: Option<Found> = search::find(
-            commits.len(),
-            self.branches.cursor.selected(),
+            branches.commits.len(),
+            branches.cursor.selected(),
             direction,
             |i: usize| {
-                commits.get(i).is_some_and(|c: &Commit| {
+                branches.commits.get(i).is_some_and(|c: &Commit| {
                     search::text_matches(&c.subject, term)
                         || search::text_matches(&c.hash, term)
                         || search::text_matches(&c.author, term)
+                        || branches
+                            .labels(&c.hash)
+                            .iter()
+                            .any(|label: &Label| label_matches(label, term))
                 })
             },
         );
         if let Some(Found { index, .. }) = found {
-            let len: usize = commits.len();
+            let len: usize = self.branches.commits.len();
             self.branches
                 .cursor
                 .select(index, len, self.viewports.branches_graph);
@@ -648,6 +652,17 @@ impl App {
             self.load_details(ports);
         }
         found
+    }
+}
+
+/// Whether a branch or tag label contains `term`, ignoring case. A remote branch is matched as
+/// `remote/branch`, the way the graph shows it.
+fn label_matches(label: &Label, term: &str) -> bool {
+    match label {
+        Label::Local { name, .. } | Label::Tag { name } => search::text_matches(name, term),
+        Label::Remote { remote, branch } => {
+            search::text_matches(&format!("{remote}/{branch}"), term)
+        }
     }
 }
 

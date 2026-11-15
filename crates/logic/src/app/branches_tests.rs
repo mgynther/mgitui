@@ -156,6 +156,54 @@ fn search_by_subject_hash_and_author() {
 }
 
 #[test]
+fn search_by_branch_and_tag_names() {
+    let ports: TestPorts = ports(10);
+    let label = |hash: &str, label: Label| (hash.to_string(), label);
+    *ports.refs.borrow_mut() = Some(Refs {
+        labels: vec![
+            label(
+                "c2",
+                Label::Local {
+                    name: "Feature".to_string(),
+                    head: false,
+                },
+            ),
+            label(
+                "c4",
+                Label::Remote {
+                    remote: "origin".to_string(),
+                    branch: "topic".to_string(),
+                },
+            ),
+            label(
+                "c6",
+                Label::Tag {
+                    name: "v1.2".to_string(),
+                },
+            ),
+        ],
+        head: None,
+    });
+    let mut app: App = app(&ports);
+    let search = |app: &mut App, text: &str| {
+        app.handle(Event::StartSearch, &ports);
+        for c in text.chars() {
+            app.handle(Event::Input(c), &ports);
+        }
+        app.handle(Event::InputSubmit, &ports);
+    };
+    search(&mut app, "feat");
+    assert_eq!(selected_hash(&app), Some("c2".to_string()));
+    search(&mut app, "v1.2");
+    assert_eq!(selected_hash(&app), Some("c6".to_string()));
+    search(&mut app, "origin/top");
+    assert_eq!(selected_hash(&app), Some("c4".to_string()));
+    search(&mut app, "n/t");
+    assert_eq!(selected_hash(&app), Some("c4".to_string()));
+    assert_eq!(app.note(), &Note::Info("search wrapped".to_string()));
+}
+
+#[test]
 fn resize_clamps_the_commit_selection() {
     let ports: TestPorts = ports(30);
     let mut app: App = app(&ports);

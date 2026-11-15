@@ -192,6 +192,14 @@ impl logic::ports::Ports for SessionPorts<'_> {
         self.with_terminal(&mut || self.git.remote_update(&self.log_git()).map_err(|_| Failed))
     }
 
+    fn fetch_all_prune(&self) -> Result<(), Failed> {
+        self.with_terminal(&mut || {
+            self.git
+                .fetch_all_prune(&self.log_git())
+                .map_err(|_| Failed)
+        })
+    }
+
     fn cherry_pick(&self, hash: &str) -> Result<(), Failed> {
         self.git
             .cherry_pick(hash, &self.log_git())

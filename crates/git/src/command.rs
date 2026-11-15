@@ -95,6 +95,8 @@ pub enum Command {
     },
     /// `git remote update`: fetches all remotes.
     RemoteUpdate,
+    /// `git fetch --all --prune`: fetches all remotes pruning stale remote branches.
+    FetchAllPrune,
     /// `git cherry-pick <commit>`: applies a commit onto the checked out branch.
     CherryPick {
         /// The commit hash.
@@ -179,6 +181,7 @@ impl Command {
             Command::Switch { .. } => &["switch"],
             Command::CherryPick { .. } => &["cherry-pick"],
             Command::RemoteUpdate => &["remote", "update"],
+            Command::FetchAllPrune => &["fetch", "--all", "--prune"],
             Command::DeleteBranch { .. } => &["branch", "-D"],
             Command::Rebase { .. } => &["rebase"],
             Command::RebaseInteractive { .. } => &["rebase", "-i"],
@@ -241,7 +244,8 @@ impl Command {
             | Command::LastMessage
             | Command::Log { .. }
             | Command::Refs
-            | Command::RemoteUpdate => {}
+            | Command::RemoteUpdate
+            | Command::FetchAllPrune => {}
         }
         args
     }
@@ -401,6 +405,7 @@ mod tests {
             "cherry-pick abc"
         );
         assert_eq!(args(&Command::RemoteUpdate), "remote update");
+        assert_eq!(args(&Command::FetchAllPrune), "fetch --all --prune");
         assert_eq!(
             args(&Command::DeleteBranch {
                 name: "old".to_string()

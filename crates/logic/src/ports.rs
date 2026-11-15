@@ -181,6 +181,13 @@ pub trait Ports {
     /// Fails when git fails, for example when a remote cannot be reached.
     fn remote_update(&self) -> Result<(), Failed>;
 
+    /// Fetches all remotes with `git fetch --all --prune`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails, for example when a remote cannot be reached.
+    fn fetch_all_prune(&self) -> Result<(), Failed>;
+
     /// Cherry-picks a commit onto the checked out branch.
     ///
     /// # Errors

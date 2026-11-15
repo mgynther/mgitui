@@ -50,6 +50,7 @@ fn actions(ports: &TestPorts) -> Vec<String> {
                 || c.starts_with("cherry-pick")
                 || c.starts_with("delete")
                 || c.starts_with("remote")
+                || c.starts_with("fetch")
                 || c.starts_with("rebase")
                 || c.contains(": ")
         })
@@ -596,5 +597,30 @@ fn remote_update_fetches_and_reloads() {
     assert_eq!(
         app.note(),
         &Note::Problem("Remote update failed, see the Log view".to_string())
+    );
+}
+
+#[test]
+fn fetch_all_prune_fetches_and_reloads() {
+    let ports: TestPorts = labelled_ports(vec![]);
+    let mut app: App = loaded_app(&ports);
+    run(&mut app, &ports, &[Event::FetchAllPrune]);
+    assert_eq!(
+        actions(&ports),
+        vec!["Info: fetch --all --prune", "fetch --all --prune"]
+    );
+    assert!(ports.calls().contains(&"refs".to_string()));
+    assert_eq!(
+        app.note(),
+        &Note::Info("Fetched all remotes pruning stale remote branches".to_string())
+    );
+    let failing: TestPorts = TestPorts {
+        branch_fails: true,
+        ..labelled_ports(vec![])
+    };
+    run(&mut app, &failing, &[Event::FetchAllPrune]);
+    assert_eq!(
+        app.note(),
+        &Note::Problem("Fetch all prune failed, see the Log view".to_string())
     );
 }

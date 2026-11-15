@@ -527,6 +527,16 @@ impl App {
         };
     }
 
+    pub(super) fn fetch_all_prune(&mut self, ports: &dyn Ports) {
+        ports.log(LogLevel::Info, "fetch --all --prune");
+        let result: Result<(), Failed> = ports.fetch_all_prune();
+        self.refresh(ports);
+        self.note = match result {
+            Ok(()) => Note::Info("Fetched all remotes pruning stale remote branches".to_string()),
+            Err(Failed) => Note::Problem("Fetch all prune failed, see the Log view".to_string()),
+        };
+    }
+
     pub(super) fn cherry_pick(&mut self, ports: &dyn Ports) {
         let Some(hash) = self.branches.selected().map(|c: &Commit| c.hash.clone()) else {
             self.note = Note::Info("No commit selected".to_string());

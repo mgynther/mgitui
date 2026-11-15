@@ -297,6 +297,10 @@ impl Ports for TestPorts {
         self.branch_result("remote update".to_string())
     }
 
+    fn fetch_all_prune(&self) -> Result<(), Failed> {
+        self.branch_result("fetch --all --prune".to_string())
+    }
+
     fn cherry_pick(&self, hash: &str) -> Result<(), Failed> {
         self.branch_result(format!("cherry-pick {hash}"))
     }

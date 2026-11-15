@@ -52,6 +52,8 @@ pub enum Event {
     CherryPick,
     /// Fetch all remotes with `git remote update`.
     RemoteUpdate,
+    /// Fetch all remotes pruning stale remote branches.
+    FetchAllPrune,
     /// Delete a local branch of the selected commit that is not checked out.
     DeleteBranch,
     /// Rebase a branch of the selected commit onto another branch.

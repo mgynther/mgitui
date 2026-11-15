@@ -126,6 +126,7 @@ If per-layer coverage reports well-tested code as uncovered, the coverage data f
 | h | Branches | check out the commit's local branch |
 | p | Branches | cherry-pick the selected commit onto the checked out branch |
 | u | Branches | fetch all remotes with `git remote update` |
+| U | Branches | fetch all remotes pruning stale remote branches with `git fetch --all --prune` |
 | d | Branches | delete a local branch of the selected commit that is not checked out, after confirming with y (also when not merged) |
 | b | Branches | rebase a branch of the selected commit onto another local branch or remote main/master |
 | i | Branches | the same as b, interactively: git opens Vim for the todo list |

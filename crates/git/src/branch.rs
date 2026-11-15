@@ -43,6 +43,18 @@ impl Git {
         Ok(())
     }
 
+    /// Fetches all remotes pruning stale remote branches. Git and ssh ask for passwords on the
+    /// terminal, so the caller must hand the terminal over; the output is still captured and
+    /// logged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails, for example when a remote cannot be reached.
+    pub fn fetch_all_prune(&self, log: &Log<'_>) -> Result<(), GitError> {
+        self.run(&Command::FetchAllPrune, None, log)?;
+        Ok(())
+    }
+
     /// Checks out local branch `branch`.
     ///
     /// # Errors
@@ -282,6 +294,39 @@ mod tests {
         repo.git_ok(&["remote", "set-url", "origin", "/nonexistent/repo"]);
         assert!(matches!(
             repo.git().remote_update(&logged.log()),
+            Err(GitError::Failed { .. })
+        ));
+    }
+
+    #[test]
+    fn fetch_all_prune_fetches_all_remotes() {
+        let upstream: TestRepo = TestRepo::new();
+        upstream.git_ok(&["commit", "-q", "--allow-empty", "-m", "upstream work"]);
+        upstream.git_ok(&["branch", "-c", "another-branch"]);
+
+        let repo: TestRepo = TestRepo::new();
+        let url: String = upstream.path().to_string_lossy().into_owned();
+        repo.git_ok(&["remote", "add", "origin", &url]);
+        let logged: Logged = Logged::new();
+        repo.git().fetch_all_prune(&logged.log()).unwrap();
+        assert_eq!(
+            repo.git_ok(&["branch", "-r"]),
+            "  origin/another-branch\n  origin/main\n"
+        );
+        assert_eq!(logged.lines()[0], "Info: git fetch --all --prune (exit 0)");
+
+        upstream.git_ok(&["branch", "-D", "another-branch"]);
+        let logged_before: usize = logged.lines().len();
+        repo.git().fetch_all_prune(&logged.log()).unwrap();
+        assert_eq!(repo.git_ok(&["branch", "-r"]), "  origin/main\n");
+        assert_eq!(
+            logged.lines()[logged_before],
+            "Info: git fetch --all --prune (exit 0)"
+        );
+
+        repo.git_ok(&["remote", "set-url", "origin", "/nonexistent/repo"]);
+        assert!(matches!(
+            repo.git().fetch_all_prune(&logged.log()),
             Err(GitError::Failed { .. })
         ));
     }

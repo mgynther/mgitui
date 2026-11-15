@@ -574,6 +574,36 @@ fn remote_update_shows_fetched_branches() {
 }
 
 #[test]
+fn fetch_all_prune_removes_stale_remote_branches() {
+    let upstream: TempDir = TempDir::new();
+    init_repo(upstream.path());
+    git_ok(
+        upstream.path(),
+        &["commit", "-q", "--allow-empty", "-m", "upstream work"],
+    );
+    git_ok(upstream.path(), &["branch", "stale"]);
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    let url: String = upstream.path().to_string_lossy().into_owned();
+    git_ok(dir.path(), &["remote", "add", "origin", &url]);
+    let mut s: Session = session_in(&dir);
+    s.input(b"u");
+    git_ok(upstream.path(), &["branch", "-D", "stale"]);
+    s.input(b"u");
+    assert_eq!(
+        git_ok(dir.path(), &["branch", "-r"]),
+        "  origin/main\n  origin/stale\n"
+    );
+    s.input(b"U");
+    let screen: ui::buffer::Buffer = s.render(SIZE);
+    assert_eq!(
+        screen.row_text(23).trim_end(),
+        "Fetched all remotes pruning stale remote branches"
+    );
+    assert_eq!(git_ok(dir.path(), &["branch", "-r"]), "  origin/main\n");
+}
+
+#[test]
 fn d_discards_changes_and_deletes_untracked_files_after_confirming() {
     let dir: TempDir = TempDir::new();
     init_repo(dir.path());

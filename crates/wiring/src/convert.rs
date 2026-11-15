@@ -34,6 +34,7 @@ pub fn event(event: ui::event::Event) -> logic::event::Event {
         U::Checkout => L::Checkout,
         U::CherryPick => L::CherryPick,
         U::RemoteUpdate => L::RemoteUpdate,
+        U::FetchAllPrune => L::FetchAllPrune,
         U::DeleteBranch => L::DeleteBranch,
         U::DiscardFile => L::DiscardFile,
         U::Rebase => L::Rebase,

@@ -116,7 +116,7 @@ mod tests {
     use crate::buffer::Buffer;
     use crate::layout::Size;
     use crate::views::diff_text::{DiffRowKind, DiffRowView};
-    use crate::views::file_list::FileRow;
+    use crate::views::file_list::{FileChange, FileRow};
 
     const SIZE: Size = Size {
         width: 90,
@@ -127,11 +127,17 @@ mod tests {
         DiffView {
             focus,
             unstaged: vec![FileRow {
-                label: "M a.txt".to_string(),
+                change: FileChange::Modified,
+                path: "a.txt".to_string(),
+                original_path: None,
+                mode_changed: false,
                 selected: true,
             }],
             staged: vec![FileRow {
-                label: "A b.txt".to_string(),
+                change: FileChange::Added,
+                path: "b.txt".to_string(),
+                original_path: None,
+                mode_changed: false,
                 selected: true,
             }],
             diff_file: Some("a.txt".to_string()),

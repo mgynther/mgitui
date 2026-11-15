@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use terminal::Terminal;
+use ui::exit::{ExitProblem, exit_text};
 use wiring::log::{LogBuffer, system_clock};
 use wiring::session::Session;
 
@@ -16,16 +17,18 @@ fn main() -> ExitCode {
     let current: PathBuf = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let git: git::Git = match wiring::startup::open_repository(&git::Git::new(&current), &log) {
         Ok(git) => git,
-        Err(message) => return fail(&message),
+        Err(problem) => return fail(&problem),
     };
     match run(git, log) {
         Ok(()) => ExitCode::SUCCESS,
-        Err(error) => fail(&format!("mgitui: {error}")),
+        Err(error) => fail(&ExitProblem::Terminal {
+            detail: error.to_string(),
+        }),
     }
 }
 
-fn fail(message: &str) -> ExitCode {
-    let _ = writeln!(io::stderr(), "{message}");
+fn fail(problem: &ExitProblem) -> ExitCode {
+    let _ = writeln!(io::stderr(), "{}", exit_text(problem));
     ExitCode::FAILURE
 }
 

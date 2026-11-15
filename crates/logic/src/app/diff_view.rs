@@ -476,7 +476,9 @@ impl App {
             }
             Ok(true) => match ports.last_commit_message() {
                 Ok(message) => {
-                    self.diff.amend_draft = message;
+                    // git ends the message with an empty line; the draft ends with one newline,
+                    // like a message typed in the editor.
+                    self.diff.amend_draft = format!("{}\n", message.trim_end());
                     self.diff.amend = true;
                     self.reload_status(ports);
                 }

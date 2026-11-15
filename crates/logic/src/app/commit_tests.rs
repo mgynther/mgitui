@@ -80,6 +80,18 @@ fn failures_keep_the_message() {
 }
 
 #[test]
+fn the_amend_draft_ends_with_one_newline() {
+    let ports: TestPorts = TestPorts {
+        last_message: Some("Last\n\n  \n".to_string()),
+        amended: Some(vec![modified("a")]),
+        ..TestPorts::new()
+    };
+    let mut app: App = app(&ports);
+    run(&mut app, &ports, &[Event::ToggleAmend]);
+    assert_eq!(app.diff().message(), "Last\n");
+}
+
+#[test]
 fn amend_mode_has_its_own_draft() {
     let ports: TestPorts = TestPorts {
         amended: Some(vec![modified("a")]),

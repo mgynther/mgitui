@@ -44,6 +44,17 @@ fn log_app(messages: &[&str]) -> App {
 }
 
 #[test]
+fn start_loads_everything() {
+    let ports: TestPorts = TestPorts::new();
+    let mut app: App = App::new();
+    app.start(&ports);
+    assert_eq!(
+        ports.calls(),
+        vec!["Info: start", "refs", "commits 0 2000", "status"]
+    );
+}
+
+#[test]
 fn starts_in_branches_view() {
     let app: App = App::default();
     assert_eq!(app.view(), ViewId::Branches);

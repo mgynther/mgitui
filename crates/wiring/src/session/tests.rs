@@ -97,7 +97,7 @@ fn log_view_search_with_validation() {
     let lines: Vec<String> = (0..24).map(|y: usize| screen.row_text(y)).collect();
     let position = |text: &str| lines.iter().position(|l: &String| l.contains(text));
     assert_eq!(position("wiring     Info  started"), Some(2));
-    assert_eq!(position("logic      Info  reload"), Some(3));
+    assert_eq!(position("logic      Info  start"), Some(3));
     assert!(position("git        Info  git log --all") > Some(3));
     assert!(
         position("validation Error search text is empty") > position("git        Info  git status")

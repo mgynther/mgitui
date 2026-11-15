@@ -1,6 +1,7 @@
 //! A running application: state, git and log, driven by terminal input.
 
 use logic::app::App;
+use logic::ports::Ports;
 
 use crate::convert;
 use crate::editor::{Editor, Handoff};
@@ -34,7 +35,7 @@ impl Session {
             editor,
             handoff,
         };
-        session.handle(logic::event::Event::Reload);
+        session.with_ports(|app: &mut App, ports: &dyn Ports| app.start(ports));
         session
     }
 
@@ -53,13 +54,18 @@ impl Session {
     }
 
     fn handle(&mut self, event: logic::event::Event) {
+        self.with_ports(|app: &mut App, ports: &dyn Ports| app.handle(event, ports));
+    }
+
+    /// Runs `act` on the application with ports for this session, then collects the log.
+    fn with_ports(&mut self, act: impl FnOnce(&mut App, &dyn Ports)) {
         let ports: SessionPorts<'_> = SessionPorts {
             log: &self.log,
             git: &self.git,
             editor: self.editor.as_ref(),
             handoff: self.handoff.as_ref(),
         };
-        self.app.handle(event, &ports);
+        act(&mut self.app, &ports);
         self.collect_log();
     }
 

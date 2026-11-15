@@ -318,7 +318,7 @@ fn log_view(
         .map(
             |(index, entry): (usize, &LogEntry)| ui::views::log::LogRow {
                 time: entry.time,
-                layer: layer_name(entry.layer).to_string(),
+                layer: ui_layer(entry.layer),
                 level: ui_level(entry.level),
                 message: entry.message.clone(),
                 selected: index == cursor.selected(),
@@ -503,31 +503,14 @@ fn file_rows(
         .take(height)
         .map(
             |(index, file): (usize, &ChangedFile)| ui::views::file_list::FileRow {
-                label: file_label(file),
+                change: file_change(file.kind),
+                path: file.path.clone(),
+                original_path: file.original_path.clone(),
+                mode_changed: file.mode_changed,
                 selected: index == cursor.selected(),
             },
         )
         .collect()
-}
-
-/// A status letter and the path, for example `M src/main.rs` or `R old -> new`.
-fn file_label(file: &ChangedFile) -> String {
-    let letter: char = match file.kind {
-        ChangeKind::Modified => 'M',
-        ChangeKind::Added => 'A',
-        ChangeKind::Deleted => 'D',
-        ChangeKind::Renamed => 'R',
-        ChangeKind::Copied => 'C',
-        ChangeKind::TypeChanged => 'T',
-        ChangeKind::Untracked => '?',
-        ChangeKind::Conflict => 'U',
-    };
-    let path: String = match &file.original_path {
-        Some(original) => format!("{original} -> {}", file.path),
-        None => file.path.clone(),
-    };
-    let mode: &str = if file.mode_changed { " (mode)" } else { "" };
-    format!("{letter} {path}{mode}")
 }
 
 /// The visible rows of a file diff.
@@ -566,13 +549,28 @@ fn diff_row_kind(kind: RowKind) -> ui::views::diff_text::DiffRowKind {
     }
 }
 
-fn layer_name(layer: Layer) -> &'static str {
+fn file_change(kind: ChangeKind) -> ui::views::file_list::FileChange {
+    use ui::views::file_list::FileChange as F;
+    match kind {
+        ChangeKind::Modified => F::Modified,
+        ChangeKind::Added => F::Added,
+        ChangeKind::Deleted => F::Deleted,
+        ChangeKind::Renamed => F::Renamed,
+        ChangeKind::Copied => F::Copied,
+        ChangeKind::TypeChanged => F::TypeChanged,
+        ChangeKind::Untracked => F::Untracked,
+        ChangeKind::Conflict => F::Conflict,
+    }
+}
+
+fn ui_layer(layer: Layer) -> ui::views::log::Layer {
+    use ui::views::log::Layer as U;
     match layer {
-        Layer::Git => "git",
-        Layer::Logic => "logic",
-        Layer::Ui => "ui",
-        Layer::Validation => "validation",
-        Layer::Wiring => "wiring",
+        Layer::Git => U::Git,
+        Layer::Logic => U::Logic,
+        Layer::Ui => U::Ui,
+        Layer::Validation => U::Validation,
+        Layer::Wiring => U::Wiring,
     }
 }
 

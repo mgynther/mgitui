@@ -6,7 +6,7 @@ use crate::buffer::Buffer;
 use crate::layout::Size;
 use crate::style::{Color, Style};
 use crate::views::diff_text::{DiffRowKind, DiffRowView};
-use crate::views::file_list::FileRow;
+use crate::views::file_list::{FileChange, FileRow};
 
 const SIZE: Size = Size {
     width: 90,
@@ -49,7 +49,10 @@ fn view(focus: BranchesFocus, rows: Vec<CommitRow>) -> BranchesView {
             message: vec!["Subject".to_string(), String::new(), "Body".to_string()],
         }),
         files: vec![FileRow {
-            label: "M a.txt".to_string(),
+            change: FileChange::Modified,
+            path: "a.txt".to_string(),
+            original_path: None,
+            mode_changed: false,
             selected: true,
         }],
         diff_file: Some("a.txt".to_string()),

@@ -1,10 +1,10 @@
 use std::collections::VecDeque;
 
 use super::{
-    branches_focus, commit_info, commit_rows, diff_focus, diff_row_kind, event, file_label,
-    graph_cell, input_mode, label_view, layer_name, log_view, logic_view, screen, status,
-    ui_branch_name_problem, ui_info, ui_input_problem, ui_level, ui_operation, ui_problem, ui_view,
-    viewports,
+    branches_focus, commit_info, commit_rows, diff_focus, diff_row_kind, event, file_change,
+    file_rows, graph_cell, input_mode, label_view, log_view, logic_view, screen, status,
+    ui_branch_name_problem, ui_info, ui_input_problem, ui_layer, ui_level, ui_operation,
+    ui_problem, ui_view, viewports,
 };
 use logic::app::{App, BranchesPane, Confirmation, DiffPane, Mode, Prompt, PromptKind, Viewports};
 use logic::cursor::Cursor;
@@ -554,15 +554,16 @@ fn branch_name_problems_convert() {
 
 #[test]
 fn layers_and_levels() {
-    let layers: [(Layer, &str); 5] = [
-        (Layer::Git, "git"),
-        (Layer::Logic, "logic"),
-        (Layer::Ui, "ui"),
-        (Layer::Validation, "validation"),
-        (Layer::Wiring, "wiring"),
+    use ui::views::log::Layer as U;
+    let layers: [(Layer, U); 5] = [
+        (Layer::Git, U::Git),
+        (Layer::Logic, U::Logic),
+        (Layer::Ui, U::Ui),
+        (Layer::Validation, U::Validation),
+        (Layer::Wiring, U::Wiring),
     ];
-    for (layer, name) in layers {
-        assert_eq!(layer_name(layer), name);
+    for (layer, expected) in layers {
+        assert_eq!(ui_layer(layer), expected);
     }
     let levels: [(LogLevel, ui::log::LogLevel); 4] = [
         (LogLevel::Error, ui::log::LogLevel::Error),
@@ -620,14 +621,14 @@ fn log_view_shows_the_visible_entries() {
         vec![
             ui::views::log::LogRow {
                 time: 5,
-                layer: "git".to_string(),
+                layer: ui::views::log::Layer::Git,
                 level: ui::log::LogLevel::Info,
                 message: "b".to_string(),
                 selected: false,
             },
             ui::views::log::LogRow {
                 time: 5,
-                layer: "git".to_string(),
+                layer: ui::views::log::Layer::Git,
                 level: ui::log::LogLevel::Info,
                 message: "c".to_string(),
                 selected: true,
@@ -722,27 +723,42 @@ fn focus() {
 }
 
 #[test]
-fn file_labels() {
-    let file = |kind: ChangeKind| changed("p", kind);
-    let cases: [(ChangeKind, &str); 8] = [
-        (ChangeKind::Modified, "M p"),
-        (ChangeKind::Added, "A p"),
-        (ChangeKind::Deleted, "D p"),
-        (ChangeKind::Renamed, "R p"),
-        (ChangeKind::Copied, "C p"),
-        (ChangeKind::TypeChanged, "T p"),
-        (ChangeKind::Untracked, "? p"),
-        (ChangeKind::Conflict, "U p"),
+fn file_changes_convert() {
+    use ui::views::file_list::FileChange as F;
+    let cases: [(ChangeKind, F); 8] = [
+        (ChangeKind::Modified, F::Modified),
+        (ChangeKind::Added, F::Added),
+        (ChangeKind::Deleted, F::Deleted),
+        (ChangeKind::Renamed, F::Renamed),
+        (ChangeKind::Copied, F::Copied),
+        (ChangeKind::TypeChanged, F::TypeChanged),
+        (ChangeKind::Untracked, F::Untracked),
+        (ChangeKind::Conflict, F::Conflict),
     ];
-    for (kind, label) in cases {
-        assert_eq!(file_label(&file(kind)), label);
+    for (kind, expected) in cases {
+        assert_eq!(file_change(kind), expected);
     }
+}
+
+#[test]
+fn file_rows_show_the_visible_files() {
     let renamed: ChangedFile = ChangedFile {
-        original_path: Some("o".to_string()),
+        path: "new".to_string(),
+        original_path: Some("old".to_string()),
+        kind: ChangeKind::Renamed,
         mode_changed: true,
-        ..file(ChangeKind::Renamed)
     };
-    assert_eq!(file_label(&renamed), "R o -> p (mode)");
+    let files: Vec<ChangedFile> = vec![changed("a", ChangeKind::Modified), renamed];
+    assert_eq!(
+        file_rows(&files, cursor_on(1, 2, 1), 1),
+        vec![ui::views::file_list::FileRow {
+            change: ui::views::file_list::FileChange::Renamed,
+            path: "new".to_string(),
+            original_path: Some("old".to_string()),
+            mode_changed: true,
+            selected: true,
+        }]
+    );
 }
 
 #[test]

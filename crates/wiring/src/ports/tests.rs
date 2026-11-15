@@ -134,8 +134,8 @@ fn git_failures_become_failed() {
     assert_eq!(ports.reset_keep("h"), Err(Failed));
     assert_eq!(ports.show_commit("h"), Err(Failed));
     assert_eq!(ports.delete_branch("b"), Err(Failed));
-    assert_eq!(ports.rebase("b", "main", false), Err(Failed));
-    assert_eq!(ports.rebase("b", "main", true), Err(Failed));
+    assert_eq!(ports.rebase("b", "main"), Err(Failed));
+    assert_eq!(ports.rebase_interactive("b", "main"), Err(Failed));
     assert_eq!(ports.commit_files("h"), Err(Failed));
     assert_eq!(ports.commit_file_diff("h", &x), Err(Failed));
     assert_eq!(ports.last_commit_message(), Err(Failed));
@@ -200,7 +200,7 @@ fn edit_validate_commit_and_amend() {
         let message: CommitMessage = ports.validate_commit_message("First\n").unwrap();
         ports.commit(&message, false).unwrap();
         assert_eq!(ports.has_commits(), Ok(true));
-        assert_eq!(ports.last_commit_message(), Ok("First\n".to_string()));
+        assert_eq!(ports.last_commit_message(), Ok("First\n\n".to_string()));
         ports
             .commit(&CommitMessage("Second\n".to_string()), true)
             .unwrap();
@@ -309,13 +309,13 @@ fn interactive_rebase_hands_the_terminal_to_git() {
         editor: &append_line,
         handoff: &counting,
     };
-    assert_eq!(ports.rebase("topic", "main", true), Ok(()));
+    assert_eq!(ports.rebase_interactive("topic", "main"), Ok(()));
     assert_eq!(handed.get(), 1);
     assert_eq!(
         git_ok(dir.path(), &["log", "--format=%s", "topic"]),
         "one\nmain work\nbase\n"
     );
-    assert_eq!(ports.rebase("main", "topic", false), Ok(()));
+    assert_eq!(ports.rebase("main", "topic"), Ok(()));
     let broken =
         |_: &mut dyn FnMut()| -> std::io::Result<()> { Err(std::io::Error::other("no tty")) };
     let failing: SessionPorts<'_> = SessionPorts {
@@ -324,7 +324,7 @@ fn interactive_rebase_hands_the_terminal_to_git() {
         editor: &append_line,
         handoff: &broken,
     };
-    assert_eq!(failing.rebase("topic", "main", true), Err(Failed));
+    assert_eq!(failing.rebase_interactive("topic", "main"), Err(Failed));
     assert!(
         log.drain()
             .iter()

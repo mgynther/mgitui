@@ -516,7 +516,11 @@ impl App {
             "rebase"
         };
         ports.log(LogLevel::Info, &format!("{action} {branch} onto {onto}"));
-        let result: Result<(), Failed> = ports.rebase(branch, onto, interactive);
+        let result: Result<(), Failed> = if interactive {
+            ports.rebase_interactive(branch, onto)
+        } else {
+            ports.rebase(branch, onto)
+        };
         self.refresh(ports);
         self.note = match result {
             Ok(()) if interactive => Note::Info(Info::RebasedInteractively {

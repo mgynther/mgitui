@@ -2,6 +2,7 @@
 
 pub mod buffer;
 pub mod event;
+pub mod exit;
 pub mod key;
 pub mod layout;
 pub mod log;

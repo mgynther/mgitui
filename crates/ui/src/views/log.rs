@@ -14,13 +14,28 @@ pub struct LogView {
     pub rows: Vec<LogRow>,
 }
 
+/// The layer that logged a line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Layer {
+    /// The git layer.
+    Git,
+    /// The logic layer.
+    Logic,
+    /// The ui layer.
+    Ui,
+    /// The validation layer.
+    Validation,
+    /// The wiring layer.
+    Wiring,
+}
+
 /// One log line.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogRow {
     /// Seconds since 1970-01-01 00:00 UTC.
     pub time: u64,
     /// The layer that logged the line.
-    pub layer: String,
+    pub layer: Layer,
     /// The severity.
     pub level: LogLevel,
     /// The message.
@@ -47,7 +62,7 @@ pub fn render(buffer: &mut Buffer, view: &LogView, size: Size) {
         let text: String = format!(
             "{} {:<10} {:<5} {}",
             format_utc(row.time),
-            row.layer,
+            layer_name(row.layer),
             level_name(row.level),
             row.message
         );
@@ -64,6 +79,16 @@ fn level_color(level: LogLevel) -> Color {
     }
 }
 
+fn layer_name(layer: Layer) -> &'static str {
+    match layer {
+        Layer::Git => "git",
+        Layer::Logic => "logic",
+        Layer::Ui => "ui",
+        Layer::Validation => "validation",
+        Layer::Wiring => "wiring",
+    }
+}
+
 fn level_name(level: LogLevel) -> &'static str {
     match level {
         LogLevel::Error => "Error",
@@ -75,7 +100,7 @@ fn level_name(level: LogLevel) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{LogRow, LogView, render};
+    use super::{Layer, LogRow, LogView, layer_name, render};
     use crate::buffer::Buffer;
     use crate::layout::Size;
     use crate::log::LogLevel;
@@ -89,10 +114,24 @@ mod tests {
     fn row(level: LogLevel, message: &str, selected: bool) -> LogRow {
         LogRow {
             time: 1_735_787_045,
-            layer: "git".to_string(),
+            layer: Layer::Git,
             level,
             message: message.to_string(),
             selected,
+        }
+    }
+
+    #[test]
+    fn layer_names() {
+        let cases: [(Layer, &str); 5] = [
+            (Layer::Git, "git"),
+            (Layer::Logic, "logic"),
+            (Layer::Ui, "ui"),
+            (Layer::Validation, "validation"),
+            (Layer::Wiring, "wiring"),
+        ];
+        for (layer, name) in cases {
+            assert_eq!(layer_name(layer), name);
         }
     }
 

@@ -144,7 +144,6 @@ impl logic::ports::Ports for SessionPorts<'_> {
     fn last_commit_message(&self) -> Result<String, Failed> {
         self.git
             .last_commit_message(&self.log_git())
-            .map(|message: String| format!("{}\n", message.trim_end()))
             .map_err(|_| Failed)
     }
 
@@ -246,13 +245,13 @@ impl logic::ports::Ports for SessionPorts<'_> {
             .map_err(|_| Failed)
     }
 
-    fn rebase(&self, branch: &str, onto: &str, interactive: bool) -> Result<(), Failed> {
-        if !interactive {
-            return self
-                .git
-                .rebase(branch, onto, &self.log_git())
-                .map_err(|_| Failed);
-        }
+    fn rebase(&self, branch: &str, onto: &str) -> Result<(), Failed> {
+        self.git
+            .rebase(branch, onto, &self.log_git())
+            .map_err(|_| Failed)
+    }
+
+    fn rebase_interactive(&self, branch: &str, onto: &str) -> Result<(), Failed> {
         self.with_terminal(&mut || {
             self.git
                 .rebase_interactive(branch, onto, &self.log_git())

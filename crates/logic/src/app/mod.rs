@@ -253,6 +253,12 @@ impl App {
         self.clamp_branch_cursors();
     }
 
+    /// Loads everything from git when the application starts.
+    pub fn start(&mut self, ports: &dyn Ports) {
+        ports.log(LogLevel::Info, "start");
+        self.refresh(ports);
+    }
+
     /// Changes the state for `event`, using `ports` for everything outside the state.
     pub fn handle(&mut self, event: Event, ports: &dyn Ports) {
         self.note = Note::None;

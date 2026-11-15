@@ -365,13 +365,13 @@ fn rebase_problems() {
         failing_app.note(),
         &Note::Problem("Rebase failed, see the Log view; resolve it outside mgitui".to_string())
     );
-    let ports: TestPorts = rebase_ports(vec![local("topic")]);
-    let mut app: App = loaded_app(&ports);
-    run(&mut app, &ports, &[Event::Rebase]);
-    typed(&mut app, &ports, "99");
-    run(&mut app, &ports, &[Event::InputSubmit]);
+    let unlisted: TestPorts = rebase_ports(vec![local("topic")]);
+    let mut unlisted_app: App = loaded_app(&unlisted);
+    run(&mut unlisted_app, &unlisted, &[Event::Rebase]);
+    typed(&mut unlisted_app, &unlisted, "99");
+    run(&mut unlisted_app, &unlisted, &[Event::InputSubmit]);
     assert_eq!(
-        app.note(),
+        unlisted_app.note(),
         &Note::Problem("Choice is not listed".to_string())
     );
 }

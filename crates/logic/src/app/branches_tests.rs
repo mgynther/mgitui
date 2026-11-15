@@ -26,6 +26,15 @@ fn run(app: &mut App, ports: &TestPorts, events: &[Event]) {
     }
 }
 
+/// Types `text` into a search prompt and submits it.
+fn search(app: &mut App, ports: &TestPorts, text: &str) {
+    app.handle(Event::StartSearch, ports);
+    for c in text.chars() {
+        app.handle(Event::Input(c), ports);
+    }
+    app.handle(Event::InputSubmit, ports);
+}
+
 fn selected_hash(app: &App) -> Option<String> {
     app.branches().selected().map(|c| c.hash.clone())
 }
@@ -133,22 +142,15 @@ fn failures_are_shown() {
 fn search_by_subject_hash_and_author() {
     let ports: TestPorts = ports(10);
     let mut app: App = app(&ports);
-    let search = |app: &mut App, text: &str| {
-        app.handle(Event::StartSearch, &ports);
-        for c in text.chars() {
-            app.handle(Event::Input(c), &ports);
-        }
-        app.handle(Event::InputSubmit, &ports);
-    };
-    search(&mut app, "commit 3");
+    search(&mut app, &ports, "commit 3");
     assert_eq!(selected_hash(&app), Some("c3".to_string()));
-    search(&mut app, "c7");
+    search(&mut app, &ports, "c7");
     assert_eq!(selected_hash(&app), Some("c7".to_string()));
-    search(&mut app, "bo");
+    search(&mut app, &ports, "bo");
     assert_eq!(selected_hash(&app), Some("c5".to_string()));
     run(&mut app, &ports, &[Event::SearchPrevious]);
     assert_eq!(selected_hash(&app), Some("c7".to_string()));
-    search(&mut app, "nothing");
+    search(&mut app, &ports, "nothing");
     assert_eq!(
         app.note(),
         &Note::Info("Pattern not found: nothing".to_string())
@@ -185,20 +187,13 @@ fn search_by_branch_and_tag_names() {
         head: None,
     });
     let mut app: App = app(&ports);
-    let search = |app: &mut App, text: &str| {
-        app.handle(Event::StartSearch, &ports);
-        for c in text.chars() {
-            app.handle(Event::Input(c), &ports);
-        }
-        app.handle(Event::InputSubmit, &ports);
-    };
-    search(&mut app, "feat");
+    search(&mut app, &ports, "feat");
     assert_eq!(selected_hash(&app), Some("c2".to_string()));
-    search(&mut app, "v1.2");
+    search(&mut app, &ports, "v1.2");
     assert_eq!(selected_hash(&app), Some("c6".to_string()));
-    search(&mut app, "origin/top");
+    search(&mut app, &ports, "origin/top");
     assert_eq!(selected_hash(&app), Some("c4".to_string()));
-    search(&mut app, "n/t");
+    search(&mut app, &ports, "n/t");
     assert_eq!(selected_hash(&app), Some("c4".to_string()));
     assert_eq!(app.note(), &Note::Info("search wrapped".to_string()));
 }

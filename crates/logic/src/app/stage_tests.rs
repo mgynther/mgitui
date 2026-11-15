@@ -312,8 +312,8 @@ fn d_is_refused_on_staged_conflicted_and_missing_files_and_in_the_diff() {
     run(&mut app, &ports, &[Event::DiscardFile]);
     assert_eq!(app.mode(), &Mode::Normal);
     let empty: TestPorts = ports_with(vec![], vec![]);
-    let mut app: App = self::app(&empty);
-    run(&mut app, &empty, &[Event::DiscardFile]);
-    assert_eq!(app.mode(), &Mode::Normal);
+    let mut empty_app: App = self::app(&empty);
+    run(&mut empty_app, &empty, &[Event::DiscardFile]);
+    assert_eq!(empty_app.mode(), &Mode::Normal);
     assert_eq!(empty.calls(), Vec::<String>::new());
 }

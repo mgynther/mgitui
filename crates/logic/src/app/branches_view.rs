@@ -459,8 +459,11 @@ impl App {
                     };
                     Some((rank, name.clone()))
                 }
-                Label::Remote { remote, branch } if !interactive && is_main(branch) => {
-                    Some((2, format!("{remote}/{branch}")))
+                Label::Remote {
+                    remote,
+                    branch: remote_branch,
+                } if !interactive && is_main(remote_branch) => {
+                    Some((2, format!("{remote}/{remote_branch}")))
                 }
                 Label::Local { .. } | Label::Remote { .. } | Label::Tag { .. } => None,
             })

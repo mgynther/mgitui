@@ -218,54 +218,58 @@ fn branches_view_shows_graph_details_and_panes() {
         Box::new(run_here),
     );
     s.resize(SIZE);
-    let screen: ui::buffer::Buffer = s.render(SIZE);
+    let first_selected: ui::buffer::Buffer = s.render(SIZE);
     assert!(
-        screen.row_text(2).starts_with("◉  [feature] second"),
+        first_selected
+            .row_text(2)
+            .starts_with("◉  [feature] second"),
         "{}",
-        screen.row_text(2)
+        first_selected.row_text(2)
     );
     assert!(
-        screen
+        first_selected
             .row_text(2)
             .ends_with("Ada Author         2025-01-02 03:04")
     );
     assert!(
-        screen.row_text(3).starts_with("●  [main] <v1> first"),
+        first_selected
+            .row_text(3)
+            .starts_with("●  [main] <v1> first"),
         "{}",
-        screen.row_text(3)
+        first_selected.row_text(3)
     );
     assert!(
-        screen.row_text(9).starts_with("commit "),
+        first_selected.row_text(9).starts_with("commit "),
         "{}",
-        screen.row_text(9)
+        first_selected.row_text(9)
     );
-    assert!(screen.row_text(9).contains("│A b.txt"));
+    assert!(first_selected.row_text(9).contains("│A b.txt"));
     s.input(b"j");
-    let screen: ui::buffer::Buffer = s.render(SIZE);
+    let second_selected: ui::buffer::Buffer = s.render(SIZE);
     assert!(
-        screen
+        second_selected
             .row_text(10)
             .starts_with("Author: Ada Author  Date: 2025-01-02 03:04")
     );
     assert!(
-        screen.row_text(11).starts_with("first"),
+        second_selected.row_text(11).starts_with("first"),
         "{}",
-        screen.row_text(11)
+        second_selected.row_text(11)
     );
-    assert!(screen.row_text(9).contains("│A a.txt"));
+    assert!(second_selected.row_text(9).contains("│A a.txt"));
     s.input(b"w");
     assert!(s.render(SIZE).cell(55, 9).unwrap().style.reverse);
     s.input(b"w");
-    let screen: ui::buffer::Buffer = s.render(SIZE);
+    let diff_focused: ui::buffer::Buffer = s.render(SIZE);
     assert!(
-        screen.row_text(15).contains("Diff a.txt"),
+        diff_focused.row_text(15).contains("Diff a.txt"),
         "{}",
-        screen.row_text(15)
+        diff_focused.row_text(15)
     );
     assert!(
-        screen.row_text(16).starts_with("▶@@"),
+        diff_focused.row_text(16).starts_with("▶@@"),
         "{}",
-        screen.row_text(16)
+        diff_focused.row_text(16)
     );
     s.input(b"w/sec\r");
     assert!(s.render(SIZE).row_text(9).contains("│A b.txt"));
@@ -319,19 +323,22 @@ fn create_and_check_out_branches() {
 #[test]
 fn empty_repository_and_small_terminal() {
     let (_dir, mut s): (TempDir, Session) = session();
-    let screen: ui::buffer::Buffer = s.render(SIZE);
-    assert!(screen.row_text(1).starts_with("─ Commits ─"));
-    assert_eq!(screen.row_text(2).trim_end(), "");
+    let empty: ui::buffer::Buffer = s.render(SIZE);
+    assert!(empty.row_text(1).starts_with("─ Commits ─"));
+    assert_eq!(empty.row_text(2).trim_end(), "");
     s.input(b"jGgwjhc\x1b");
     s.input(b"\x1bOQ");
     assert!(s.render(SIZE).row_text(2).contains("No changes"));
     s.input(b"\re a");
-    let screen: ui::buffer::Buffer = s.render(SIZE);
+    let amend_refused: ui::buffer::Buffer = s.render(SIZE);
     assert_eq!(
-        screen.row_text(23).trim_end(),
+        amend_refused.row_text(23).trim_end(),
         "Nothing to amend: there are no commits yet"
     );
-    assert_eq!(screen.cell(25, 0).unwrap().style.fg, ui::style::Color::Red);
+    assert_eq!(
+        amend_refused.cell(25, 0).unwrap().style.fg,
+        ui::style::Color::Red
+    );
     s.input(b"\x1bOR");
     let log: ui::buffer::Buffer = s.render(SIZE);
     let lines: Vec<String> = (2..23).map(|y: usize| log.row_text(y)).collect();

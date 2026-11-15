@@ -109,7 +109,7 @@ mod tests {
 
     #[test]
     fn commits_and_refs() {
-        let converted: logic::model::Commit = commit(git::Commit {
+        let converted_commit: logic::model::Commit = commit(git::Commit {
             hash: "h".to_string(),
             parents: vec!["p".to_string()],
             author: "a".to_string(),
@@ -118,11 +118,11 @@ mod tests {
         });
         assert_eq!(
             (
-                converted.hash,
-                converted.parents,
-                converted.author,
-                converted.date,
-                converted.subject
+                converted_commit.hash,
+                converted_commit.parents,
+                converted_commit.author,
+                converted_commit.date,
+                converted_commit.subject
             ),
             (
                 "h".to_string(),
@@ -137,7 +137,7 @@ mod tests {
             kind,
             is_head: true,
         };
-        let converted: logic::model::Refs = refs(
+        let converted_refs: logic::model::Refs = refs(
             vec![
                 git_ref(git::RefKind::Local("main".to_string())),
                 git_ref(git::RefKind::Remote {
@@ -148,9 +148,9 @@ mod tests {
             ],
             Some("t".to_string()),
         );
-        assert_eq!(converted.head, Some("t".to_string()));
+        assert_eq!(converted_refs.head, Some("t".to_string()));
         assert_eq!(
-            converted.labels,
+            converted_refs.labels,
             vec![
                 (
                     "t".to_string(),

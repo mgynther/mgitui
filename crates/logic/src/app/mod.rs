@@ -8,6 +8,8 @@ pub use branches_view::{BranchesPane, BranchesState, CHUNK};
 pub use diff_view::{DiffPane, DiffState};
 
 #[cfg(test)]
+mod amend_tests;
+#[cfg(test)]
 mod branch_action_tests;
 #[cfg(test)]
 mod branches_tests;

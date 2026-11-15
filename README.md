@@ -140,7 +140,7 @@ If per-layer coverage reports well-tested code as uncovered, the coverage data f
 | Esc | Diff file diff | clear the line selection |
 | e | Diff | edit the commit message in Vim |
 | c | Diff | commit |
-| a | Diff | toggle amending the last commit |
+| a | Diff | toggle amending the last commit: the Staged list then shows what the amended commit will contain, so unstaging files or lines takes them out of it (an amend that would leave the commit empty is refused) |
 | A | Diff | stage all unstaged changes, including deletions and untracked files (refused while there are merge conflicts) |
 
 ## Manual checks

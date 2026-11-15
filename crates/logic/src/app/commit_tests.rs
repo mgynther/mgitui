@@ -1,6 +1,6 @@
 use super::{App, Note};
 use crate::event::{Event, ViewId};
-use crate::test_ports::TestPorts;
+use crate::test_ports::{TestPorts, modified};
 
 fn app(ports: &TestPorts) -> App {
     let mut app: App = App::new();
@@ -80,7 +80,10 @@ fn failures_keep_the_message() {
 
 #[test]
 fn amend_mode_has_its_own_draft() {
-    let ports: TestPorts = TestPorts::new();
+    let ports: TestPorts = TestPorts {
+        amended: Some(vec![modified("a")]),
+        ..TestPorts::new()
+    };
     let mut app: App = app(&ports);
     run(&mut app, &ports, &[Event::EditMessage, Event::ToggleAmend]);
     assert!(app.diff().amend());

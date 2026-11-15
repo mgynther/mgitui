@@ -82,6 +82,16 @@ impl WorkStatus {
     }
 }
 
+/// What the staged list is compared with in amend mode, so that it shows what the amended
+/// commit will contain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AmendBase {
+    /// The commit before the last one.
+    ParentCommit,
+    /// Nothing: the last commit is the first one, so all of its files are new.
+    Nothing,
+}
+
 /// Which list of changes.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Side {

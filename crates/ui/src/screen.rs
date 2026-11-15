@@ -178,7 +178,7 @@ mod tests {
             staged: vec![],
             diff_title: "Diff".to_string(),
             diff: vec![],
-            message_title: "Commit message".to_string(),
+            amend: false,
             message: String::new(),
             no_changes: true,
         }

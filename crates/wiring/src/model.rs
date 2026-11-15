@@ -1,8 +1,24 @@
-//! Conversions from the git layer's types to the logic layer's types.
+//! Conversions between the git layer's types and the logic layer's types.
 
 use logic::model::{
-    ChangeKind, ChangedFile, Commit, DiffLine, FileDiff, Hunk, Label, LineKind, Refs, WorkStatus,
+    AmendBase, ChangeKind, ChangedFile, Commit, DiffLine, FileDiff, Hunk, Label, LineKind, Refs,
+    WorkStatus,
 };
+
+/// The git base for what the logic layer compares the amended commit with.
+#[must_use]
+pub fn amend_base(base: AmendBase) -> git::Base {
+    match base {
+        AmendBase::ParentCommit => git::Base::ParentOfHead,
+        AmendBase::Nothing => git::Base::Empty,
+    }
+}
+
+/// The logic files for git file changes.
+#[must_use]
+pub fn changed_files(files: Vec<git::FileChange>) -> Vec<ChangedFile> {
+    files.into_iter().map(changed_file).collect()
+}
 
 /// The logic status for a git status.
 #[must_use]
@@ -104,8 +120,21 @@ pub fn refs(refs: Vec<git::Ref>, head: Option<String>) -> Refs {
 
 #[cfg(test)]
 mod tests {
-    use super::{change_kind, commit, file_diff, refs, work_status};
+    use super::{amend_base, change_kind, changed_files, commit, file_diff, refs, work_status};
     use logic::model::{ChangeKind, Label, LineKind};
+
+    #[test]
+    fn amend_bases() {
+        assert_eq!(
+            amend_base(logic::model::AmendBase::ParentCommit),
+            git::Base::ParentOfHead
+        );
+        assert_eq!(
+            amend_base(logic::model::AmendBase::Nothing),
+            git::Base::Empty
+        );
+        assert_eq!(changed_files(vec![]), vec![]);
+    }
 
     #[test]
     fn commits_and_refs() {

@@ -6,7 +6,9 @@ use super::{App, Confirmation, Mode, Note};
 use crate::cursor::Cursor;
 use crate::event::Event;
 use crate::log::LogLevel;
-use crate::model::{ChangeKind, ChangedFile, DiffRow, FileDiff, Side, WorkStatus, diff_rows};
+use crate::model::{
+    AmendBase, ChangeKind, ChangedFile, DiffRow, FileDiff, Side, WorkStatus, diff_rows,
+};
 use crate::patch::{LineRef, build_patch};
 use crate::ports::{Failed, Ports};
 use crate::search::{self, Direction, Found};
@@ -36,6 +38,9 @@ pub struct DiffState {
     draft: String,
     amend_draft: String,
     amend: bool,
+    /// What the staged list was compared with at the last reload in amend mode; `None` in
+    /// normal mode. Asked again on every reload, because commits made outside the app change it.
+    amend_base: Option<AmendBase>,
 }
 
 impl DiffState {
@@ -148,7 +153,17 @@ impl App {
             self.note = Note::Problem("Reloading changes failed, see the Log view".to_string());
             return;
         };
-        let status: WorkStatus = status;
+        let mut status: WorkStatus = status;
+        self.diff.amend_base = None;
+        if self.diff.amend {
+            let amended: Result<(AmendBase, Vec<ChangedFile>), Failed> = amended_files(ports);
+            let Ok((base, files)) = amended else {
+                self.note = Note::Problem("Reloading changes failed, see the Log view".to_string());
+                return;
+            };
+            status.staged = files;
+            self.diff.amend_base = Some(base);
+        }
         for side in [Side::Unstaged, Side::Staged] {
             let old: Cursor = self.diff.cursor(side);
             let old_path: Option<String> = self
@@ -194,12 +209,15 @@ impl App {
     /// Loads the diff of the selected file.
     fn load_file_diff(&mut self, ports: &dyn Ports) {
         let side: Side = self.diff.side;
+        let amend_base: Option<AmendBase> = self.diff.amend_base;
         let diff: Option<Result<FileDiff, Failed>> =
             self.diff.selected_file().map(|file: &ChangedFile| {
-                if file.kind == ChangeKind::Untracked {
-                    ports.untracked_file_diff(&file.path)
-                } else {
-                    ports.file_diff(&file.paths(side), side)
+                match (file.kind, side, amend_base) {
+                    (ChangeKind::Untracked, _, _) => ports.untracked_file_diff(&file.path),
+                    (_, Side::Staged, Some(base)) => {
+                        ports.amended_file_diff(&file.paths(side), base)
+                    }
+                    _ => ports.file_diff(&file.paths(side), side),
                 }
             });
         self.diff.file_diff = match diff {
@@ -306,7 +324,7 @@ impl App {
             }
             Side::Staged => {
                 ports.log(LogLevel::Info, &format!("unstage {}", file.path));
-                unstage_whole_file(&file, ports)
+                unstage_whole_file(&file, self.diff.amend_base, ports)
             }
         };
         self.after_staging(result, ports);
@@ -435,10 +453,13 @@ impl App {
         }
     }
 
+    /// Switches amend mode on or off. The staged list changes meaning, so it is reloaded: in
+    /// amend mode it shows what the amended commit will contain.
     fn toggle_amend(&mut self, ports: &dyn Ports) {
         if self.diff.amend {
             self.diff.amend = false;
             self.diff.amend_draft.clear();
+            self.reload_status(ports);
             return;
         }
         match ports.has_commits() {
@@ -451,6 +472,7 @@ impl App {
                 Ok(message) => {
                     self.diff.amend_draft = message;
                     self.diff.amend = true;
+                    self.reload_status(ports);
                 }
                 Err(Failed) => self.amend_failed(),
             },
@@ -463,6 +485,12 @@ impl App {
     }
 
     fn commit(&mut self, ports: &dyn Ports) {
+        if self.diff.amend && self.diff.status.staged.is_empty() {
+            let message: &str = "The amended commit would be empty: stage changes first";
+            ports.log(LogLevel::Error, message);
+            self.note = Note::Problem(message.to_string());
+            return;
+        }
         let message: crate::ports::CommitMessage =
             match ports.validate_commit_message(self.diff.message()) {
                 Ok(message) => message,
@@ -524,10 +552,31 @@ pub(super) fn move_cursor(cursor: &mut Cursor, event: Event, len: usize, height:
     }
 }
 
-/// Unstages all changes of a file in the staged list. Without commits there is nothing to
-/// restore the index from, so the file is removed from the index instead.
-fn unstage_whole_file(file: &ChangedFile, ports: &dyn Ports) -> Result<(), Failed> {
+/// The files the amended commit will contain, and what they are compared with: the commit
+/// before the last one, or nothing when the last commit is the first one.
+fn amended_files(ports: &dyn Ports) -> Result<(AmendBase, Vec<ChangedFile>), Failed> {
+    let base: AmendBase = if ports.last_commit_has_parent()? {
+        AmendBase::ParentCommit
+    } else {
+        AmendBase::Nothing
+    };
+    Ok((base, ports.amended_files(base)?))
+}
+
+/// Unstages all changes of a file in the staged list. In amend mode that takes the file out of
+/// the amended commit. Without a commit to restore the index from (no commits, or amending the
+/// first commit), the file is removed from the index instead.
+fn unstage_whole_file(
+    file: &ChangedFile,
+    amend_base: Option<AmendBase>,
+    ports: &dyn Ports,
+) -> Result<(), Failed> {
     let paths: Vec<String> = file.paths(Side::Staged);
+    match amend_base {
+        Some(AmendBase::ParentCommit) => return ports.unstage_from_amend(&paths),
+        Some(AmendBase::Nothing) => return ports.remove_from_index(&paths),
+        None => {}
+    }
     let has_commits: Result<bool, Failed> = ports.has_commits();
     match has_commits {
         Ok(true) => ports.unstage_paths(&paths),

@@ -1,7 +1,7 @@
 //! The functions logic uses to get things done, provided by wiring.
 
 use crate::log::LogLevel;
-use crate::model::{ChangedFile, Commit, FileDiff, Refs, Side, WorkStatus};
+use crate::model::{AmendBase, ChangedFile, Commit, FileDiff, Refs, Side, WorkStatus};
 
 /// Search text that passed validation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -108,6 +108,35 @@ pub trait Ports {
     ///
     /// Fails when git fails.
     fn has_commits(&self) -> Result<bool, Failed>;
+
+    /// Whether the last commit has a parent, that is, whether it is not the first commit.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn last_commit_has_parent(&self) -> Result<bool, Failed>;
+
+    /// The files the amended commit will change: the index compared with `base`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn amended_files(&self, base: AmendBase) -> Result<Vec<ChangedFile>, Failed>;
+
+    /// The diff of `paths` in the amended commit: the index compared with `base`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn amended_file_diff(&self, paths: &[String], base: AmendBase) -> Result<FileDiff, Failed>;
+
+    /// Takes all changes of `paths` out of the amended commit, setting them in the index to
+    /// the commit before the last one.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn unstage_from_amend(&self, paths: &[String]) -> Result<(), Failed>;
 
     /// The message of the last commit.
     ///

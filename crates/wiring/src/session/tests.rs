@@ -733,6 +733,103 @@ fn shift_a_stages_all_changes_including_untracked_files() {
     assert_eq!(s.render(SIZE).row_text(23).trim_end(), "Nothing to stage");
 }
 
+/// A repository whose last commit modifies `keep.txt`, adds `added.txt` and deletes
+/// `gone.txt`.
+fn amendable_repo() -> TempDir {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    std::fs::write(dir.path().join("keep.txt"), "1\n2\n").unwrap();
+    std::fs::write(dir.path().join("gone.txt"), "g\n").unwrap();
+    git_ok(dir.path(), &["add", "."]);
+    git_ok(dir.path(), &["commit", "-q", "-m", "base"]);
+    std::fs::write(dir.path().join("keep.txt"), "1\nTWO\n").unwrap();
+    std::fs::write(dir.path().join("added.txt"), "a\n").unwrap();
+    git_ok(dir.path(), &["rm", "-q", "gone.txt"]);
+    git_ok(dir.path(), &["add", "."]);
+    git_ok(dir.path(), &["commit", "-q", "-m", "last"]);
+    dir
+}
+
+#[test]
+fn amend_mode_takes_a_file_out_of_the_last_commit() {
+    let dir: TempDir = amendable_repo();
+    let mut s: Session = session_in(&dir);
+    s.input(b"\x1bOQa");
+    let amending: ui::buffer::Buffer = s.render(SIZE);
+    let titled: usize = (0..SIZE.height)
+        .find(|row: &usize| {
+            amending
+                .row_text(*row)
+                .starts_with("─ Staged (amended commit) ")
+        })
+        .expect("the staged list is titled for amending");
+    assert!(amending.row_text(titled + 1).starts_with("A added.txt"));
+    assert!(amending.row_text(titled + 2).starts_with("D gone.txt"));
+    assert!(amending.row_text(titled + 3).starts_with("M keep.txt"));
+    s.input(b"s\rc");
+    assert_eq!(
+        git_ok(
+            dir.path(),
+            &["show", "--format=%s", "--name-status", "HEAD"]
+        ),
+        "last\n\nD\tgone.txt\nM\tkeep.txt\n"
+    );
+    assert_eq!(
+        git_ok(dir.path(), &["status", "--porcelain"]),
+        "?? added.txt\n"
+    );
+    assert_eq!(git_ok(dir.path(), &["rev-list", "--count", "HEAD"]), "2\n");
+}
+
+#[test]
+fn amend_mode_takes_lines_out_of_the_last_commit() {
+    let dir: TempDir = amendable_repo();
+    let mut s: Session = session_in(&dir);
+    s.input(b"\x1bOQasjjw");
+    let diff: ui::buffer::Buffer = s.render(SIZE);
+    let removed: usize = (0..SIZE.height)
+        .find(|row: &usize| {
+            diff.row_text(*row).contains("│▶-2") || diff.row_text(*row).contains("│ -2")
+        })
+        .expect("the diff against the commit before the last shows -2");
+    assert!(diff.row_text(removed + 1).contains("+TWO"));
+    s.input(b"jj jj\r");
+    assert_eq!(git_ok(dir.path(), &["show", ":keep.txt"]), "1\n2\n");
+    s.input(b"c");
+    assert_eq!(
+        git_ok(dir.path(), &["show", "--format=", "--name-status", "HEAD"]),
+        "A\tadded.txt\nD\tgone.txt\n"
+    );
+}
+
+#[test]
+fn an_amend_that_would_empty_the_first_commit_is_refused() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    std::fs::write(dir.path().join("a.txt"), "a\n").unwrap();
+    git_ok(dir.path(), &["add", "."]);
+    git_ok(dir.path(), &["commit", "-q", "-m", "first"]);
+    let mut s: Session = session_in(&dir);
+    s.input(b"\x1bOQas\r");
+    assert_eq!(
+        git_ok(dir.path(), &["status", "--porcelain"]),
+        "D  a.txt\n?? a.txt\n"
+    );
+    s.input(b"c");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "The amended commit would be empty: stage changes first"
+    );
+    s.input(b"s\rc");
+    assert_eq!(
+        git_ok(
+            dir.path(),
+            &["show", "--format=%s", "--name-status", "HEAD"]
+        ),
+        "first\n\nA\ta.txt\n"
+    );
+}
+
 #[test]
 fn d_discards_changes_and_deletes_untracked_files_after_confirming() {
     let dir: TempDir = TempDir::new();

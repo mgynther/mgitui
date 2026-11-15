@@ -31,8 +31,9 @@ pub struct DiffView {
     pub diff_title: String,
     /// The visible rows of the file diff.
     pub diff: Vec<DiffRowView>,
-    /// The title of the commit message pane.
-    pub message_title: String,
+    /// Whether committing amends the last commit. The staged list then shows what the amended
+    /// commit will contain, and the titles say so.
+    pub amend: bool,
     /// The commit message.
     pub message: String,
     /// Whether there are no changes at all.
@@ -57,7 +58,11 @@ pub fn render(buffer: &mut Buffer, view: &DiffView, size: Size) {
     draw_title(
         buffer,
         panes.staged,
-        "Staged",
+        if view.amend {
+            "Staged (amended commit)"
+        } else {
+            "Staged"
+        },
         view.focus == DiffFocus::Staged,
     );
     file_list::render(
@@ -89,7 +94,12 @@ pub fn render(buffer: &mut Buffer, view: &DiffView, size: Size) {
             view.focus == DiffFocus::FileDiff,
         );
     }
-    draw_title(buffer, panes.message, &view.message_title, false);
+    let message_title: &str = if view.amend {
+        "Amend message (previous commit)"
+    } else {
+        "Commit message"
+    };
+    draw_title(buffer, panes.message, message_title, false);
     let message_area: Rect = panes.message.content();
     for (y, line) in
         (message_area.y..message_area.y + message_area.height).zip(view.message.lines())
@@ -131,7 +141,7 @@ mod tests {
                 cursor: true,
                 marked: false,
             }],
-            message_title: "Commit message".to_string(),
+            amend: false,
             message: "Subject\n\nBody".to_string(),
             no_changes,
         }
@@ -152,6 +162,26 @@ mod tests {
         assert!(buffer.row_text(21).contains("─ Commit message ─"));
         assert!(buffer.row_text(22).contains("│Subject"));
         assert!(buffer.row_text(24).contains("│Body"));
+    }
+
+    #[test]
+    fn amend_titles() {
+        let mut buffer: Buffer = Buffer::new(SIZE);
+        let amending: DiffView = DiffView {
+            amend: true,
+            ..view(DiffFocus::Unstaged, false)
+        };
+        render(&mut buffer, &amending, SIZE);
+        assert!(
+            buffer
+                .row_text(15)
+                .starts_with("─ Staged (amended commit) ─")
+        );
+        assert!(
+            buffer
+                .row_text(21)
+                .contains("─ Amend message (previous commit) ─")
+        );
     }
 
     #[test]

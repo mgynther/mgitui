@@ -1,7 +1,7 @@
 //! The functions wiring provides to the logic layer.
 
 use logic::log::LogLevel;
-use logic::model::{ChangedFile, Commit, FileDiff, Refs, Side, WorkStatus};
+use logic::model::{AmendBase, ChangedFile, Commit, FileDiff, Refs, Side, WorkStatus};
 use logic::ports::{BranchName, CommitMessage, Failed};
 
 use crate::editor::{self, Editor, Handoff};
@@ -112,6 +112,32 @@ impl logic::ports::Ports for SessionPorts<'_> {
 
     fn has_commits(&self) -> Result<bool, Failed> {
         self.git.has_head(&self.log_git()).map_err(|_| Failed)
+    }
+
+    fn last_commit_has_parent(&self) -> Result<bool, Failed> {
+        self.git
+            .head_has_parent(&self.log_git())
+            .map_err(|_| Failed)
+    }
+
+    fn amended_files(&self, base: AmendBase) -> Result<Vec<ChangedFile>, Failed> {
+        self.git
+            .staged_since(model::amend_base(base), &self.log_git())
+            .map(model::changed_files)
+            .map_err(|_| Failed)
+    }
+
+    fn amended_file_diff(&self, paths: &[String], base: AmendBase) -> Result<FileDiff, Failed> {
+        self.git
+            .diff_since(paths, model::amend_base(base), &self.log_git())
+            .map(model::file_diff)
+            .map_err(|_| Failed)
+    }
+
+    fn unstage_from_amend(&self, paths: &[String]) -> Result<(), Failed> {
+        self.git
+            .reset_to_parent(paths, &self.log_git())
+            .map_err(|_| Failed)
     }
 
     fn last_commit_message(&self) -> Result<String, Failed> {
@@ -246,13 +272,7 @@ impl logic::ports::Ports for SessionPorts<'_> {
     fn commit_files(&self, hash: &str) -> Result<Vec<ChangedFile>, Failed> {
         self.git
             .commit_files(hash, &self.log_git())
-            .map(|files: Vec<git::FileChange>| {
-                model::work_status(git::Status {
-                    staged: files,
-                    unstaged: Vec::new(),
-                })
-                .staged
-            })
+            .map(model::changed_files)
             .map_err(|_| Failed)
     }
 

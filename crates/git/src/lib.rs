@@ -2,6 +2,7 @@
 
 pub mod log;
 
+mod amend;
 mod branch;
 mod command;
 mod commit;
@@ -14,6 +15,7 @@ mod status;
 #[cfg(test)]
 mod test_repo;
 
+pub use amend::Base;
 pub use command::Command;
 pub use diff::{DiffLine, FileDiff, Hunk, LineKind, parse_diff};
 pub use history::{Commit, Ref, RefKind, parse_log, parse_refs};

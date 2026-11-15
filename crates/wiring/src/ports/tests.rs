@@ -2,7 +2,7 @@ use super::SessionPorts;
 use crate::log::LogBuffer;
 use crate::test_support::{TempDir, fixed_clock, git_ok, init_repo};
 use logic::log::{Layer, LogEntry, LogLevel};
-use logic::model::{ChangeKind, ChangedFile, FileDiff, LineKind, Side, WorkStatus};
+use logic::model::{AmendBase, ChangeKind, ChangedFile, FileDiff, LineKind, Side, WorkStatus};
 use logic::ports::{CommitMessage, Failed, Ports, SearchText};
 
 #[expect(
@@ -115,6 +115,13 @@ fn git_failures_become_failed() {
     assert_eq!(ports.delete_untracked(&x), Err(Failed));
     assert_eq!(ports.apply_to_index("", false), Err(Failed));
     assert_eq!(ports.has_commits(), Err(Failed));
+    assert_eq!(ports.last_commit_has_parent(), Err(Failed));
+    assert_eq!(ports.amended_files(AmendBase::ParentCommit), Err(Failed));
+    assert_eq!(
+        ports.amended_file_diff(&x, AmendBase::ParentCommit),
+        Err(Failed)
+    );
+    assert_eq!(ports.unstage_from_amend(&x), Err(Failed));
     assert_eq!(ports.commits(0, 1), Err(Failed));
     assert_eq!(ports.refs(), Err(Failed));
     assert_eq!(ports.commit_message("h"), Err(Failed));

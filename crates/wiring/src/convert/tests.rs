@@ -70,6 +70,29 @@ impl logic::ports::Ports for NoPorts {
         Err(logic::ports::Failed)
     }
 
+    fn last_commit_has_parent(&self) -> Result<bool, logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
+    fn amended_files(
+        &self,
+        _base: logic::model::AmendBase,
+    ) -> Result<Vec<logic::model::ChangedFile>, logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
+    fn amended_file_diff(
+        &self,
+        _paths: &[String],
+        _base: logic::model::AmendBase,
+    ) -> Result<logic::model::FileDiff, logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
+    fn unstage_from_amend(&self, _paths: &[String]) -> Result<(), logic::ports::Failed> {
+        Err(logic::ports::Failed)
+    }
+
     fn last_commit_message(&self) -> Result<String, logic::ports::Failed> {
         Err(logic::ports::Failed)
     }

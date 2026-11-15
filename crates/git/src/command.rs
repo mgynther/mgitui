@@ -28,6 +28,31 @@ pub enum Command {
     /// `git add -A`: stages all changes in the working tree, including deletions and untracked
     /// files.
     AddAll,
+    /// `git rev-parse --verify -q HEAD^`: whether the last commit has a parent. Exit code 1
+    /// means no.
+    HasParent,
+    /// `git hash-object -t tree /dev/null`: the id of the empty tree, which depends on the
+    /// repository's hash format.
+    EmptyTree,
+    /// `git diff --cached --name-status -z -M <base>`: the files whose index content differs
+    /// from `base`.
+    StagedSince {
+        /// The commit or tree to compare the index with.
+        base: String,
+    },
+    /// `git diff --cached <base> -- <paths>`: the diff of the index against `base`.
+    DiffSince {
+        /// The commit or tree to compare the index with.
+        base: String,
+        /// The paths: one, or the original and new path of a rename.
+        paths: Vec<String>,
+    },
+    /// `git reset -q HEAD^ -- <paths>`: sets the index entries of the paths to the parent of
+    /// the last commit, removing paths that it does not have.
+    ResetToParent {
+        /// The paths.
+        paths: Vec<String>,
+    },
     /// `git rev-parse --verify HEAD`: whether there is a commit yet. Exit code 1 means no.
     HasHead,
     /// `git restore --staged`: unstages the paths.
@@ -162,6 +187,11 @@ impl Command {
             Command::Add { .. } => &["add", "-A", "--"],
             Command::AddAll => &["add", "-A"],
             Command::HasHead => &["rev-parse", "--verify", "-q", "HEAD"],
+            Command::HasParent => &["rev-parse", "--verify", "-q", "HEAD^"],
+            Command::EmptyTree => &["hash-object", "-t", "tree", "/dev/null"],
+            Command::StagedSince { .. } => &["diff", "--cached", "--name-status", "-z", "-M"],
+            Command::DiffSince { .. } => &["diff", "--no-ext-diff", "--cached", "-M"],
+            Command::ResetToParent { .. } => &["reset", "-q", "HEAD^", "--"],
             Command::RestoreStaged { .. } => &["restore", "--staged", "--"],
             Command::RemoveCached { .. } => &["rm", "--cached", "-q", "-r", "--"],
             Command::Restore { .. } => &["restore", "--"],
@@ -233,7 +263,8 @@ impl Command {
             | Command::RestoreStaged { paths }
             | Command::RemoveCached { paths }
             | Command::Restore { paths }
-            | Command::Clean { paths } => args.extend(paths.iter().cloned()),
+            | Command::Clean { paths }
+            | Command::ResetToParent { paths } => args.extend(paths.iter().cloned()),
             Command::DiffUntracked { path } => args.push(path.clone()),
             Command::Commit { message_file, .. } => args.push(message_file.clone()),
             Command::CommitMessage { hash } | Command::CommitFiles { hash } => {
@@ -252,15 +283,18 @@ impl Command {
                 args.push(onto.clone());
                 args.push(branch.clone());
             }
-            Command::CommitFileDiff { hash, paths } => {
-                args.push(hash.clone());
+            Command::CommitFileDiff { hash: base, paths } | Command::DiffSince { base, paths } => {
+                args.push(base.clone());
                 args.push("--".to_string());
                 args.extend(paths.iter().cloned());
             }
+            Command::StagedSince { base } => args.push(base.clone()),
             Command::ShowToplevel
             | Command::Status
             | Command::HasHead
             | Command::AddAll
+            | Command::HasParent
+            | Command::EmptyTree
             | Command::ApplyCached { .. }
             | Command::LastMessage
             | Command::Log { .. }
@@ -287,7 +321,7 @@ impl Command {
     #[must_use]
     pub fn success_codes(&self) -> &'static [i32] {
         match self {
-            Command::DiffUntracked { .. } | Command::HasHead => &[0, 1],
+            Command::DiffUntracked { .. } | Command::HasHead | Command::HasParent => &[0, 1],
             _ => &[0],
         }
     }
@@ -341,6 +375,27 @@ mod tests {
         );
         assert_eq!(args(&Command::AddAll), "add -A");
         assert_eq!(args(&Command::HasHead), "rev-parse --verify -q HEAD");
+        assert_eq!(args(&Command::HasParent), "rev-parse --verify -q HEAD^");
+        assert_eq!(args(&Command::EmptyTree), "hash-object -t tree /dev/null");
+        assert_eq!(
+            args(&Command::StagedSince {
+                base: "b".to_string()
+            }),
+            "diff --cached --name-status -z -M b"
+        );
+        assert_eq!(
+            args(&Command::DiffSince {
+                base: "b".to_string(),
+                paths: paths.clone()
+            }),
+            "diff --no-ext-diff --cached -M b -- p"
+        );
+        assert_eq!(
+            args(&Command::ResetToParent {
+                paths: paths.clone()
+            }),
+            "reset -q HEAD^ -- p"
+        );
         assert_eq!(
             args(&Command::RestoreStaged {
                 paths: paths.clone()

@@ -4,7 +4,8 @@ use std::cell::RefCell;
 
 use crate::log::LogLevel;
 use crate::model::{
-    ChangeKind, ChangedFile, Commit, DiffLine, FileDiff, Hunk, LineKind, Refs, Side, WorkStatus,
+    AmendBase, ChangeKind, ChangedFile, Commit, DiffLine, FileDiff, Hunk, LineKind, Refs, Side,
+    WorkStatus,
 };
 use crate::ports::{BranchName, CommitMessage, Failed, Ports, SearchText};
 
@@ -26,6 +27,10 @@ pub struct TestPorts {
     pub stage_fails: bool,
     /// The answer to `has_commits`; `None` fails.
     pub has_commits: Option<bool>,
+    /// The answer to `last_commit_has_parent`; `None` fails.
+    pub has_parent: Option<bool>,
+    /// The answer to `amended_files`; `None` fails.
+    pub amended: Option<Vec<ChangedFile>>,
     /// The answer to `last_commit_message`; `None` fails.
     pub last_message: Option<String>,
     /// What the editor appends to the text; `None` fails.
@@ -52,6 +57,8 @@ impl TestPorts {
             diff: None,
             stage_fails: false,
             has_commits: Some(true),
+            has_parent: Some(true),
+            amended: Some(Vec::new()),
             last_message: Some("Last\n".to_string()),
             editor_appends: Some("edited\n".to_string()),
             commit_fails: false,
@@ -229,6 +236,29 @@ impl Ports for TestPorts {
     fn has_commits(&self) -> Result<bool, Failed> {
         self.calls.borrow_mut().push("has commits".to_string());
         self.has_commits.ok_or(Failed)
+    }
+
+    fn last_commit_has_parent(&self) -> Result<bool, Failed> {
+        self.calls.borrow_mut().push("has parent".to_string());
+        self.has_parent.ok_or(Failed)
+    }
+
+    fn amended_files(&self, base: AmendBase) -> Result<Vec<ChangedFile>, Failed> {
+        self.calls
+            .borrow_mut()
+            .push(format!("amended files since {base:?}"));
+        self.amended.clone().ok_or(Failed)
+    }
+
+    fn amended_file_diff(&self, paths: &[String], base: AmendBase) -> Result<FileDiff, Failed> {
+        self.diff_result(
+            format!("diff amended since {base:?} {}", paths.join(" ")),
+            paths.last(),
+        )
+    }
+
+    fn unstage_from_amend(&self, paths: &[String]) -> Result<(), Failed> {
+        self.record(format!("unstage from amend {}", paths.join(" ")))
     }
 
     fn last_commit_message(&self) -> Result<String, Failed> {

@@ -410,29 +410,31 @@ impl App {
             return;
         }
         if let Some(file) = self.file_for_action(ports) {
-            self.mode = Mode::Confirm(Confirmation::DiscardFile { file });
+            self.mode = Mode::Confirm(if file.kind == ChangeKind::Untracked {
+                Confirmation::DeleteUntracked { file }
+            } else {
+                Confirmation::DiscardChanges { file }
+            });
         }
     }
 
-    pub(super) fn discard_file(&mut self, file: &ChangedFile, ports: &dyn Ports) {
-        let untracked: bool = file.kind == ChangeKind::Untracked;
-        let action: &str = if untracked {
-            "delete"
-        } else {
-            "discard changes in"
-        };
-        ports.log(LogLevel::Info, &format!("{action} {}", file.path));
-        let paths: Vec<String> = file.paths(Side::Unstaged);
-        let result: Result<(), Failed> = if untracked {
-            ports.delete_untracked(&paths)
-        } else {
-            ports.restore_paths(&paths)
-        };
+    pub(super) fn delete_untracked(&mut self, file: &ChangedFile, ports: &dyn Ports) {
+        ports.log(LogLevel::Info, &format!("delete {}", file.path));
+        let result: Result<(), Failed> = ports.delete_untracked(&file.paths(Side::Unstaged));
         self.refresh(ports);
-        self.note = match (result, untracked) {
-            (Ok(()), true) => Note::Info(format!("Deleted {}", file.path)),
-            (Ok(()), false) => Note::Info(format!("Discarded changes in {}", file.path)),
-            (Err(Failed), _) => Note::Problem("Discarding failed, see the Log view".to_string()),
+        self.note = match result {
+            Ok(()) => Note::Info(format!("Deleted {}", file.path)),
+            Err(Failed) => Note::Problem("Discarding failed, see the Log view".to_string()),
+        };
+    }
+
+    pub(super) fn discard_changes(&mut self, file: &ChangedFile, ports: &dyn Ports) {
+        ports.log(LogLevel::Info, &format!("discard changes in {}", file.path));
+        let result: Result<(), Failed> = ports.restore_paths(&file.paths(Side::Unstaged));
+        self.refresh(ports);
+        self.note = match result {
+            Ok(()) => Note::Info(format!("Discarded changes in {}", file.path)),
+            Err(Failed) => Note::Problem("Discarding failed, see the Log view".to_string()),
         };
     }
 

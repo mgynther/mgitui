@@ -6,6 +6,7 @@ pub mod key;
 pub mod layout;
 pub mod log;
 pub mod screen;
+pub mod status;
 pub mod style;
 pub mod time;
 pub mod views;

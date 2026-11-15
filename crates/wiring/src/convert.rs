@@ -3,8 +3,8 @@
 use std::collections::VecDeque;
 
 use logic::app::{
-    App, BranchesPane, BranchesState, Confirmation, DiffPane, DiffState, Mode, Note, Prompt,
-    PromptKind, Viewports,
+    App, BranchesPane, BranchesState, Confirmation, DiffPane, DiffState, Mode, Note, PromptKind,
+    Viewports,
 };
 use logic::cursor::Cursor;
 use logic::graph::{Cell, CommitSide, GraphRow, Shape};
@@ -129,27 +129,9 @@ pub fn screen(app: &App) -> ui::screen::Screen {
 
 fn status(mode: &Mode, note: &Note) -> ui::screen::Status {
     match (mode, note) {
-        (Mode::Confirm(confirmation), _) => ui::screen::Status::Prompt {
-            label: match confirmation {
-                Confirmation::Quit => "Quit? y/n".to_string(),
-                Confirmation::DeleteBranch { name } => {
-                    format!("Delete branch {name} even if it is not merged? y/n")
-                }
-                Confirmation::ResetBranch { branch, hash } => {
-                    format!("Reset {branch} to {}? y/n", hash.get(..7).unwrap_or(hash))
-                }
-                Confirmation::DiscardFile { file } if file.kind == ChangeKind::Untracked => {
-                    format!("Delete untracked file {}? y/n", file.path)
-                }
-                Confirmation::DiscardFile { file } => {
-                    format!("Discard unstaged changes in {}? y/n", file.path)
-                }
-            },
-            text: String::new(),
-            problem: None,
-        },
+        (Mode::Confirm(confirmation), _) => ui::screen::Status::Question(question(confirmation)),
         (Mode::Prompt(prompt), note) => ui::screen::Status::Prompt {
-            label: prompt_label(prompt),
+            kind: prompt_kind(&prompt.kind),
             text: prompt.text.clone(),
             problem: match note {
                 Note::Problem(problem) => Some(problem.clone()),
@@ -162,52 +144,48 @@ fn status(mode: &Mode, note: &Note) -> ui::screen::Status {
     }
 }
 
-fn prompt_label(prompt: &Prompt) -> String {
-    match &prompt.kind {
-        PromptKind::Search => "/".to_string(),
-        PromptKind::BranchName { .. } => "New branch name: ".to_string(),
-        PromptKind::CheckoutChoice { branches } => {
-            format!("Check out ({}): ", numbered(branches))
-        }
-        PromptKind::DeleteBranch { branches } => {
-            format!("Delete which branch ({}): ", numbered(branches))
-        }
+fn question(confirmation: &Confirmation) -> ui::status::Question {
+    use ui::status::Question;
+    match confirmation {
+        Confirmation::Quit => Question::Quit,
+        Confirmation::DeleteBranch { name } => Question::DeleteBranch { name: name.clone() },
+        Confirmation::ResetBranch { branch, hash } => Question::ResetBranch {
+            branch: branch.clone(),
+            hash: hash.clone(),
+        },
+        Confirmation::DeleteUntracked { file } => Question::DeleteUntracked {
+            path: file.path.clone(),
+        },
+        Confirmation::DiscardChanges { file } => Question::DiscardChanges {
+            path: file.path.clone(),
+        },
+    }
+}
+
+fn prompt_kind(kind: &PromptKind) -> ui::status::PromptKind {
+    use ui::status::PromptKind as K;
+    match kind {
+        PromptKind::Search => K::Search,
+        PromptKind::BranchName { .. } => K::BranchName,
+        PromptKind::CheckoutChoice { branches } => K::CheckoutChoice(branches.clone()),
+        PromptKind::DeleteBranch { branches } => K::DeleteBranch(branches.clone()),
         PromptKind::RebaseBranch {
             branches,
             interactive,
-        } => format!(
-            "{} which branch ({}): ",
-            rebase_verb(*interactive),
-            numbered(branches)
-        ),
+        } => K::RebaseBranch {
+            branches: branches.clone(),
+            interactive: *interactive,
+        },
         PromptKind::RebaseOnto {
             branch,
             onto,
             interactive,
-        } => format!(
-            "{} {branch} onto ({}): ",
-            rebase_verb(*interactive),
-            numbered(onto)
-        ),
+        } => K::RebaseOnto {
+            branch: branch.clone(),
+            onto: onto.clone(),
+            interactive: *interactive,
+        },
     }
-}
-
-fn rebase_verb(interactive: bool) -> &'static str {
-    if interactive {
-        "Interactively rebase"
-    } else {
-        "Rebase"
-    }
-}
-
-/// `1 a, 2 b, ...` for a numbered prompt.
-fn numbered(items: &[String]) -> String {
-    let choices: Vec<String> = items
-        .iter()
-        .enumerate()
-        .map(|(index, item): (usize, &String)| format!("{} {item}", index + 1))
-        .collect();
-    choices.join(", ")
 }
 
 fn log_view(
@@ -254,7 +232,9 @@ fn branches_view(app: &App) -> ui::views::branches::BranchesView {
             branches.file_cursor(),
             viewports.branches_files,
         ),
-        diff_title: diff_title(branches.selected_file()),
+        diff_file: branches
+            .selected_file()
+            .map(|f: &ChangedFile| f.path.clone()),
         diff: diff_rows(
             branches.diff_rows(),
             branches.diff_cursor(),
@@ -321,13 +301,6 @@ fn commit_info(
     }
 }
 
-fn diff_title(file: Option<&ChangedFile>) -> String {
-    file.map_or_else(
-        || "Diff".to_string(),
-        |f: &ChangedFile| format!("Diff {}", f.path),
-    )
-}
-
 fn graph_cell(cell: &Cell) -> ui::views::branches::GraphCell {
     use ui::views::branches::{CommitSide as S, GraphShape as G};
     let side = |side: CommitSide| match side {
@@ -380,7 +353,7 @@ fn diff_view(app: &App) -> ui::views::diff::DiffView {
             diff.cursor(Side::Staged),
             viewports.diff_staged,
         ),
-        diff_title: diff_title(diff.selected_file()),
+        diff_file: diff.selected_file().map(|f: &ChangedFile| f.path.clone()),
         diff: diff_rows(
             diff.rows(),
             diff.diff_cursor(),

@@ -147,8 +147,8 @@ pub struct BranchesView {
     pub info: Option<CommitInfo>,
     /// The visible files of the selected commit.
     pub files: Vec<FileRow>,
-    /// The title of the file diff pane.
-    pub diff_title: String,
+    /// The path of the file whose diff is shown.
+    pub diff_file: Option<String>,
     /// The visible rows of the file diff.
     pub diff: Vec<DiffRowView>,
 }
@@ -184,7 +184,7 @@ pub fn render(buffer: &mut Buffer, view: &BranchesView, size: Size) {
     draw_title(
         buffer,
         panes.file_diff,
-        &view.diff_title,
+        &diff_text::title(view.diff_file.as_deref()),
         view.focus == BranchesFocus::FileDiff,
     );
     diff_text::render(

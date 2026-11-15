@@ -27,8 +27,8 @@ pub struct DiffView {
     pub unstaged: Vec<FileRow>,
     /// The visible files with staged changes.
     pub staged: Vec<FileRow>,
-    /// The title of the file diff pane.
-    pub diff_title: String,
+    /// The path of the file whose diff is shown.
+    pub diff_file: Option<String>,
     /// The visible rows of the file diff.
     pub diff: Vec<DiffRowView>,
     /// Whether committing amends the last commit. The staged list then shows what the amended
@@ -74,7 +74,7 @@ pub fn render(buffer: &mut Buffer, view: &DiffView, size: Size) {
     draw_title(
         buffer,
         panes.file_diff,
-        &view.diff_title,
+        &diff_text::title(view.diff_file.as_deref()),
         view.focus == DiffFocus::FileDiff,
     );
     let diff_area: Rect = panes.file_diff.content();
@@ -134,7 +134,7 @@ mod tests {
                 label: "A b.txt".to_string(),
                 selected: true,
             }],
-            diff_title: "Diff a.txt".to_string(),
+            diff_file: Some("a.txt".to_string()),
             diff: vec![DiffRowView {
                 kind: DiffRowKind::Added,
                 text: "line".to_string(),

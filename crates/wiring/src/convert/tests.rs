@@ -1,9 +1,9 @@
 use std::collections::VecDeque;
 
 use super::{
-    branches_focus, commit_info, commit_rows, diff_focus, diff_row_kind, diff_title, event,
-    file_label, graph_cell, input_mode, label_view, layer_name, log_view, logic_view, screen,
-    status, ui_level, ui_view, viewports,
+    branches_focus, commit_info, commit_rows, diff_focus, diff_row_kind, event, file_label,
+    graph_cell, input_mode, label_view, layer_name, log_view, logic_view, screen, status, ui_level,
+    ui_view, viewports,
 };
 use logic::app::{
     App, BranchesPane, Confirmation, DiffPane, Mode, Note, Prompt, PromptKind, Viewports,
@@ -17,6 +17,8 @@ use logic::model::{ChangeKind, ChangedFile, Commit, Label, LineKind, RowKind, Si
 use ui::event::Event as U;
 use ui::event::ViewId as UV;
 use ui::screen::Status;
+use ui::status::PromptKind as UPrompt;
+use ui::status::Question;
 use ui::views::branches::{BranchesFocus, CommitInfo, GraphShape, LabelView};
 use ui::views::diff::DiffFocus;
 
@@ -145,7 +147,7 @@ fn status_line_for_notes_and_prompts() {
             &Note::Info("i".to_string())
         ),
         Status::Prompt {
-            label: "/".to_string(),
+            kind: UPrompt::Search,
             text: "a".to_string(),
             problem: None,
         }
@@ -156,7 +158,7 @@ fn status_line_for_notes_and_prompts() {
             &Note::Problem("p".to_string())
         ),
         Status::Prompt {
-            label: "/".to_string(),
+            kind: UPrompt::Search,
             text: "a".to_string(),
             problem: Some("p".to_string()),
         }
@@ -164,7 +166,7 @@ fn status_line_for_notes_and_prompts() {
     assert_eq!(
         status(&prompt(PromptKind::Search, ""), &Note::None),
         Status::Prompt {
-            label: "/".to_string(),
+            kind: UPrompt::Search,
             text: String::new(),
             problem: None,
         }
@@ -172,56 +174,56 @@ fn status_line_for_notes_and_prompts() {
 }
 
 #[test]
-fn prompt_labels() {
+fn prompt_kinds_convert() {
     let branches: Vec<String> = vec!["a".to_string(), "b".to_string()];
-    let cases: [(PromptKind, &str); 7] = [
-        (PromptKind::Search, "/"),
+    let cases: [(PromptKind, UPrompt); 6] = [
+        (PromptKind::Search, UPrompt::Search),
         (
             PromptKind::BranchName {
                 at: "h".to_string(),
             },
-            "New branch name: ",
+            UPrompt::BranchName,
         ),
         (
             PromptKind::CheckoutChoice {
                 branches: branches.clone(),
             },
-            "Check out (1 a, 2 b): ",
+            UPrompt::CheckoutChoice(branches.clone()),
         ),
         (
             PromptKind::DeleteBranch {
                 branches: branches.clone(),
             },
-            "Delete which branch (1 a, 2 b): ",
-        ),
-        (
-            PromptKind::RebaseBranch {
-                branches: branches.clone(),
-                interactive: false,
-            },
-            "Rebase which branch (1 a, 2 b): ",
+            UPrompt::DeleteBranch(branches.clone()),
         ),
         (
             PromptKind::RebaseBranch {
                 branches: branches.clone(),
                 interactive: true,
             },
-            "Interactively rebase which branch (1 a, 2 b): ",
+            UPrompt::RebaseBranch {
+                branches: branches.clone(),
+                interactive: true,
+            },
         ),
         (
             PromptKind::RebaseOnto {
                 branch: "t".to_string(),
+                onto: branches.clone(),
+                interactive: false,
+            },
+            UPrompt::RebaseOnto {
+                branch: "t".to_string(),
                 onto: branches,
                 interactive: false,
             },
-            "Rebase t onto (1 a, 2 b): ",
         ),
     ];
-    for (kind, label) in cases {
+    for (kind, expected) in cases {
         assert_eq!(
             status(&prompt(kind, ""), &Note::None),
             Status::Prompt {
-                label: label.to_string(),
+                kind: expected,
                 text: String::new(),
                 problem: None,
             }
@@ -230,53 +232,51 @@ fn prompt_labels() {
 }
 
 #[test]
-fn confirmation_labels() {
-    let cases: [(Confirmation, &str); 6] = [
-        (Confirmation::Quit, "Quit? y/n"),
+fn confirmations_become_questions() {
+    let cases: [(Confirmation, Question); 5] = [
+        (Confirmation::Quit, Question::Quit),
         (
             Confirmation::DeleteBranch {
                 name: "old".to_string(),
             },
-            "Delete branch old even if it is not merged? y/n",
+            Question::DeleteBranch {
+                name: "old".to_string(),
+            },
         ),
         (
             Confirmation::ResetBranch {
                 branch: "main".to_string(),
                 hash: "1234567890".to_string(),
             },
-            "Reset main to 1234567? y/n",
-        ),
-        (
-            Confirmation::ResetBranch {
+            Question::ResetBranch {
                 branch: "main".to_string(),
-                hash: "123".to_string(),
+                hash: "1234567890".to_string(),
             },
-            "Reset main to 123? y/n",
         ),
         (
-            Confirmation::DiscardFile {
+            Confirmation::DeleteUntracked {
                 file: changed("new.txt", ChangeKind::Untracked),
             },
-            "Delete untracked file new.txt? y/n",
+            Question::DeleteUntracked {
+                path: "new.txt".to_string(),
+            },
         ),
         (
-            Confirmation::DiscardFile {
+            Confirmation::DiscardChanges {
                 file: changed("a.txt", ChangeKind::Modified),
             },
-            "Discard unstaged changes in a.txt? y/n",
+            Question::DiscardChanges {
+                path: "a.txt".to_string(),
+            },
         ),
     ];
-    for (confirmation, label) in cases {
+    for (confirmation, expected) in cases {
         assert_eq!(
             status(
                 &Mode::Confirm(confirmation),
                 &Note::Problem("p".to_string())
             ),
-            Status::Prompt {
-                label: label.to_string(),
-                text: String::new(),
-                problem: None,
-            }
+            Status::Question(expected)
         );
     }
 }
@@ -432,7 +432,7 @@ fn commit_info_has_every_field_and_the_message_lines() {
 }
 
 #[test]
-fn focus_and_titles() {
+fn focus() {
     assert_eq!(branches_focus(BranchesPane::Graph), BranchesFocus::Graph);
     assert_eq!(branches_focus(BranchesPane::Files), BranchesFocus::Files);
     assert_eq!(
@@ -448,11 +448,6 @@ fn focus_and_titles() {
         DiffFocus::Unstaged
     );
     assert_eq!(diff_focus(DiffPane::Files, Side::Staged), DiffFocus::Staged);
-    assert_eq!(diff_title(None), "Diff");
-    assert_eq!(
-        diff_title(Some(&changed("a.txt", ChangeKind::Modified))),
-        "Diff a.txt"
-    );
 }
 
 #[test]

@@ -299,7 +299,7 @@ fn d_discards_unstaged_changes_after_confirming() {
     run(&mut app, &ports, &[Event::DiscardFile]);
     assert_eq!(
         app.mode(),
-        &Mode::Confirm(Confirmation::DiscardFile {
+        &Mode::Confirm(Confirmation::DiscardChanges {
             file: modified("u")
         })
     );
@@ -328,23 +328,32 @@ fn d_discards_unstaged_changes_after_confirming() {
 fn d_deletes_untracked_files_after_confirming() {
     let ports: TestPorts = ports_with(vec![file("n", ChangeKind::Untracked)], vec![]);
     let mut app: App = app(&ports);
-    run(&mut app, &ports, &[Event::DiscardFile, Event::Yes]);
+    run(&mut app, &ports, &[Event::DiscardFile]);
+    assert_eq!(
+        app.mode(),
+        &Mode::Confirm(Confirmation::DeleteUntracked {
+            file: file("n", ChangeKind::Untracked)
+        })
+    );
+    run(&mut app, &ports, &[Event::Yes]);
     assert_eq!(ports.calls()[..2], ["Info: delete n", "delete untracked n"]);
     assert_eq!(app.note(), &Note::Info("Deleted n".to_string()));
 }
 
 #[test]
 fn discard_failure_is_shown() {
-    let ports: TestPorts = TestPorts {
-        stage_fails: true,
-        ..ports_with(vec![modified("u")], vec![])
-    };
-    let mut app: App = app(&ports);
-    run(&mut app, &ports, &[Event::DiscardFile, Event::Yes]);
-    assert_eq!(
-        app.note(),
-        &Note::Problem("Discarding failed, see the Log view".to_string())
-    );
+    for changed in [modified("u"), file("n", ChangeKind::Untracked)] {
+        let ports: TestPorts = TestPorts {
+            stage_fails: true,
+            ..ports_with(vec![changed], vec![])
+        };
+        let mut failing_app: App = app(&ports);
+        run(&mut failing_app, &ports, &[Event::DiscardFile, Event::Yes]);
+        assert_eq!(
+            failing_app.note(),
+            &Note::Problem("Discarding failed, see the Log view".to_string())
+        );
+    }
 }
 
 #[test]

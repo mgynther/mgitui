@@ -57,8 +57,13 @@ pub enum Confirmation {
         /// The commit hash.
         hash: String,
     },
-    /// Discarding the unstaged changes of a file, or deleting it when untracked.
-    DiscardFile {
+    /// Deleting an untracked file.
+    DeleteUntracked {
+        /// The file in the unstaged list.
+        file: ChangedFile,
+    },
+    /// Discarding the unstaged changes of a tracked file.
+    DiscardChanges {
         /// The file in the unstaged list.
         file: ChangedFile,
     },
@@ -272,7 +277,12 @@ impl App {
                         Confirmation::ResetBranch { branch, hash } => {
                             self.reset_branch(&branch, &hash, ports);
                         }
-                        Confirmation::DiscardFile { file } => self.discard_file(&file, ports),
+                        Confirmation::DeleteUntracked { file } => {
+                            self.delete_untracked(&file, ports);
+                        }
+                        Confirmation::DiscardChanges { file } => {
+                            self.discard_changes(&file, ports);
+                        }
                     }
                 }
             }

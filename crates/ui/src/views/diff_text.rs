@@ -4,6 +4,12 @@ use crate::buffer::Buffer;
 use crate::layout::Rect;
 use crate::style::{Color, Style};
 
+/// The title of a file diff pane.
+#[must_use]
+pub fn title(file: Option<&str>) -> String {
+    file.map_or_else(|| "Diff".to_string(), |path: &str| format!("Diff {path}"))
+}
+
 /// What a diff row is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiffRowKind {

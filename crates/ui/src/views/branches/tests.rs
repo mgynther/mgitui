@@ -52,7 +52,7 @@ fn view(focus: BranchesFocus, rows: Vec<CommitRow>) -> BranchesView {
             label: "M a.txt".to_string(),
             selected: true,
         }],
-        diff_title: "Diff a.txt".to_string(),
+        diff_file: Some("a.txt".to_string()),
         diff: vec![DiffRowView {
             kind: DiffRowKind::Added,
             text: "new".to_string(),

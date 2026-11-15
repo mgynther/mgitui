@@ -3,6 +3,7 @@
 use crate::buffer::Buffer;
 use crate::event::ViewId;
 use crate::layout::{MIN_SIZE, Rect, Size};
+use crate::status::{PromptKind, Question, prompt_label, question_label};
 use crate::style::{Color, Style};
 use crate::views::branches::BranchesView;
 use crate::views::diff::DiffView;
@@ -39,15 +40,17 @@ pub enum Status {
     Note(String),
     /// A short note about a problem, shown in red.
     Problem(String),
-    /// A prompt with the text typed so far.
+    /// A text prompt with the text typed so far.
     Prompt {
-        /// The prompt label, for example `/` or `Branch name: `.
-        label: String,
+        /// What the prompt asks for.
+        kind: PromptKind,
         /// The typed text.
         text: String,
         /// A problem with the last submitted text, shown in red after the prompt.
         problem: Option<String>,
     },
+    /// A question answered with y or n.
+    Question(Question),
 }
 
 /// The content of the active view.
@@ -105,20 +108,33 @@ fn draw_status(buffer: &mut Buffer, status: &Status, size: Size) {
         Status::Note(text) => buffer.put_str(0, y, text, Style::PLAIN, size.width),
         Status::Problem(text) => buffer.put_str(0, y, text, Style::fg(Color::Red), size.width),
         Status::Prompt {
-            label,
+            kind,
             text,
             problem,
-        } => {
-            let used: usize = buffer.put_str(0, y, label, Style::PLAIN.bold(), size.width);
-            let typed: usize = buffer.put_str(used, y, text, Style::PLAIN, size.width - used);
-            let x: usize = used + typed;
-            let cursor: usize = buffer.put_str(x, y, " ", Style::PLAIN.reversed_if(true), 1);
-            problem.as_ref().map_or(0, |problem: &String| {
-                let shown: String = format!("  {problem}");
-                buffer.put_str(x + cursor, y, &shown, Style::fg(Color::Red), size.width)
-            })
+        } => draw_prompt(buffer, &prompt_label(kind), text, problem.as_ref(), size),
+        Status::Question(question) => {
+            draw_prompt(buffer, &question_label(question), "", None, size)
         }
     };
+}
+
+/// Draws `label` and the typed `text` with a cursor after it, then `problem` in red.
+fn draw_prompt(
+    buffer: &mut Buffer,
+    label: &str,
+    text: &str,
+    problem: Option<&String>,
+    size: Size,
+) -> usize {
+    let y: usize = size.height - 1;
+    let used: usize = buffer.put_str(0, y, label, Style::PLAIN.bold(), size.width);
+    let typed: usize = buffer.put_str(used, y, text, Style::PLAIN, size.width - used);
+    let x: usize = used + typed;
+    let cursor: usize = buffer.put_str(x, y, " ", Style::PLAIN.reversed_if(true), 1);
+    problem.map_or(0, |problem: &String| {
+        let shown: String = format!("  {problem}");
+        buffer.put_str(x + cursor, y, &shown, Style::fg(Color::Red), size.width)
+    })
 }
 
 /// Draws a pane's title row: the title on a line, reversed when the pane has focus.
@@ -155,6 +171,7 @@ mod tests {
     use crate::buffer::Buffer;
     use crate::event::ViewId;
     use crate::layout::{Rect, Size};
+    use crate::status::{PromptKind, Question};
     use crate::style::{Color, Style};
     use crate::views::branches::{BranchesFocus, BranchesView};
     use crate::views::diff::{DiffFocus, DiffView};
@@ -166,7 +183,7 @@ mod tests {
             rows: vec![],
             info: None,
             files: vec![],
-            diff_title: "Diff".to_string(),
+            diff_file: None,
             diff: vec![],
         }
     }
@@ -176,7 +193,7 @@ mod tests {
             focus: DiffFocus::Unstaged,
             unstaged: vec![],
             staged: vec![],
-            diff_title: "Diff".to_string(),
+            diff_file: None,
             diff: vec![],
             amend: false,
             message: String::new(),
@@ -274,7 +291,7 @@ mod tests {
             &screen(
                 ViewId::Log,
                 Status::Prompt {
-                    label: "/".to_string(),
+                    kind: PromptKind::Search,
                     text: "abc".to_string(),
                     problem: None,
                 },
@@ -288,7 +305,7 @@ mod tests {
             &screen(
                 ViewId::Log,
                 Status::Prompt {
-                    label: "> ".to_string(),
+                    kind: PromptKind::BranchName,
                     text: "7".to_string(),
                     problem: Some("bad".to_string()),
                 },
@@ -296,8 +313,21 @@ mod tests {
             ),
             SIZE,
         );
-        assert_eq!(with_problem.row_text(23).trim_end(), "> 7   bad");
-        assert_eq!(with_problem.cell(6, 23).unwrap().style.fg, Color::Red);
+        assert_eq!(
+            with_problem.row_text(23).trim_end(),
+            "New branch name: 7   bad"
+        );
+        assert_eq!(with_problem.cell(21, 23).unwrap().style.fg, Color::Red);
+        let question: Buffer = render(
+            &screen(
+                ViewId::Log,
+                Status::Question(Question::Quit),
+                Body::Log(LogView { rows: vec![] }),
+            ),
+            SIZE,
+        );
+        assert_eq!(question.row_text(23).trim_end(), "Quit? y/n");
+        assert!(question.cell(9, 23).unwrap().style.reverse);
     }
 
     #[test]

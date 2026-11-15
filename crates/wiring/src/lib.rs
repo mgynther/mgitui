@@ -2,6 +2,7 @@
 
 pub mod convert;
 pub mod editor;
+pub mod event_loop;
 pub mod log;
 pub mod model;
 pub mod ports;

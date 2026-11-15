@@ -6,6 +6,13 @@ use ui::exit::ExitProblem;
 
 use crate::log::LogBuffer;
 
+/// The directory mgitui starts in: the current directory, or `.` when it cannot be read, for
+/// example because it was deleted. Opening the repository then reports the problem.
+#[must_use]
+pub fn start_dir(current: std::io::Result<PathBuf>) -> PathBuf {
+    current.unwrap_or_else(|_| PathBuf::from("."))
+}
+
 /// Finds the repository that contains the directory of `git` and returns a git runner for its
 /// root directory.
 ///
@@ -27,7 +34,16 @@ pub fn open_repository(git: &git::Git, log: &LogBuffer) -> Result<git::Git, Exit
 mod tests {
     use std::path::PathBuf;
 
-    use super::{ExitProblem, open_repository};
+    use super::{ExitProblem, open_repository, start_dir};
+
+    #[test]
+    fn start_dir_falls_back_to_the_relative_current_directory() {
+        assert_eq!(start_dir(Ok(PathBuf::from("/r"))), PathBuf::from("/r"));
+        assert_eq!(
+            start_dir(Err(std::io::Error::other("deleted"))),
+            PathBuf::from(".")
+        );
+    }
     use crate::log::LogBuffer;
     use crate::test_support::{TempDir, fixed_clock, init_repo, test_git};
 

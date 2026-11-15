@@ -1,5 +1,6 @@
 //! The real terminal: raw mode, size, reading input, drawing and handing the terminal to Vim.
-//! It needs a real terminal, so it is excluded from coverage and checked by hand.
+//! It needs a real terminal, so the wiring layer's terminal tests run it in a pseudo-terminal,
+//! and `tests/panic.rs` checks restoring after a panic in one.
 
 use std::io::{self, Read, Write};
 use std::path::Path;
@@ -81,6 +82,16 @@ pub fn restore(saved: &str) {
     let _ = stty(&[saved]);
 }
 
+/// Restores the terminal to `saved` when the program panics, before the panic message is
+/// printed, so that the message shows in a working terminal.
+pub fn restore_on_panic(saved: String) {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info: &std::panic::PanicHookInfo<'_>| {
+        restore(&saved);
+        previous(info);
+    }));
+}
+
 /// Switches back to raw mode and the alternate screen.
 ///
 /// # Errors
@@ -122,8 +133,7 @@ pub fn run_vim(saved: &str, path: &Path) -> io::Result<()> {
 
 fn write_out(text: &str) -> io::Result<()> {
     let mut out: io::StdoutLock<'_> = io::stdout().lock();
-    out.write_all(text.as_bytes())?;
-    out.flush()
+    out.write_all(text.as_bytes()).and_then(|()| out.flush())
 }
 
 fn stty(args: &[&str]) -> io::Result<String> {

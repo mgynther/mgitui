@@ -63,6 +63,8 @@ Rust needs a C linker. Debian / Ubuntu: `sudo apt install build-essential`. Fedo
 
 `rust-toolchain.toml` pins the Rust version and the rustup components the project uses: Clippy, rustfmt, the LLVM tools for coverage and rust-analyzer for editor support. rustup installs them on the first `cargo` command in the repository.
 
+The terminal tests run the app in a pseudo-terminal with `script` from util-linux, which nearly every Linux distribution installs by default. Check with `script --version`.
+
 Test coverage also needs cargo-llvm-cov:
 
 ```sh
@@ -108,7 +110,7 @@ cargo clippy -p logic --all-targets -- -D warnings
 cargo llvm-cov -p logic --fail-under-lines 100 --fail-under-functions 100 --fail-under-regions 100
 ```
 
-For `wiring` and `terminal`, add the `--ignore-filename-regex` from `check.sh` to the coverage command. Run `./check.sh` before committing.
+Most of the terminal device in `crates/terminal/src/device.rs` is covered by the wiring layer's terminal tests, which run the real binary, so `cargo llvm-cov -p terminal` alone reports it as partly uncovered; measure it with `--workspace`. Run `./check.sh` before committing.
 
 If per-layer coverage reports well-tested code as uncovered, the coverage data from earlier runs is stale. Clear it with `cargo llvm-cov clean --workspace` and run the coverage command again.
 
@@ -143,18 +145,14 @@ If per-layer coverage reports well-tested code as uncovered, the coverage data f
 | a | Diff | toggle amending the last commit: the Staged list then shows what the amended commit will contain, so unstaging files or lines takes them out of it (an amend that would leave the commit empty is refused) |
 | A | Diff | stage all unstaged changes, including deletions and untracked files (refused while there are merge conflicts) |
 
-## Manual checks
+## Terminal tests and manual checks
 
-The terminal handling and starting Vim are not covered by automated tests. After changing `crates/wiring/src/main.rs` or `crates/terminal/src/device.rs`, check by hand:
+`crates/wiring/tests/terminal.rs` runs the real binary in a pseudo-terminal, with stand-in `vim` and `stty` scripts where a test needs to control them. It covers raw mode, switching views, resizing, editing the message in Vim, the interactive rebase, restoring the terminal, and the ways starting or using the terminal can fail. `crates/terminal/tests/panic.rs` checks that a panic restores the terminal, in a child process that panics on purpose.
 
-1. Start `mgitui` in a repository: the Branches view is shown and the terminal is in raw mode (typed keys are not echoed).
-2. F1, F2 and F3 switch views, also in a different terminal emulator and in the Linux console if available.
-3. Resize the terminal: the view is redrawn; below 80x24 the "terminal too small" message is shown.
-4. In the Diff view press e: Vim opens on the commit message, and after `:wq` the message is shown in the box and the screen is redrawn.
-5. Quit Vim with `:q!`: the message is unchanged.
-6. In the Branches view press i on a branch and choose a branch to rebase onto: git opens Vim with the todo list, and after `:wq` the app comes back with the rebased graph.
-7. Press q then y: the terminal is restored, the cursor is visible and typed keys are echoed again.
-8. Outside a git repository `mgitui` prints an error and exits with status 1.
+What it cannot check needs a look by hand after changing `crates/wiring/src/main.rs` or `crates/terminal/src/device.rs`:
+
+1. F1, F2 and F3 switch views in a different terminal emulator and in the Linux console, if available.
+2. In the Diff view press e: real Vim opens on the commit message and its screen looks right; after `:wq` the app comes back.
 
 ## Licence
 

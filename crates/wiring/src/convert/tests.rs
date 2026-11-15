@@ -1,204 +1,24 @@
+use std::collections::VecDeque;
+
 use super::{
-    diff_row_kind, event, file_label, graph_cell, input_mode, label_view, layer_name, log_view,
-    logic_view, screen, ui_level, ui_view, viewports,
+    branches_focus, commit_info, commit_rows, diff_focus, diff_row_kind, diff_title, event,
+    file_label, graph_cell, input_mode, label_view, layer_name, log_view, logic_view, screen,
+    status, ui_level, ui_view, viewports,
 };
-use logic::app::{App, Confirmation, Mode, Viewports};
+use logic::app::{
+    App, BranchesPane, Confirmation, DiffPane, Mode, Note, Prompt, PromptKind, Viewports,
+};
+use logic::cursor::Cursor;
 use logic::event::Event as L;
 use logic::event::ViewId as LV;
+use logic::graph::{Cell, GraphRow, Shape};
 use logic::log::{Layer, LogEntry, LogLevel};
-use logic::model::{ChangeKind, ChangedFile, LineKind, RowKind};
+use logic::model::{ChangeKind, ChangedFile, Commit, Label, LineKind, RowKind, Side};
 use ui::event::Event as U;
 use ui::event::ViewId as UV;
-
-/// Ports for conversions that need an [`App`] but no git: search text is accepted as typed,
-/// and every other call fails.
-struct NoPorts;
-
-impl logic::ports::Ports for NoPorts {
-    fn log(&self, _level: LogLevel, _message: &str) {}
-
-    fn validate_search(&self, input: &str) -> Result<logic::ports::SearchText, String> {
-        Ok(logic::ports::SearchText(input.to_string()))
-    }
-
-    fn status(&self) -> Result<logic::model::WorkStatus, logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn file_diff(
-        &self,
-        _paths: &[String],
-        _side: logic::model::Side,
-    ) -> Result<logic::model::FileDiff, logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn untracked_file_diff(
-        &self,
-        _path: &str,
-    ) -> Result<logic::model::FileDiff, logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn stage_paths(&self, _paths: &[String]) -> Result<(), logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn stage_all(&self) -> Result<(), logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn unstage_paths(&self, _paths: &[String]) -> Result<(), logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn remove_from_index(&self, _paths: &[String]) -> Result<(), logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn restore_paths(&self, _paths: &[String]) -> Result<(), logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn delete_untracked(&self, _paths: &[String]) -> Result<(), logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn apply_to_index(&self, _patch: &str, _reverse: bool) -> Result<(), logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn has_commits(&self) -> Result<bool, logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn last_commit_has_parent(&self) -> Result<bool, logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn amended_files(
-        &self,
-        _base: logic::model::AmendBase,
-    ) -> Result<Vec<logic::model::ChangedFile>, logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn amended_file_diff(
-        &self,
-        _paths: &[String],
-        _base: logic::model::AmendBase,
-    ) -> Result<logic::model::FileDiff, logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn unstage_from_amend(&self, _paths: &[String]) -> Result<(), logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn last_commit_message(&self) -> Result<String, logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn edit_message(&self, _text: &str) -> Result<String, logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn validate_commit_message(&self, _text: &str) -> Result<logic::ports::CommitMessage, String> {
-        Err(String::new())
-    }
-
-    fn commit(
-        &self,
-        _message: &logic::ports::CommitMessage,
-        _amend: bool,
-    ) -> Result<(), logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn commits(
-        &self,
-        _skip: usize,
-        _count: usize,
-    ) -> Result<Vec<logic::model::Commit>, logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn refs(&self) -> Result<logic::model::Refs, logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn validate_branch_name(&self, _input: &str) -> Result<logic::ports::BranchName, String> {
-        Err(String::new())
-    }
-
-    fn validate_checkout_choice(&self, _input: &str, _count: usize) -> Result<usize, String> {
-        Err(String::new())
-    }
-
-    fn create_branch(
-        &self,
-        _name: &logic::ports::BranchName,
-        _at: &str,
-    ) -> Result<(), logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn delete_branch(&self, _name: &str) -> Result<(), logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn remote_update(&self) -> Result<(), logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn fetch_all_prune(&self) -> Result<(), logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn show_commit(&self, _hash: &str) -> Result<(), logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn reset_keep(&self, _hash: &str) -> Result<(), logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn cherry_pick(&self, _hash: &str) -> Result<(), logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn rebase(
-        &self,
-        _branch: &str,
-        _onto: &str,
-        _interactive: bool,
-    ) -> Result<(), logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn checkout(&self, _branch: &str) -> Result<(), logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn commit_message(&self, _hash: &str) -> Result<String, logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn commit_files(
-        &self,
-        _hash: &str,
-    ) -> Result<Vec<logic::model::ChangedFile>, logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-
-    fn commit_file_diff(
-        &self,
-        _hash: &str,
-        _paths: &[String],
-    ) -> Result<logic::model::FileDiff, logic::ports::Failed> {
-        Err(logic::ports::Failed)
-    }
-}
+use ui::screen::Status;
+use ui::views::branches::{BranchesFocus, CommitInfo, GraphShape, LabelView};
+use ui::views::diff::DiffFocus;
 
 #[test]
 fn every_event_converts() {
@@ -258,16 +78,207 @@ fn views_convert_both_ways() {
     }
 }
 
+fn prompt(kind: PromptKind, text: &str) -> Mode {
+    Mode::Prompt(Prompt {
+        kind,
+        text: text.to_string(),
+    })
+}
+
+/// A cursor on item `selected` of `len` items, scrolled so that it shows in `height` rows.
+fn cursor_on(selected: usize, len: usize, height: usize) -> Cursor {
+    let mut cursor: Cursor = Cursor::default();
+    cursor.select(selected, len, height);
+    cursor
+}
+
+fn changed(path: &str, kind: ChangeKind) -> ChangedFile {
+    ChangedFile {
+        path: path.to_string(),
+        original_path: None,
+        kind,
+        mode_changed: false,
+    }
+}
+
+fn commit(hash: &str, subject: &str) -> Commit {
+    Commit {
+        hash: hash.to_string(),
+        parents: vec![],
+        author: "Ada".to_string(),
+        author_email: "ada@example.com".to_string(),
+        date: "2025-01-02 03:04".to_string(),
+        committer: "Cy".to_string(),
+        committer_email: "cy@example.com".to_string(),
+        committer_date: "2025-01-03 04:05".to_string(),
+        subject: subject.to_string(),
+    }
+}
+
 #[test]
 fn modes_convert() {
-    let mut app: App = App::new();
-    assert_eq!(input_mode(app.mode()), ui::event::InputMode::Normal);
-    app.handle(L::StartSearch, &NoPorts);
-    assert_eq!(input_mode(app.mode()), ui::event::InputMode::Text);
+    assert_eq!(input_mode(&Mode::Normal), ui::event::InputMode::Normal);
+    assert_eq!(
+        input_mode(&prompt(PromptKind::Search, "")),
+        ui::event::InputMode::Text
+    );
     assert_eq!(
         input_mode(&Mode::Confirm(Confirmation::Quit)),
         ui::event::InputMode::Confirm
     );
+}
+
+#[test]
+fn status_line_for_notes_and_prompts() {
+    assert_eq!(status(&Mode::Normal, &Note::None), Status::Empty);
+    assert_eq!(
+        status(&Mode::Normal, &Note::Info("i".to_string())),
+        Status::Note("i".to_string())
+    );
+    assert_eq!(
+        status(&Mode::Normal, &Note::Problem("p".to_string())),
+        Status::Problem("p".to_string())
+    );
+    assert_eq!(
+        status(
+            &prompt(PromptKind::Search, "a"),
+            &Note::Info("i".to_string())
+        ),
+        Status::Prompt {
+            label: "/".to_string(),
+            text: "a".to_string(),
+            problem: None,
+        }
+    );
+    assert_eq!(
+        status(
+            &prompt(PromptKind::Search, "a"),
+            &Note::Problem("p".to_string())
+        ),
+        Status::Prompt {
+            label: "/".to_string(),
+            text: "a".to_string(),
+            problem: Some("p".to_string()),
+        }
+    );
+    assert_eq!(
+        status(&prompt(PromptKind::Search, ""), &Note::None),
+        Status::Prompt {
+            label: "/".to_string(),
+            text: String::new(),
+            problem: None,
+        }
+    );
+}
+
+#[test]
+fn prompt_labels() {
+    let branches: Vec<String> = vec!["a".to_string(), "b".to_string()];
+    let cases: [(PromptKind, &str); 7] = [
+        (PromptKind::Search, "/"),
+        (
+            PromptKind::BranchName {
+                at: "h".to_string(),
+            },
+            "New branch name: ",
+        ),
+        (
+            PromptKind::CheckoutChoice {
+                branches: branches.clone(),
+            },
+            "Check out (1 a, 2 b): ",
+        ),
+        (
+            PromptKind::DeleteBranch {
+                branches: branches.clone(),
+            },
+            "Delete which branch (1 a, 2 b): ",
+        ),
+        (
+            PromptKind::RebaseBranch {
+                branches: branches.clone(),
+                interactive: false,
+            },
+            "Rebase which branch (1 a, 2 b): ",
+        ),
+        (
+            PromptKind::RebaseBranch {
+                branches: branches.clone(),
+                interactive: true,
+            },
+            "Interactively rebase which branch (1 a, 2 b): ",
+        ),
+        (
+            PromptKind::RebaseOnto {
+                branch: "t".to_string(),
+                onto: branches,
+                interactive: false,
+            },
+            "Rebase t onto (1 a, 2 b): ",
+        ),
+    ];
+    for (kind, label) in cases {
+        assert_eq!(
+            status(&prompt(kind, ""), &Note::None),
+            Status::Prompt {
+                label: label.to_string(),
+                text: String::new(),
+                problem: None,
+            }
+        );
+    }
+}
+
+#[test]
+fn confirmation_labels() {
+    let cases: [(Confirmation, &str); 6] = [
+        (Confirmation::Quit, "Quit? y/n"),
+        (
+            Confirmation::DeleteBranch {
+                name: "old".to_string(),
+            },
+            "Delete branch old even if it is not merged? y/n",
+        ),
+        (
+            Confirmation::ResetBranch {
+                branch: "main".to_string(),
+                hash: "1234567890".to_string(),
+            },
+            "Reset main to 1234567? y/n",
+        ),
+        (
+            Confirmation::ResetBranch {
+                branch: "main".to_string(),
+                hash: "123".to_string(),
+            },
+            "Reset main to 123? y/n",
+        ),
+        (
+            Confirmation::DiscardFile {
+                file: changed("new.txt", ChangeKind::Untracked),
+            },
+            "Delete untracked file new.txt? y/n",
+        ),
+        (
+            Confirmation::DiscardFile {
+                file: changed("a.txt", ChangeKind::Modified),
+            },
+            "Discard unstaged changes in a.txt? y/n",
+        ),
+    ];
+    for (confirmation, label) in cases {
+        assert_eq!(
+            status(
+                &Mode::Confirm(confirmation),
+                &Note::Problem("p".to_string())
+            ),
+            Status::Prompt {
+                label: label.to_string(),
+                text: String::new(),
+                problem: None,
+            }
+        );
+    }
 }
 
 #[test]
@@ -322,71 +333,131 @@ fn startup_screen() {
 }
 
 #[test]
-fn log_screen_shows_visible_rows_and_status() {
-    let mut app: App = App::new();
-    app.set_viewports(Viewports {
-        branches_graph: 0,
-        branches_files: 0,
-        branches_diff: 0,
-        log: 2,
-        diff_unstaged: 0,
-        diff_staged: 0,
-        diff_file: 0,
-    });
-    for message in ["a", "b", "c"] {
-        app.push_log(&LogEntry {
+fn log_view_shows_the_visible_entries() {
+    let entries: VecDeque<LogEntry> = ["a", "b", "c"]
+        .iter()
+        .map(|message: &&str| LogEntry {
             time: 5,
             layer: Layer::Git,
             level: LogLevel::Info,
-            message: message.to_string(),
-        });
-    }
-    app.handle(L::SwitchView(LV::Log), &NoPorts);
-    app.handle(L::StartSearch, &NoPorts);
-    app.handle(L::Input('a'), &NoPorts);
-    let prompt: ui::screen::Screen = screen(&app);
+            message: (*message).to_string(),
+        })
+        .collect();
+    let rows: Vec<ui::views::log::LogRow> = log_view(&entries, cursor_on(2, 3, 2), 2).rows;
     assert_eq!(
-        prompt.status,
-        ui::screen::Status::Prompt {
-            label: "/".to_string(),
-            text: "a".to_string(),
-            problem: None,
-        }
+        rows,
+        vec![
+            ui::views::log::LogRow {
+                time: 5,
+                layer: "git".to_string(),
+                level: ui::log::LogLevel::Info,
+                message: "b".to_string(),
+                selected: false,
+            },
+            ui::views::log::LogRow {
+                time: 5,
+                layer: "git".to_string(),
+                level: ui::log::LogLevel::Info,
+                message: "c".to_string(),
+                selected: true,
+            },
+        ]
     );
-    assert!(matches!(prompt.body, ui::screen::Body::Log(_)));
-    let shown: Vec<(String, bool)> = log_view(&app)
-        .rows
+}
+
+#[test]
+fn commit_rows_show_the_visible_commits() {
+    let commits: Vec<Commit> = vec![
+        commit("c2", "two"),
+        commit("c1", "one"),
+        commit("c0", "zero"),
+    ];
+    let graph: Vec<GraphRow> = ["c2", "c1", "c0"]
         .iter()
-        .map(|r: &ui::views::log::LogRow| (r.message.clone(), r.selected))
+        .map(|_| GraphRow {
+            cells: vec![Cell {
+                shape: Shape::Commit,
+                lane: 0,
+                link_right: None,
+            }],
+        })
+        .collect();
+    let main: Vec<Label> = vec![Label::Local {
+        name: "main".to_string(),
+        head: true,
+    }];
+    let labels = |hash: &str| -> &[Label] { if hash == "c1" { &main } else { &[] } };
+    let rows: Vec<ui::views::branches::CommitRow> =
+        commit_rows(&commits, &graph, labels, Some("c1"), cursor_on(1, 3, 2), 2);
+    let shown: Vec<(&str, bool, bool, usize)> = rows
+        .iter()
+        .map(|r: &ui::views::branches::CommitRow| {
+            (r.subject.as_str(), r.selected, r.head, r.labels.len())
+        })
         .collect();
     assert_eq!(
         shown,
-        vec![("b".to_string(), false), ("c".to_string(), true)]
+        vec![("two", false, false, 0), ("one", true, true, 1)]
     );
-    app.handle(L::InputSubmit, &NoPorts);
+    assert_eq!(rows[1].cells[0].shape, GraphShape::Commit);
     assert_eq!(
-        screen(&app).status,
-        ui::screen::Status::Note("search wrapped".to_string())
+        rows[1].labels,
+        vec![LabelView::Local {
+            name: "main".to_string(),
+            head: true
+        }]
     );
-    app.handle(L::StartSearch, &NoPorts);
-    app.handle(L::Input('z'), &NoPorts);
-    app.handle(L::InputSubmit, &NoPorts);
     assert_eq!(
-        screen(&app).status,
-        ui::screen::Status::Note("Pattern not found: z".to_string())
+        (rows[0].author.as_str(), rows[0].date.as_str()),
+        ("Ada", "2025-01-02 03:04")
     );
-    app.handle(L::SwitchView(LV::Diff), &NoPorts);
-    assert!(matches!(screen(&app).body, ui::screen::Body::Diff(_)));
+}
+
+#[test]
+fn commit_info_has_every_field_and_the_message_lines() {
+    assert_eq!(
+        commit_info(&commit("abc", "s"), Some(2), "Subject\n\nBody\n"),
+        CommitInfo {
+            hash: "abc".to_string(),
+            lane: Some(2),
+            author: "Ada".to_string(),
+            author_email: "ada@example.com".to_string(),
+            author_date: "2025-01-02 03:04".to_string(),
+            committer: "Cy".to_string(),
+            committer_email: "cy@example.com".to_string(),
+            committer_date: "2025-01-03 04:05".to_string(),
+            message: vec!["Subject".to_string(), String::new(), "Body".to_string()],
+        }
+    );
+}
+
+#[test]
+fn focus_and_titles() {
+    assert_eq!(branches_focus(BranchesPane::Graph), BranchesFocus::Graph);
+    assert_eq!(branches_focus(BranchesPane::Files), BranchesFocus::Files);
+    assert_eq!(
+        branches_focus(BranchesPane::FileDiff),
+        BranchesFocus::FileDiff
+    );
+    assert_eq!(
+        diff_focus(DiffPane::FileDiff, Side::Staged),
+        DiffFocus::FileDiff
+    );
+    assert_eq!(
+        diff_focus(DiffPane::Files, Side::Unstaged),
+        DiffFocus::Unstaged
+    );
+    assert_eq!(diff_focus(DiffPane::Files, Side::Staged), DiffFocus::Staged);
+    assert_eq!(diff_title(None), "Diff");
+    assert_eq!(
+        diff_title(Some(&changed("a.txt", ChangeKind::Modified))),
+        "Diff a.txt"
+    );
 }
 
 #[test]
 fn file_labels() {
-    let file = |kind: ChangeKind| ChangedFile {
-        path: "p".to_string(),
-        original_path: None,
-        kind,
-        mode_changed: false,
-    };
+    let file = |kind: ChangeKind| changed("p", kind);
     let cases: [(ChangeKind, &str); 8] = [
         (ChangeKind::Modified, "M p"),
         (ChangeKind::Added, "A p"),

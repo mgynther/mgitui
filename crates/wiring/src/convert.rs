@@ -1,11 +1,13 @@
 //! Conversions between the types of the logic and ui layers.
 
+use std::collections::VecDeque;
+
 use logic::app::{
     App, BranchesPane, BranchesState, Confirmation, DiffPane, DiffState, Mode, Note, Prompt,
     PromptKind, Viewports,
 };
 use logic::cursor::Cursor;
-use logic::graph::{Cell, CommitSide, Shape};
+use logic::graph::{Cell, CommitSide, GraphRow, Shape};
 use logic::log::{Layer, LogEntry, LogLevel};
 use logic::model::{ChangeKind, ChangedFile, Commit, DiffRow, Label, LineKind, RowKind, Side};
 
@@ -101,7 +103,9 @@ pub fn viewports(size: ui::layout::Size) -> Viewports {
     }
 }
 
-/// The screen model for the application state.
+/// The screen model for the application state. This and the view functions that take the
+/// [`App`] only pick values out of it for the conversions, which take those values, so that each
+/// conversion can be tested without driving an [`App`] into a state.
 #[must_use]
 pub fn screen(app: &App) -> ui::screen::Screen {
     ui::screen::Screen {
@@ -110,17 +114,21 @@ pub fn screen(app: &App) -> ui::screen::Screen {
             diff_has_changes: app.diff().status().has_changes(),
             log_has_problems: app.log().has_unseen_problems(),
         },
-        status: status(app),
+        status: status(app.mode(), app.note()),
         body: match app.view() {
             logic::event::ViewId::Branches => ui::screen::Body::Branches(branches_view(app)),
             logic::event::ViewId::Diff => ui::screen::Body::Diff(diff_view(app)),
-            logic::event::ViewId::Log => ui::screen::Body::Log(log_view(app)),
+            logic::event::ViewId::Log => ui::screen::Body::Log(log_view(
+                app.log().entries(),
+                app.log_cursor(),
+                app.viewports().log,
+            )),
         },
     }
 }
 
-fn status(app: &App) -> ui::screen::Status {
-    match (app.mode(), app.note()) {
+fn status(mode: &Mode, note: &Note) -> ui::screen::Status {
+    match (mode, note) {
         (Mode::Confirm(confirmation), _) => ui::screen::Status::Prompt {
             label: match confirmation {
                 Confirmation::Quit => "Quit? y/n".to_string(),
@@ -202,15 +210,16 @@ fn numbered(items: &[String]) -> String {
     choices.join(", ")
 }
 
-fn log_view(app: &App) -> ui::views::log::LogView {
-    let cursor: logic::cursor::Cursor = app.log_cursor();
-    let rows: Vec<ui::views::log::LogRow> = app
-        .log()
-        .entries()
+fn log_view(
+    entries: &VecDeque<LogEntry>,
+    cursor: Cursor,
+    height: usize,
+) -> ui::views::log::LogView {
+    let rows: Vec<ui::views::log::LogRow> = entries
         .iter()
         .enumerate()
         .skip(cursor.offset())
-        .take(app.viewports().log)
+        .take(height)
         .map(
             |(index, entry): (usize, &LogEntry)| ui::views::log::LogRow {
                 time: entry.time,
@@ -225,64 +234,27 @@ fn log_view(app: &App) -> ui::views::log::LogView {
 }
 
 fn branches_view(app: &App) -> ui::views::branches::BranchesView {
-    use ui::views::branches::{BranchesFocus, BranchesView, CommitRow};
     let branches: &BranchesState = app.branches();
     let viewports: Viewports = app.viewports();
-    let cursor: Cursor = branches.cursor();
-    let rows: Vec<CommitRow> = branches
-        .commits()
-        .iter()
-        .zip(branches.rows())
-        .enumerate()
-        .skip(cursor.offset())
-        .take(viewports.branches_graph)
-        .map(
-            |(index, (commit, row)): (usize, (&Commit, &logic::graph::GraphRow))| CommitRow {
-                cells: row.cells.iter().map(graph_cell).collect(),
-                labels: branches
-                    .labels(&commit.hash)
-                    .iter()
-                    .map(label_view)
-                    .collect(),
-                subject: commit.subject.clone(),
-                author: commit.author.clone(),
-                date: commit.date.clone(),
-                selected: index == cursor.selected(),
-                head: branches.head() == Some(commit.hash.as_str()),
-            },
-        )
-        .collect();
-    let info: Option<ui::views::branches::CommitInfo> =
-        branches
-            .selected()
-            .map(|commit: &Commit| ui::views::branches::CommitInfo {
-                hash: commit.hash.clone(),
-                lane: branches.selected_lane(),
-                author: commit.author.clone(),
-                author_email: commit.author_email.clone(),
-                author_date: commit.date.clone(),
-                committer: commit.committer.clone(),
-                committer_email: commit.committer_email.clone(),
-                committer_date: commit.committer_date.clone(),
-                message: branches.message().lines().map(str::to_string).collect(),
-            });
-    BranchesView {
-        focus: match branches.pane() {
-            BranchesPane::Graph => BranchesFocus::Graph,
-            BranchesPane::Files => BranchesFocus::Files,
-            BranchesPane::FileDiff => BranchesFocus::FileDiff,
-        },
-        rows,
-        info,
+    ui::views::branches::BranchesView {
+        focus: branches_focus(branches.pane()),
+        rows: commit_rows(
+            branches.commits(),
+            branches.rows(),
+            |hash: &str| branches.labels(hash),
+            branches.head(),
+            branches.cursor(),
+            viewports.branches_graph,
+        ),
+        info: branches.selected().map(|commit: &Commit| {
+            commit_info(commit, branches.selected_lane(), branches.message())
+        }),
         files: file_rows(
             branches.files(),
             branches.file_cursor(),
             viewports.branches_files,
         ),
-        diff_title: branches.selected_file().map_or_else(
-            || "Diff".to_string(),
-            |f: &ChangedFile| format!("Diff {}", f.path),
-        ),
+        diff_title: diff_title(branches.selected_file()),
         diff: diff_rows(
             branches.diff_rows(),
             branches.diff_cursor(),
@@ -290,6 +262,70 @@ fn branches_view(app: &App) -> ui::views::branches::BranchesView {
             viewports.branches_diff,
         ),
     }
+}
+
+fn branches_focus(pane: BranchesPane) -> ui::views::branches::BranchesFocus {
+    use ui::views::branches::BranchesFocus;
+    match pane {
+        BranchesPane::Graph => BranchesFocus::Graph,
+        BranchesPane::Files => BranchesFocus::Files,
+        BranchesPane::FileDiff => BranchesFocus::FileDiff,
+    }
+}
+
+/// The visible rows of the commit graph: `commits` with their `graph` rows, the `labels` of
+/// each commit by hash, and `head`, the commit `HEAD` points to.
+fn commit_rows<'a>(
+    commits: &[Commit],
+    graph: &[GraphRow],
+    labels: impl Fn(&str) -> &'a [Label],
+    head: Option<&str>,
+    cursor: Cursor,
+    height: usize,
+) -> Vec<ui::views::branches::CommitRow> {
+    commits
+        .iter()
+        .zip(graph)
+        .enumerate()
+        .skip(cursor.offset())
+        .take(height)
+        .map(|(index, (commit, row)): (usize, (&Commit, &GraphRow))| {
+            ui::views::branches::CommitRow {
+                cells: row.cells.iter().map(graph_cell).collect(),
+                labels: labels(&commit.hash).iter().map(label_view).collect(),
+                subject: commit.subject.clone(),
+                author: commit.author.clone(),
+                date: commit.date.clone(),
+                selected: index == cursor.selected(),
+                head: head == Some(commit.hash.as_str()),
+            }
+        })
+        .collect()
+}
+
+fn commit_info(
+    commit: &Commit,
+    lane: Option<usize>,
+    message: &str,
+) -> ui::views::branches::CommitInfo {
+    ui::views::branches::CommitInfo {
+        hash: commit.hash.clone(),
+        lane,
+        author: commit.author.clone(),
+        author_email: commit.author_email.clone(),
+        author_date: commit.date.clone(),
+        committer: commit.committer.clone(),
+        committer_email: commit.committer_email.clone(),
+        committer_date: commit.committer_date.clone(),
+        message: message.lines().map(str::to_string).collect(),
+    }
+}
+
+fn diff_title(file: Option<&ChangedFile>) -> String {
+    file.map_or_else(
+        || "Diff".to_string(),
+        |f: &ChangedFile| format!("Diff {}", f.path),
+    )
 }
 
 fn graph_cell(cell: &Cell) -> ui::views::branches::GraphCell {
@@ -332,13 +368,8 @@ fn label_view(label: &Label) -> ui::views::branches::LabelView {
 fn diff_view(app: &App) -> ui::views::diff::DiffView {
     let diff: &DiffState = app.diff();
     let viewports: Viewports = app.viewports();
-    let focus: ui::views::diff::DiffFocus = match (diff.pane(), diff.side()) {
-        (DiffPane::FileDiff, _) => ui::views::diff::DiffFocus::FileDiff,
-        (DiffPane::Files, Side::Unstaged) => ui::views::diff::DiffFocus::Unstaged,
-        (DiffPane::Files, Side::Staged) => ui::views::diff::DiffFocus::Staged,
-    };
     ui::views::diff::DiffView {
-        focus,
+        focus: diff_focus(diff.pane(), diff.side()),
         unstaged: file_rows(
             diff.files(Side::Unstaged),
             diff.cursor(Side::Unstaged),
@@ -349,10 +380,7 @@ fn diff_view(app: &App) -> ui::views::diff::DiffView {
             diff.cursor(Side::Staged),
             viewports.diff_staged,
         ),
-        diff_title: diff.selected_file().map_or_else(
-            || "Diff".to_string(),
-            |f: &ChangedFile| format!("Diff {}", f.path),
-        ),
+        diff_title: diff_title(diff.selected_file()),
         diff: diff_rows(
             diff.rows(),
             diff.diff_cursor(),
@@ -362,6 +390,14 @@ fn diff_view(app: &App) -> ui::views::diff::DiffView {
         amend: diff.amend(),
         message: diff.message().to_string(),
         no_changes: !diff.status().has_changes(),
+    }
+}
+
+fn diff_focus(pane: DiffPane, side: Side) -> ui::views::diff::DiffFocus {
+    match (pane, side) {
+        (DiffPane::FileDiff, _) => ui::views::diff::DiffFocus::FileDiff,
+        (DiffPane::Files, Side::Unstaged) => ui::views::diff::DiffFocus::Unstaged,
+        (DiffPane::Files, Side::Staged) => ui::views::diff::DiffFocus::Staged,
     }
 }
 

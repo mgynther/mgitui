@@ -4,7 +4,7 @@ use super::{
     branches_focus, commit_info, commit_rows, diff_focus, diff_row_kind, event, file_change,
     file_rows, graph_cell, input_mode, label_view, log_view, logic_view, screen, status,
     ui_branch_name_problem, ui_info, ui_input_problem, ui_layer, ui_level, ui_operation,
-    ui_problem, ui_view, viewports,
+    ui_problem, ui_size, ui_view, viewports,
 };
 use logic::app::{App, BranchesPane, Confirmation, DiffPane, Mode, Prompt, PromptKind, Viewports};
 use logic::cursor::Cursor;
@@ -574,6 +574,20 @@ fn layers_and_levels() {
     for (level, ui) in levels {
         assert_eq!(ui_level(level), ui);
     }
+}
+
+#[test]
+fn terminal_size_converts() {
+    assert_eq!(
+        ui_size(terminal::size::Size {
+            rows: 24,
+            columns: 80
+        }),
+        ui::layout::Size {
+            width: 80,
+            height: 24
+        }
+    );
 }
 
 #[test]

@@ -88,6 +88,15 @@ pub fn input_mode(mode: &Mode) -> ui::event::InputMode {
     }
 }
 
+/// The ui size for the terminal's size.
+#[must_use]
+pub fn ui_size(size: terminal::size::Size) -> ui::layout::Size {
+    ui::layout::Size {
+        width: size.columns,
+        height: size.rows,
+    }
+}
+
 /// How many rows each list has for a terminal of `size`.
 #[must_use]
 pub fn viewports(size: ui::layout::Size) -> Viewports {

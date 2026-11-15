@@ -5,7 +5,7 @@ use logic::model::{AmendBase, ChangedFile, Commit, FileDiff, Refs, Side, WorkSta
 use logic::note::InputProblem;
 use logic::ports::{BranchName, CommitMessage, Failed};
 
-use crate::editor::{self, Editor, Handoff};
+use crate::editor::{Editor, Handoff};
 use crate::log::LogBuffer;
 use crate::model;
 
@@ -148,7 +148,7 @@ impl logic::ports::Ports for SessionPorts<'_> {
     }
 
     fn edit_message(&self, text: &str) -> Result<String, Failed> {
-        editor::edit_text(text, self.git.temp_dir(), self.editor).map_err(
+        terminal::edit::edit_text(text, self.git.temp_dir(), self.editor).map_err(
             |error: std::io::Error| {
                 self.log.wiring(
                     LogLevel::Error,

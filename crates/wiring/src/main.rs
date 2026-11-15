@@ -1,13 +1,11 @@
-//! The mgitui binary: the terminal and the main loop. Terminal-only code, excluded from
-//! coverage.
-
-mod terminal;
+//! The mgitui binary: connects the terminal to a session and runs the main loop. It needs a
+//! real terminal, so it is excluded from coverage and checked by hand.
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use terminal::Terminal;
+use terminal::device::{self, Terminal};
 use ui::exit::{ExitProblem, exit_text};
 use wiring::log::{LogBuffer, system_clock};
 use wiring::session::Session;
@@ -38,12 +36,12 @@ fn run(git: git::Git, log: LogBuffer) -> io::Result<()> {
     let for_panic: String = saved.clone();
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        terminal::restore(&for_panic);
+        device::restore(&for_panic);
         default_hook(info);
     }));
     let for_handoff: String = saved.clone();
-    let editor = move |path: &Path| terminal::run_vim(&saved, path);
-    let handoff = move |run: &mut dyn FnMut()| terminal::hand_over(&for_handoff, run);
+    let editor = move |path: &Path| device::run_vim(&saved, path);
+    let handoff = move |run: &mut dyn FnMut()| device::hand_over(&for_handoff, run);
     let mut session: Session = Session::new(git, log, Box::new(editor), Box::new(handoff));
     let result: io::Result<()> = event_loop(&terminal, &mut session);
     terminal.leave();
@@ -55,7 +53,7 @@ fn event_loop(terminal: &Terminal, session: &mut Session) -> io::Result<()> {
     let mut drawn: Option<ui::layout::Size> = None;
     let mut dirty: bool = true;
     while !session.should_quit() {
-        let size: ui::layout::Size = terminal.size()?;
+        let size: ui::layout::Size = wiring::convert::ui_size(terminal.size()?);
         if drawn != Some(size) {
             session.resize(size);
             dirty = true;

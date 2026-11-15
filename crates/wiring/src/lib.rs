@@ -6,7 +6,6 @@ pub mod log;
 pub mod model;
 pub mod ports;
 pub mod session;
-pub mod size;
 pub mod startup;
 
 #[cfg(test)]

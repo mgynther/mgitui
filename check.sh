@@ -2,8 +2,8 @@
 # Runs the project checks in order: build, tests with coverage, lint, format.
 set -eu
 
-# Terminal-only files that are excluded from coverage (listed in the spec).
-COVERAGE_EXCLUDE='crates/wiring/src/(main|terminal)\.rs'
+# Files that need a real terminal, excluded from coverage and checked by hand (see README.md).
+COVERAGE_EXCLUDE='crates/(wiring/src/main|terminal/src/device)\.rs'
 
 echo "== build"
 cargo build --workspace --all-targets

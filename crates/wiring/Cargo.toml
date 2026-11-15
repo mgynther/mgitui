@@ -13,6 +13,7 @@ path = "src/main.rs"
 [dependencies]
 git = { path = "../git" }
 logic = { path = "../logic" }
+terminal = { path = "../terminal" }
 ui = { path = "../ui" }
 validation = { path = "../validation" }
 

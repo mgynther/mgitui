@@ -99,7 +99,7 @@ cargo install --path crates/wiring
 
 ### Testing one layer
 
-The code is split into one crate per layer under `crates/`: `git`, `logic`, `ui`, `validation` and `wiring`. Only `wiring` depends on the other crates, so each layer builds and tests on its own, even while another layer does not compile:
+The code is split into one crate per layer under `crates/`: `git`, `logic`, `terminal`, `ui`, `validation` and `wiring`. Only `wiring` depends on the other crates, so each layer builds and tests on its own, even while another layer does not compile:
 
 ```sh
 cargo test -p logic                  # all tests of one layer
@@ -108,7 +108,7 @@ cargo clippy -p logic --all-targets -- -D warnings
 cargo llvm-cov -p logic --fail-under-lines 100 --fail-under-functions 100 --fail-under-regions 100
 ```
 
-For `wiring`, add the `--ignore-filename-regex` from `check.sh` to the coverage command. Run `./check.sh` before committing.
+For `wiring` and `terminal`, add the `--ignore-filename-regex` from `check.sh` to the coverage command. Run `./check.sh` before committing.
 
 If per-layer coverage reports well-tested code as uncovered, the coverage data from earlier runs is stale. Clear it with `cargo llvm-cov clean --workspace` and run the coverage command again.
 
@@ -145,7 +145,7 @@ If per-layer coverage reports well-tested code as uncovered, the coverage data f
 
 ## Manual checks
 
-The terminal handling and starting Vim are not covered by automated tests. After changing `crates/wiring/src/main.rs` or `crates/wiring/src/terminal.rs`, check by hand:
+The terminal handling and starting Vim are not covered by automated tests. After changing `crates/wiring/src/main.rs` or `crates/terminal/src/device.rs`, check by hand:
 
 1. Start `mgitui` in a repository: the Branches view is shown and the terminal is in raw mode (typed keys are not echoed).
 2. F1, F2 and F3 switch views, also in a different terminal emulator and in the Linux console if available.

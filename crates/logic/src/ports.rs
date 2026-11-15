@@ -53,6 +53,13 @@ pub trait Ports {
     /// Fails when git fails.
     fn stage_file(&self, file: &ChangedFile) -> Result<(), Failed>;
 
+    /// Stages all changes in the working tree, including deletions and untracked files.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn stage_all(&self) -> Result<(), Failed>;
+
     /// Unstages all changes of a file in the staged list.
     ///
     /// # Errors

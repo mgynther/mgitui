@@ -21,6 +21,16 @@ impl Git {
         Ok(())
     }
 
+    /// Stages all changes in the working tree, including deletions and untracked files.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    pub fn add_all(&self, log: &Log<'_>) -> Result<(), GitError> {
+        self.run(&Command::AddAll, None, log)?;
+        Ok(())
+    }
+
     /// Whether the repository has at least one commit.
     ///
     /// # Errors
@@ -212,5 +222,26 @@ mod tests {
                 .unstage(&paths(&["missing"]), &logged.log())
                 .is_err()
         );
+    }
+
+    #[test]
+    fn add_all_stages_changes_deletions_and_untracked_files() {
+        let repo: TestRepo = TestRepo::new();
+        repo.write("changed.txt", "a\n");
+        repo.write("deleted.txt", "d\n");
+        repo.git_ok(&["add", "."]);
+        repo.git_ok(&["commit", "-q", "-m", "init"]);
+        repo.write("changed.txt", "b\n");
+        std::fs::remove_file(repo.path().join("deleted.txt")).unwrap();
+        repo.write("dir/new.txt", "n\n");
+        let logged: Logged = Logged::new();
+        repo.git().add_all(&logged.log()).unwrap();
+        assert_eq!(
+            repo.git_ok(&["status", "--porcelain"]),
+            "M  changed.txt\nD  deleted.txt\nA  dir/new.txt\n"
+        );
+        assert_eq!(logged.lines(), vec!["Info: git add -A (exit 0)"]);
+        let missing: crate::runner::Git = repo.git().with_program("/nonexistent/git");
+        assert!(missing.add_all(&logged.log()).is_err());
     }
 }

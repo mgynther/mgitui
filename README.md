@@ -141,6 +141,7 @@ If per-layer coverage reports well-tested code as uncovered, the coverage data f
 | e | Diff | edit the commit message in Vim |
 | c | Diff | commit |
 | a | Diff | toggle amending the last commit |
+| A | Diff | stage all unstaged changes, including deletions and untracked files (refused while there are merge conflicts) |
 
 ## Manual checks
 

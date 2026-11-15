@@ -711,6 +711,29 @@ fn reset_branch_to_selected_commit() {
 }
 
 #[test]
+fn shift_a_stages_all_changes_including_untracked_files() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    std::fs::write(dir.path().join("a.txt"), "a\n").unwrap();
+    std::fs::write(dir.path().join("gone.txt"), "g\n").unwrap();
+    git_ok(dir.path(), &["add", "."]);
+    git_ok(dir.path(), &["commit", "-q", "-m", "init"]);
+    std::fs::write(dir.path().join("a.txt"), "changed\n").unwrap();
+    std::fs::remove_file(dir.path().join("gone.txt")).unwrap();
+    std::fs::create_dir(dir.path().join("sub")).unwrap();
+    std::fs::write(dir.path().join("sub/new.txt"), "n\n").unwrap();
+    let mut s: Session = session_in(&dir);
+    s.input(b"\x1bOQA");
+    assert_eq!(
+        git_ok(dir.path(), &["status", "--porcelain"]),
+        "M  a.txt\nD  gone.txt\nA  sub/new.txt\n"
+    );
+    assert_eq!(s.render(SIZE).row_text(23).trim_end(), "");
+    s.input(b"A");
+    assert_eq!(s.render(SIZE).row_text(23).trim_end(), "Nothing to stage");
+}
+
+#[test]
 fn d_discards_changes_and_deletes_untracked_files_after_confirming() {
     let dir: TempDir = TempDir::new();
     init_repo(dir.path());

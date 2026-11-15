@@ -121,6 +121,7 @@ fn git_failures_become_failed() {
         ports.stage_file(&file("x", ChangeKind::Modified)),
         Err(Failed)
     );
+    assert_eq!(ports.stage_all(), Err(Failed));
     assert_eq!(
         ports.unstage_file(&file("x", ChangeKind::Modified)),
         Err(Failed)

@@ -40,6 +40,7 @@ pub fn event(event: ui::event::Event) -> logic::event::Event {
         U::ResetBranch => L::ResetBranch,
         U::DeleteBranch => L::DeleteBranch,
         U::DiscardFile => L::DiscardFile,
+        U::StageAll => L::StageAll,
         U::Rebase => L::Rebase,
         U::InteractiveRebase => L::InteractiveRebase,
         U::SwitchList => L::SwitchList,

@@ -192,6 +192,10 @@ impl Ports for TestPorts {
         self.record(format!("stage {}", file.path))
     }
 
+    fn stage_all(&self) -> Result<(), Failed> {
+        self.record("stage all".to_string())
+    }
+
     fn unstage_file(&self, file: &ChangedFile) -> Result<(), Failed> {
         self.record(format!("unstage {}", file.path))
     }

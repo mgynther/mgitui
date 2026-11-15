@@ -220,6 +220,7 @@ impl App {
             (_, Event::EditMessage) => self.edit_message(ports),
             (_, Event::Commit) => self.commit(ports),
             (_, Event::ToggleAmend) => self.toggle_amend(ports),
+            (_, Event::StageAll) => self.stage_all(ports),
             (_, Event::NextPane) => {
                 self.diff.pane = match self.diff.pane {
                     DiffPane::Files => DiffPane::FileDiff,
@@ -304,6 +305,33 @@ impl App {
                 ports.unstage_file(&file)
             }
         };
+        self.after_staging(result, ports);
+    }
+
+    /// Stages all unstaged changes, untracked files included. Refused while a file has a
+    /// merge conflict: staging it would mark it resolved, conflict markers and all.
+    fn stage_all(&mut self, ports: &dyn Ports) {
+        let status: Result<WorkStatus, Failed> = ports.status();
+        let Ok(status) = status else {
+            self.note = Note::Problem("Reading the status failed, see the Log view".to_string());
+            return;
+        };
+        if status
+            .unstaged
+            .iter()
+            .any(|file: &ChangedFile| file.kind == ChangeKind::Conflict)
+        {
+            let message: &str = "Resolve merge conflicts outside mgitui before staging all";
+            ports.log(LogLevel::Error, message);
+            self.note = Note::Problem(message.to_string());
+            return;
+        }
+        if status.unstaged.is_empty() {
+            self.note = Note::Info("Nothing to stage".to_string());
+            return;
+        }
+        ports.log(LogLevel::Info, "stage all");
+        let result: Result<(), Failed> = ports.stage_all();
         self.after_staging(result, ports);
     }
 

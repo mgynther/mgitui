@@ -25,6 +25,9 @@ pub enum Command {
         /// The paths.
         paths: Vec<String>,
     },
+    /// `git add -A`: stages all changes in the working tree, including deletions and untracked
+    /// files.
+    AddAll,
     /// `git rev-parse --verify HEAD`: whether there is a commit yet. Exit code 1 means no.
     HasHead,
     /// `git restore --staged`: unstages the paths.
@@ -157,6 +160,7 @@ impl Command {
                 &["diff", "--no-ext-diff", "--no-index", "--", "/dev/null"]
             }
             Command::Add { .. } => &["add", "-A", "--"],
+            Command::AddAll => &["add", "-A"],
             Command::HasHead => &["rev-parse", "--verify", "-q", "HEAD"],
             Command::RestoreStaged { .. } => &["restore", "--staged", "--"],
             Command::RemoveCached { .. } => &["rm", "--cached", "-q", "-r", "--"],
@@ -256,6 +260,7 @@ impl Command {
             Command::ShowToplevel
             | Command::Status
             | Command::HasHead
+            | Command::AddAll
             | Command::ApplyCached { .. }
             | Command::LastMessage
             | Command::Log { .. }
@@ -334,6 +339,7 @@ mod tests {
             }),
             "add -A -- p"
         );
+        assert_eq!(args(&Command::AddAll), "add -A");
         assert_eq!(args(&Command::HasHead), "rev-parse --verify -q HEAD");
         assert_eq!(
             args(&Command::RestoreStaged {

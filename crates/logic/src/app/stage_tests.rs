@@ -317,3 +317,63 @@ fn d_is_refused_on_staged_conflicted_and_missing_files_and_in_the_diff() {
     assert_eq!(empty_app.mode(), &Mode::Normal);
     assert_eq!(empty.calls(), Vec::<String>::new());
 }
+
+#[test]
+fn shift_a_stages_all_unstaged_changes_from_either_pane() {
+    let ports: TestPorts = ports_with(
+        vec![modified("a"), file("new", ChangeKind::Untracked)],
+        vec![],
+    );
+    let mut app: App = app(&ports);
+    run(&mut app, &ports, &[Event::StageAll]);
+    let calls: Vec<String> = ports.calls();
+    assert_eq!(calls[..3], ["status", "Info: stage all", "stage all"]);
+    assert!(calls[3..].contains(&"status".to_string()));
+    assert_eq!(app.note(), &Note::None);
+    ports.clear();
+    run(&mut app, &ports, &[Event::NextPane, Event::StageAll]);
+    assert!(ports.calls().contains(&"stage all".to_string()));
+}
+
+#[test]
+fn stage_all_problems() {
+    let nothing: TestPorts = ports_with(vec![], vec![modified("s")]);
+    let mut nothing_app: App = app(&nothing);
+    run(&mut nothing_app, &nothing, &[Event::StageAll]);
+    assert_eq!(nothing.calls(), vec!["status"]);
+    assert_eq!(
+        nothing_app.note(),
+        &Note::Info("Nothing to stage".to_string())
+    );
+
+    let conflicted: TestPorts =
+        ports_with(vec![file("c", ChangeKind::Conflict), modified("a")], vec![]);
+    let mut conflicted_app: App = app(&conflicted);
+    run(&mut conflicted_app, &conflicted, &[Event::StageAll]);
+    let message: &str = "Resolve merge conflicts outside mgitui before staging all";
+    assert_eq!(
+        conflicted.calls(),
+        vec!["status".to_string(), format!("Error: {message}")]
+    );
+    assert_eq!(conflicted_app.note(), &Note::Problem(message.to_string()));
+
+    let failing: TestPorts = TestPorts {
+        stage_fails: true,
+        ..ports_with(vec![modified("a")], vec![])
+    };
+    let mut failing_app: App = app(&failing);
+    run(&mut failing_app, &failing, &[Event::StageAll]);
+    assert_eq!(
+        failing_app.note(),
+        &Note::Problem("Staging failed, see the Log view".to_string())
+    );
+
+    *failing.status.borrow_mut() = None;
+    failing.clear();
+    run(&mut failing_app, &failing, &[Event::StageAll]);
+    assert_eq!(failing.calls(), vec!["status"]);
+    assert_eq!(
+        failing_app.note(),
+        &Note::Problem("Reading the status failed, see the Log view".to_string())
+    );
+}

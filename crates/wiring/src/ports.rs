@@ -89,6 +89,10 @@ impl logic::ports::Ports for SessionPorts<'_> {
             .map_err(|_| Failed)
     }
 
+    fn stage_all(&self) -> Result<(), Failed> {
+        self.git.add_all(&self.log_git()).map_err(|_| Failed)
+    }
+
     fn unstage_file(&self, file: &ChangedFile) -> Result<(), Failed> {
         self.git
             .unstage(&diff_paths(file, Side::Staged), &self.log_git())

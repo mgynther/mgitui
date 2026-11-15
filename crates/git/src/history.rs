@@ -17,10 +17,14 @@ pub struct Commit {
     pub parents: Vec<String>,
     /// The author name.
     pub author: String,
+    /// The author email.
+    pub author_email: String,
     /// The author date as `YYYY-MM-DD HH:MM` in local time.
     pub date: String,
     /// The committer name.
     pub committer: String,
+    /// The committer email.
+    pub committer_email: String,
     /// The committer date as `YYYY-MM-DD HH:MM` in local time.
     pub committer_date: String,
     /// The first line of the message.
@@ -196,13 +200,15 @@ pub fn parse_log(output: &str) -> Result<Vec<Commit>, GitError> {
         .map(|record: &str| record.trim_start_matches('\n'))
         .filter(|record: &&str| !record.is_empty())
         .map(|record: &str| {
-            let fields: Vec<&str> = record.splitn(7, '\u{1f}').collect();
+            let fields: Vec<&str> = record.splitn(9, '\u{1f}').collect();
             let [
                 hash,
                 parents,
                 author,
+                author_email,
                 date,
                 committer,
+                committer_email,
                 committer_date,
                 subject,
             ] = fields[..]
@@ -213,8 +219,10 @@ pub fn parse_log(output: &str) -> Result<Vec<Commit>, GitError> {
                 hash: hash.to_string(),
                 parents: parents.split_whitespace().map(str::to_string).collect(),
                 author: author.to_string(),
+                author_email: author_email.to_string(),
                 date: date.to_string(),
                 committer: committer.to_string(),
+                committer_email: committer_email.to_string(),
                 committer_date: committer_date.to_string(),
                 subject: subject.to_string(),
             })

@@ -91,8 +91,10 @@ pub fn commit(commit: git::Commit) -> Commit {
         hash: commit.hash,
         parents: commit.parents,
         author: commit.author,
+        author_email: commit.author_email,
         date: commit.date,
         committer: commit.committer,
+        committer_email: commit.committer_email,
         committer_date: commit.committer_date,
         subject: commit.subject,
     }
@@ -144,8 +146,10 @@ mod tests {
             hash: "h".to_string(),
             parents: vec!["p".to_string()],
             author: "a".to_string(),
+            author_email: "ae".to_string(),
             date: "d".to_string(),
             committer: "c".to_string(),
+            committer_email: "ce".to_string(),
             committer_date: "cd".to_string(),
             subject: "s".to_string(),
         });
@@ -154,8 +158,10 @@ mod tests {
                 converted_commit.hash,
                 converted_commit.parents,
                 converted_commit.author,
+                converted_commit.author_email,
                 converted_commit.date,
                 converted_commit.committer,
+                converted_commit.committer_email,
                 converted_commit.committer_date,
                 converted_commit.subject
             ),
@@ -163,8 +169,10 @@ mod tests {
                 "h".to_string(),
                 vec!["p".to_string()],
                 "a".to_string(),
+                "ae".to_string(),
                 "d".to_string(),
                 "c".to_string(),
+                "ce".to_string(),
                 "cd".to_string(),
                 "s".to_string()
             )

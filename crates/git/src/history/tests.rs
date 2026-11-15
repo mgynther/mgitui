@@ -8,7 +8,7 @@ use crate::test_repo::{Logged, TempDir, TestRepo, fake_git};
 
 #[test]
 fn parses_log_records() {
-    let output: &str = "a\u{1f}b c\u{1f}Ada\u{1f}2025-01-02 03:04\u{1f}Cy\u{1f}2025-01-03 04:05\u{1f}Merge x\u{1f}y\0\nb\u{1f}\u{1f}Bo\u{1f}2025-01-01 00:00\u{1f}Bo\u{1f}2025-01-01 00:00\u{1f}\0";
+    let output: &str = "a\u{1f}b c\u{1f}Ada\u{1f}ada@a\u{1f}2025-01-02 03:04\u{1f}Cy\u{1f}cy@c\u{1f}2025-01-03 04:05\u{1f}Merge x\u{1f}y\0\nb\u{1f}\u{1f}Bo\u{1f}\u{1f}2025-01-01 00:00\u{1f}Bo\u{1f}\u{1f}2025-01-01 00:00\u{1f}\0";
     assert_eq!(
         parse_log(output).unwrap(),
         vec![
@@ -16,8 +16,10 @@ fn parses_log_records() {
                 hash: "a".to_string(),
                 parents: vec!["b".to_string(), "c".to_string()],
                 author: "Ada".to_string(),
+                author_email: "ada@a".to_string(),
                 date: "2025-01-02 03:04".to_string(),
                 committer: "Cy".to_string(),
+                committer_email: "cy@c".to_string(),
                 committer_date: "2025-01-03 04:05".to_string(),
                 subject: "Merge x\u{1f}y".to_string(),
             },
@@ -25,8 +27,10 @@ fn parses_log_records() {
                 hash: "b".to_string(),
                 parents: vec![],
                 author: "Bo".to_string(),
+                author_email: String::new(),
                 date: "2025-01-01 00:00".to_string(),
                 committer: "Bo".to_string(),
+                committer_email: String::new(),
                 committer_date: "2025-01-01 00:00".to_string(),
                 subject: String::new(),
             },
@@ -87,6 +91,8 @@ fn history_of_real_repository() {
     assert_eq!(commits[0].author, "Ada Author");
     assert_eq!(commits[0].date, "2025-01-02 03:04");
     assert_eq!(commits[0].committer, "Cy Committer");
+    assert_eq!(commits[0].author_email, "ada@example.com");
+    assert_eq!(commits[0].committer_email, "cy@example.com");
     assert_eq!(commits[0].committer_date, "2025-01-02 03:04");
     assert_eq!(
         repo.git().log(1, 10, &logged.log()).unwrap(),

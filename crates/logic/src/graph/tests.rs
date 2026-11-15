@@ -7,8 +7,10 @@ fn commit(hash: &str, parents: &str) -> Commit {
         hash: hash.to_string(),
         parents: parents.split_whitespace().map(str::to_string).collect(),
         author: String::new(),
+        author_email: String::new(),
         date: String::new(),
         committer: String::new(),
+        committer_email: String::new(),
         committer_date: String::new(),
         subject: String::new(),
     }

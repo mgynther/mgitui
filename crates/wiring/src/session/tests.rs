@@ -246,15 +246,16 @@ fn branches_view_shows_graph_details_and_panes() {
     assert!(first_selected.row_text(9).contains("│A b.txt"));
     s.input(b"j");
     let second_selected: ui::buffer::Buffer = s.render(SIZE);
-    assert!(
-        second_selected
-            .row_text(10)
-            .starts_with("Author: Ada Author  Date: 2025-01-02 03:04")
+    // The box is 53 columns wide at 80x24: the dates stay visible and the emails are cut off.
+    let in_box =
+        |row: usize| -> String { second_selected.row_text(row).chars().take(53).collect() };
+    assert_eq!(
+        in_box(10),
+        "Author:    2025-01-02 03:04  Ada Author <ada@example."
     );
-    assert!(
-        second_selected
-            .row_text(11)
-            .starts_with("Committer: Cy Committer  Date: 2025-01-02 03:04")
+    assert_eq!(
+        in_box(11),
+        "Committer: 2025-01-02 03:04  Cy Committer <cy@example"
     );
     assert!(
         second_selected.row_text(12).starts_with("first"),

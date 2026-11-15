@@ -92,10 +92,14 @@ pub struct CommitInfo {
     pub lane: Option<usize>,
     /// The author name.
     pub author: String,
+    /// The author email.
+    pub author_email: String,
     /// The author date.
     pub author_date: String,
     /// The committer name.
     pub committer: String,
+    /// The committer email.
+    pub committer_email: String,
     /// The committer date.
     pub committer_date: String,
     /// The lines of the full commit message.
@@ -312,7 +316,8 @@ fn draw_label(
 }
 
 /// Draws the commit box: the hash in the color of the commit's line, then author, committer
-/// and the message.
+/// and the message. The dates come before the names: in a narrow box a long email is cut off
+/// at the end, and the date stays visible.
 fn draw_info(buffer: &mut Buffer, area: Rect, commit: &CommitInfo) {
     let hash: Style = commit
         .lane
@@ -324,13 +329,16 @@ fn draw_info(buffer: &mut Buffer, area: Rect, commit: &CommitInfo) {
             (commit.hash.clone(), hash),
         ],
         vec![(
-            format!("Author: {}  Date: {}", commit.author, commit.author_date),
+            format!(
+                "Author:    {}  {} <{}>",
+                commit.author_date, commit.author, commit.author_email
+            ),
             Style::PLAIN,
         )],
         vec![(
             format!(
-                "Committer: {}  Date: {}",
-                commit.committer, commit.committer_date
+                "Committer: {}  {} <{}>",
+                commit.committer_date, commit.committer, commit.committer_email
             ),
             Style::PLAIN,
         )],

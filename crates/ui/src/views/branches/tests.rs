@@ -41,8 +41,10 @@ fn view(focus: BranchesFocus, rows: Vec<CommitRow>) -> BranchesView {
             hash: "abc".to_string(),
             lane: Some(1),
             author: "Ada".to_string(),
+            author_email: "ada@example.com".to_string(),
             author_date: "2025-01-02 03:04".to_string(),
             committer: "Cy".to_string(),
+            committer_email: "cy@example.com".to_string(),
             committer_date: "2025-01-03 04:05".to_string(),
             message: vec!["Subject".to_string(), String::new(), "Body".to_string()],
         }),
@@ -133,12 +135,12 @@ fn unfocused_selection_is_bold_and_other_panes_are_drawn() {
     assert!(
         buffer
             .row_text(12)
-            .starts_with("Author: Ada  Date: 2025-01-02 03:04")
+            .starts_with("Author:    2025-01-02 03:04  Ada <ada@example.com>")
     );
     assert!(
         buffer
             .row_text(13)
-            .starts_with("Committer: Cy  Date: 2025-01-03 04:05")
+            .starts_with("Committer: 2025-01-03 04:05  Cy <cy@example.com>")
     );
     assert!(buffer.row_text(14).starts_with("Subject"));
     assert!(buffer.row_text(10).contains("│─ Files ─"));

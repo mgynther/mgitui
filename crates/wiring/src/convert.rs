@@ -259,8 +259,10 @@ fn branches_view(app: &App) -> ui::views::branches::BranchesView {
                 hash: commit.hash.clone(),
                 lane: branches.selected_lane(),
                 author: commit.author.clone(),
+                author_email: commit.author_email.clone(),
                 author_date: commit.date.clone(),
                 committer: commit.committer.clone(),
+                committer_email: commit.committer_email.clone(),
                 committer_date: commit.committer_date.clone(),
                 message: branches.message().lines().map(str::to_string).collect(),
             });

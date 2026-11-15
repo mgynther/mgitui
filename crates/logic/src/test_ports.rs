@@ -140,8 +140,10 @@ pub fn linear_history(count: usize) -> Vec<Commit> {
                 vec![format!("c{}", n - 1)]
             },
             author: if n.is_multiple_of(2) { "Ada" } else { "Bo" }.to_string(),
+            author_email: "author@example.com".to_string(),
             date: "2025-01-02 03:04".to_string(),
             committer: "Cy".to_string(),
+            committer_email: "cy@example.com".to_string(),
             committer_date: "2025-01-03 04:05".to_string(),
             subject: format!("commit {n}"),
         })

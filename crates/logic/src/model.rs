@@ -223,10 +223,14 @@ pub struct Commit {
     pub parents: Vec<String>,
     /// The author name.
     pub author: String,
+    /// The author email.
+    pub author_email: String,
     /// The author date, formatted for display.
     pub date: String,
     /// The committer name.
     pub committer: String,
+    /// The committer email.
+    pub committer_email: String,
     /// The committer date, formatted for display.
     pub committer_date: String,
     /// The first line of the message.

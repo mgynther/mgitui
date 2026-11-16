@@ -16,6 +16,7 @@ mod status;
 mod test_repo;
 
 pub use amend::Base;
+pub use branch::RebaseEnd;
 pub use command::Command;
 pub use diff::{DiffLine, FileDiff, Hunk, LineKind, parse_diff};
 pub use history::{Commit, Ref, RefKind, parse_log, parse_refs};

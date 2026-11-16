@@ -393,6 +393,122 @@ fn rebase_problems() {
     );
 }
 
+/// Rebases `topic` onto `main` with `event`, where git does not finish the rebase and
+/// `in_progress` is the answer to whether a rebase is in progress.
+fn unfinished_rebase(event: Event, in_progress: Option<bool>) -> (App, TestPorts) {
+    let ports: TestPorts = TestPorts {
+        rebase_not_finished: true,
+        rebase_in_progress: in_progress,
+        ..rebase_ports(vec![local("topic")])
+    };
+    let mut app: App = loaded_app(&ports);
+    run(
+        &mut app,
+        &ports,
+        &[event, Event::Input('1'), Event::InputSubmit],
+    );
+    (app, ports)
+}
+
+#[test]
+fn a_rebase_left_in_progress_has_stopped() {
+    let (app, ports): (App, TestPorts) = unfinished_rebase(Event::Rebase, Some(true));
+    assert_eq!(
+        actions(&ports),
+        vec![
+            "Info: rebase topic onto main",
+            "rebase topic onto main",
+            "rebase in progress?",
+            "Error: the rebase stopped and is in progress",
+        ]
+    );
+    assert_eq!(app.note(), &Note::Problem(Problem::RebaseStopped));
+    assert!(ports.calls().contains(&"refs".to_string()));
+    let (interactive_app, _): (App, TestPorts) =
+        unfinished_rebase(Event::InteractiveRebase, Some(true));
+    assert_eq!(
+        interactive_app.note(),
+        &Note::Problem(Problem::RebaseStopped)
+    );
+}
+
+#[test]
+fn an_unfinished_rebase_without_a_rebase_in_progress() {
+    let (interactive_app, interactive): (App, TestPorts) =
+        unfinished_rebase(Event::InteractiveRebase, Some(false));
+    assert_eq!(
+        actions(&interactive),
+        vec![
+            "Info: interactive rebase topic onto main",
+            "rebase -i topic onto main",
+            "rebase in progress?",
+            "Info: the interactive rebase ended without a rebase in progress: cancelled",
+        ]
+    );
+    assert_eq!(
+        interactive_app.note(),
+        &Note::Info(Info::InteractiveRebaseCancelled)
+    );
+    let (plain_app, plain): (App, TestPorts) = unfinished_rebase(Event::Rebase, Some(false));
+    assert_eq!(
+        actions(&plain),
+        vec![
+            "Info: rebase topic onto main",
+            "rebase topic onto main",
+            "rebase in progress?",
+            "Error: the rebase did not start",
+        ]
+    );
+    assert_eq!(
+        plain_app.note(),
+        &Note::Problem(Problem::Failed(Operation::Rebasing))
+    );
+    let (unknown_app, _): (App, TestPorts) = unfinished_rebase(Event::InteractiveRebase, None);
+    assert_eq!(
+        unknown_app.note(),
+        &Note::Problem(Problem::Failed(Operation::Rebasing))
+    );
+}
+
+#[test]
+fn rebase_is_refused_with_uncommitted_changes() {
+    for event in [Event::Rebase, Event::InteractiveRebase] {
+        let changes: TestPorts = rebase_ports(vec![local("topic")]);
+        *changes.status.borrow_mut() = Some(WorkStatus {
+            staged: vec![],
+            unstaged: vec![modified("a.txt")],
+        });
+        let mut changes_app: App = loaded_app(&changes);
+        run(&mut changes_app, &changes, &[event]);
+        assert_eq!(
+            actions(&changes),
+            vec!["Info: Commit or discard uncommitted changes before rebasing"]
+        );
+        assert_eq!(
+            changes_app.note(),
+            &Note::Problem(Problem::UncommittedChangesBeforeRebase)
+        );
+        assert_eq!(changes_app.mode(), &Mode::Normal);
+    }
+    let untracked: TestPorts = rebase_ports(vec![local("topic")]);
+    *untracked.status.borrow_mut() = Some(WorkStatus {
+        staged: vec![],
+        unstaged: vec![changed("new.txt", ChangeKind::Untracked)],
+    });
+    let mut untracked_app: App = loaded_app(&untracked);
+    run(&mut untracked_app, &untracked, &[Event::Rebase]);
+    assert!(matches!(untracked_app.mode(), Mode::Prompt(_)));
+    let no_status: TestPorts = rebase_ports(vec![local("topic")]);
+    let mut no_status_app: App = loaded_app(&no_status);
+    *no_status.status.borrow_mut() = None;
+    run(&mut no_status_app, &no_status, &[Event::Rebase]);
+    assert_eq!(
+        no_status_app.note(),
+        &Note::Problem(Problem::Failed(Operation::ReadingStatus))
+    );
+    assert_eq!(no_status_app.mode(), &Mode::Normal);
+}
+
 #[test]
 fn interactive_rebase_uses_the_same_prompts() {
     let ports: TestPorts = rebase_ports(vec![local("topic"), local("other")]);

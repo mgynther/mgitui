@@ -82,6 +82,9 @@ pub enum Info {
     NothingToStage,
     /// The editor exited with an error, so the message was kept as it was.
     EditingMessageCancelled,
+    /// The interactive rebase ended without a rebase in progress, as when the todo list is
+    /// emptied or Vim quits with `:cq`.
+    InteractiveRebaseCancelled,
     /// The selection has no added or removed lines.
     NoChangedLinesSelected,
     /// An untracked file was deleted.
@@ -126,6 +129,10 @@ pub enum Problem {
     NoBranchCheckedOutToReset,
     /// Files git tracks have changes.
     UncommittedChangesBeforeReset,
+    /// Files git tracks have changes.
+    UncommittedChangesBeforeRebase,
+    /// The rebase stopped, for example on a conflict, and is still in progress.
+    RebaseStopped,
     /// The selected file has a merge conflict.
     MergeConflict {
         /// The file's path.
@@ -154,7 +161,7 @@ pub enum Operation {
     CreatingBranch,
     /// Deleting a branch.
     DeletingBranch,
-    /// Rebasing, which may have left a rebase in progress.
+    /// Rebasing.
     Rebasing,
     /// Checking out a branch.
     CheckingOut,

@@ -11,7 +11,7 @@ use crate::model::{
     ChangedFile, Commit, DiffRow, FileDiff, Label, Refs, Side, WorkStatus, diff_rows,
 };
 use crate::note::{Info, Note, Operation, Problem};
-use crate::ports::{BranchName, Failed, Ports};
+use crate::ports::{BranchName, Failed, Ports, RebaseEnd};
 use crate::search::{self, Direction, Found};
 
 /// Commits are loaded in chunks of this size.
@@ -371,7 +371,13 @@ impl App {
             });
             return;
         }
-        if checked_out && !self.clean_for_reset(ports) {
+        if checked_out
+            && !self.free_of_tracked_changes(
+                ports,
+                Problem::UncommittedChangesBeforeReset,
+                "Commit or discard uncommitted changes before resetting",
+            )
+        {
             return;
         }
         self.mode = Mode::Confirm(Confirmation::ResetExistingBranch {
@@ -488,11 +494,21 @@ impl App {
 
     pub(super) fn start_rebase(&mut self, interactive: bool, ports: &dyn Ports) {
         let branches: Vec<String> = self.local_branches();
+        if branches.is_empty() {
+            ports.log(LogLevel::Info, "No local branch at this commit to rebase");
+            self.note = Note::Problem(Problem::NoLocalBranchToRebase);
+            return;
+        }
+        // Git refuses to rebase with uncommitted changes. Refusing before asking anything
+        // saves typing the choices, and the note says why.
+        if !self.free_of_tracked_changes(
+            ports,
+            Problem::UncommittedChangesBeforeRebase,
+            "Commit or discard uncommitted changes before rebasing",
+        ) {
+            return;
+        }
         match branches.as_slice() {
-            [] => {
-                ports.log(LogLevel::Info, "No local branch at this commit to rebase");
-                self.note = Note::Problem(Problem::NoLocalBranchToRebase);
-            }
             [branch] => self.ask_rebase_onto(branch.clone(), interactive),
             _ => self.open_prompt(PromptKind::RebaseBranch {
                 branches,
@@ -559,23 +575,25 @@ impl App {
             "rebase"
         };
         ports.log(LogLevel::Info, &format!("{action} {branch} onto {onto}"));
-        let result: Result<(), Failed> = if interactive {
+        let result: Result<RebaseEnd, Failed> = if interactive {
             ports.rebase_interactive(branch, onto)
         } else {
             ports.rebase(branch, onto)
         };
-        self.refresh(ports);
-        self.note = match result {
-            Ok(()) if interactive => Note::Info(Info::RebasedInteractively {
+        let note: Note = match result {
+            Ok(RebaseEnd::Finished) if interactive => Note::Info(Info::RebasedInteractively {
                 branch: branch.to_string(),
                 onto: onto.to_string(),
             }),
-            Ok(()) => Note::Info(Info::Rebased {
+            Ok(RebaseEnd::Finished) => Note::Info(Info::Rebased {
                 branch: branch.to_string(),
                 onto: onto.to_string(),
             }),
+            Ok(RebaseEnd::NotFinished) => unfinished_rebase(interactive, ports),
             Err(Failed) => Note::Problem(Problem::Failed(Operation::Rebasing)),
         };
+        self.refresh(ports);
+        self.note = note;
     }
 
     pub(super) fn checkout(&mut self, branch: &str, ports: &dyn Ports) {
@@ -650,22 +668,28 @@ impl App {
             self.note = Note::Problem(Problem::NoBranchCheckedOutToReset);
             return;
         };
-        if self.clean_for_reset(ports) {
+        if self.free_of_tracked_changes(
+            ports,
+            Problem::UncommittedChangesBeforeReset,
+            "Commit or discard uncommitted changes before resetting",
+        ) {
             self.mode = Mode::Confirm(Confirmation::ResetBranch { branch, hash });
         }
     }
 
-    /// Whether files git tracks are free of changes, so that the checked out branch can be
-    /// reset. Otherwise the note says why not.
-    fn clean_for_reset(&mut self, ports: &dyn Ports) -> bool {
+    /// Whether files git tracks are free of changes, as resetting the checked out branch and
+    /// rebasing need. Otherwise the note is `refused`, and `message` is logged.
+    fn free_of_tracked_changes(
+        &mut self,
+        ports: &dyn Ports,
+        refused: Problem,
+        message: &str,
+    ) -> bool {
         let status: Result<WorkStatus, Failed> = ports.status();
         match status {
             Ok(status) if status.has_tracked_changes() => {
-                ports.log(
-                    LogLevel::Info,
-                    "Commit or discard uncommitted changes before resetting",
-                );
-                self.note = Note::Problem(Problem::UncommittedChangesBeforeReset);
+                ports.log(LogLevel::Info, message);
+                self.note = Note::Problem(refused);
                 false
             }
             Ok(_) => true,
@@ -817,4 +841,28 @@ fn local_branch(refs: &Refs, name: &str) -> Option<(String, bool)> {
             Label::Local { name: local, head } if local == name => Some((hash.clone(), *head)),
             Label::Local { .. } | Label::Remote { .. } | Label::Tag { .. } => None,
         })
+}
+
+/// The note for a rebase that did not finish. A rebase still in progress stopped, for example
+/// on a conflict. Otherwise nothing happened: an interactive rebase was cancelled by the user,
+/// and a plain one was refused, with git's reason in the log.
+fn unfinished_rebase(interactive: bool, ports: &dyn Ports) -> Note {
+    match ports.rebase_in_progress() {
+        Ok(true) => {
+            ports.log(LogLevel::Error, "the rebase stopped and is in progress");
+            Note::Problem(Problem::RebaseStopped)
+        }
+        Ok(false) if interactive => {
+            ports.log(
+                LogLevel::Info,
+                "the interactive rebase ended without a rebase in progress: cancelled",
+            );
+            Note::Info(Info::InteractiveRebaseCancelled)
+        }
+        Ok(false) => {
+            ports.log(LogLevel::Error, "the rebase did not start");
+            Note::Problem(Problem::Failed(Operation::Rebasing))
+        }
+        Err(Failed) => Note::Problem(Problem::Failed(Operation::Rebasing)),
+    }
 }

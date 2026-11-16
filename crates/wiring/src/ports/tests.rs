@@ -4,7 +4,7 @@ use crate::test_support::{TempDir, fixed_clock, git_ok, init_repo, test_git};
 use logic::log::{Layer, LogEntry, LogLevel};
 use logic::model::{AmendBase, ChangeKind, ChangedFile, FileDiff, LineKind, Side, WorkStatus};
 use logic::note::{BranchNameProblem, InputProblem};
-use logic::ports::{CommitMessage, EditedMessage, Failed, Ports, SearchText};
+use logic::ports::{CommitMessage, EditedMessage, Failed, Ports, RebaseEnd, SearchText};
 
 #[expect(
     clippy::unnecessary_wraps,
@@ -142,6 +142,7 @@ fn git_failures_become_failed() {
     assert_eq!(ports.delete_branch("b"), Err(Failed));
     assert_eq!(ports.rebase("b", "main"), Err(Failed));
     assert_eq!(ports.rebase_interactive("b", "main"), Err(Failed));
+    assert_eq!(ports.rebase_in_progress(), Err(Failed));
     assert_eq!(ports.commit_files("h"), Err(Failed));
     assert_eq!(ports.commit_file_diff("h", &x), Err(Failed));
     assert_eq!(ports.last_commit_message(), Err(Failed));
@@ -324,13 +325,17 @@ fn interactive_rebase_hands_the_terminal_to_git() {
         editor: &append_line,
         handoff: &counting,
     };
-    assert_eq!(ports.rebase_interactive("topic", "main"), Ok(()));
+    assert_eq!(
+        ports.rebase_interactive("topic", "main"),
+        Ok(RebaseEnd::Finished)
+    );
     assert_eq!(handed.get(), 1);
     assert_eq!(
         git_ok(dir.path(), &["log", "--format=%s", "topic"]),
         "one\nmain work\nbase\n"
     );
-    assert_eq!(ports.rebase("main", "topic"), Ok(()));
+    assert_eq!(ports.rebase("main", "topic"), Ok(RebaseEnd::Finished));
+    assert_eq!(ports.rebase_in_progress(), Ok(false));
     let broken =
         |_: &mut dyn FnMut()| -> std::io::Result<()> { Err(std::io::Error::other("no tty")) };
     let failing: SessionPorts<'_> = SessionPorts {

@@ -166,11 +166,20 @@ pub fn edited_message(edited: terminal::edit::Edited) -> logic::ports::EditedMes
     }
 }
 
+/// The logic layer's end of a rebase for the git layer's.
+#[must_use]
+pub fn rebase_end(end: git::RebaseEnd) -> logic::ports::RebaseEnd {
+    match end {
+        git::RebaseEnd::Finished => logic::ports::RebaseEnd::Finished,
+        git::RebaseEnd::NotFinished => logic::ports::RebaseEnd::NotFinished,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         amend_base, change_kind, changed_files, commit, edited_message, file_diff, input_problem,
-        refs, work_status,
+        rebase_end, refs, work_status,
     };
     use logic::model::{ChangeKind, Label, LineKind};
 
@@ -227,6 +236,18 @@ mod tests {
                 text: "quit".to_string(),
                 editor_succeeded: false,
             }
+        );
+    }
+
+    #[test]
+    fn rebase_ends() {
+        assert_eq!(
+            rebase_end(git::RebaseEnd::Finished),
+            logic::ports::RebaseEnd::Finished
+        );
+        assert_eq!(
+            rebase_end(git::RebaseEnd::NotFinished),
+            logic::ports::RebaseEnd::NotFinished
         );
     }
 

@@ -2,7 +2,7 @@
 
 use std::ffi::OsString;
 use std::fmt;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{self, Stdio};
 
@@ -198,13 +198,14 @@ impl Git {
     }
 
     /// Runs `command` with the terminal as its input and output, so that git can run an editor.
-    /// Only the command and its exit code are logged.
+    /// Standard error is copied to the terminal as it arrives and also logged, so that the log
+    /// shows why git stopped. Standard output goes to the terminal only.
     ///
     /// # Errors
     ///
     /// Returns [`GitError::Spawn`] when git cannot be started and [`GitError::Failed`] when it
     /// exits with a code that is not a success code for `command`.
-    pub fn run_interactive(&self, command: &Command, log: &Log<'_>) -> Result<(), GitError> {
+    pub fn run_interactive(&self, command: &Command, log: &Log<'_>) -> Result<Output, GitError> {
         let args: Vec<String> = command.args();
         let shown: String = format!("git {}", args.join(" "));
         let mut process: process::Command = process::Command::new(&self.program);
@@ -212,28 +213,32 @@ impl Git {
             process.arg("-c").arg(config);
         }
         self.prepare(&mut process, command, &args);
-        let status: std::process::ExitStatus = process
-            .stdin(Stdio::inherit())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status()
-            .map_err(|error: std::io::Error| {
+        process.stdin(Stdio::inherit()).stdout(Stdio::inherit());
+        let (status, stderr): (process::ExitStatus, String) =
+            run_copying_stderr(process).map_err(|error: std::io::Error| {
                 let error: GitError = GitError::Spawn(error.to_string());
                 log(LogLevel::Error, &format!("{shown}: {error}"));
                 error
             })?;
         let code: Option<i32> = status.code();
         let succeeded: bool = code.is_some_and(|c: i32| command.success_codes().contains(&c));
-        let code_text: String = code.map_or_else(|| "signal".to_string(), |c: i32| c.to_string());
-        if succeeded {
-            log(LogLevel::Info, &format!("{shown} (exit {code_text})"));
-            Ok(())
+        let level: LogLevel = if succeeded {
+            LogLevel::Info
         } else {
-            log(LogLevel::Error, &format!("{shown} (exit {code_text})"));
-            Err(GitError::Failed {
+            LogLevel::Error
+        };
+        let code_text: String = code.map_or_else(|| "signal".to_string(), |c: i32| c.to_string());
+        log(level, &format!("{shown} (exit {code_text})"));
+        if !stderr.is_empty() {
+            log(level, &stderr);
+        }
+        match code {
+            Some(code) if succeeded => Ok(Output {
                 code,
-                stderr: String::new(),
-            })
+                stdout: String::new(),
+                stderr,
+            }),
+            _ => Err(GitError::Failed { code, stderr }),
         }
     }
 
@@ -256,6 +261,42 @@ impl Git {
         let output: Output = self.run(&Command::ShowToplevel, None, log)?;
         Ok(PathBuf::from(output.stdout.trim_end_matches('\n')))
     }
+}
+
+/// Runs `process` with standard error through a pipe, copying it to this program's standard
+/// error and returning a copy. The process is dropped once started: it holds the pipe's
+/// writing end, and reading would never see the end of the output while that is open.
+fn run_copying_stderr(
+    mut process: process::Command,
+) -> std::io::Result<(process::ExitStatus, String)> {
+    std::io::pipe().and_then(
+        move |(reader, writer): (std::io::PipeReader, std::io::PipeWriter)| {
+            process.stderr(writer);
+            let spawned: std::io::Result<process::Child> = process.spawn();
+            drop(process);
+            spawned.and_then(|mut child: process::Child| {
+                let copied: String = copy_to_stderr(reader);
+                child
+                    .wait()
+                    .map(|status: process::ExitStatus| (status, copied))
+            })
+        },
+    )
+}
+
+/// Copies everything from `reader` to standard error until the writing end is closed, and
+/// returns it. A failing standard error does not stop the copying.
+fn copy_to_stderr(mut reader: std::io::PipeReader) -> String {
+    let mut copied: Vec<u8> = Vec::new();
+    let mut buffer: [u8; 4096] = [0; 4096];
+    while let Ok(read) = reader.read(&mut buffer) {
+        let Some(chunk) = buffer.get(..read).filter(|chunk: &&[u8]| !chunk.is_empty()) else {
+            break;
+        };
+        let _ = std::io::stderr().write_all(chunk);
+        copied.extend_from_slice(chunk);
+    }
+    String::from_utf8_lossy(&copied).into_owned()
 }
 
 fn spawn_and_wait(
@@ -400,11 +441,35 @@ mod tests {
     }
 
     #[test]
+    fn interactive_command_logs_its_standard_error() {
+        let dir: TempDir = TempDir::new();
+        let program: String = fake_git(&dir, "echo refused >&2; exit 3");
+        let logged: Logged = Logged::new();
+        let result: Result<Output, GitError> = Git::new(dir.path())
+            .with_program(&program)
+            .run_interactive(&Command::Status, &logged.log());
+        assert_eq!(
+            result,
+            Err(GitError::Failed {
+                code: Some(3),
+                stderr: "refused\n".to_string()
+            })
+        );
+        assert_eq!(
+            logged.lines(),
+            vec![
+                "Error: git status --porcelain=v2 -z --untracked-files=all (exit 3)",
+                "Error: refused\n"
+            ]
+        );
+    }
+
+    #[test]
     fn interactive_command_stopped_by_signal_fails() {
         let dir: TempDir = TempDir::new();
         let program: String = fake_git(&dir, "kill -9 $$");
         let logged: Logged = Logged::new();
-        let result: Result<(), GitError> = Git::new(dir.path())
+        let result: Result<Output, GitError> = Git::new(dir.path())
             .with_program(&program)
             .run_interactive(&Command::Status, &logged.log());
         assert_eq!(

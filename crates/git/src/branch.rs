@@ -2,7 +2,7 @@
 
 use crate::command::Command;
 use crate::log::Log;
-use crate::runner::{Git, GitError};
+use crate::runner::{Git, GitError, Output};
 
 impl Git {
     /// Creates branch `name` at commit `at` without checking it out.
@@ -119,18 +119,19 @@ impl Git {
     ///
     /// # Errors
     ///
-    /// Fails when git fails, for example on a conflict or when the todo list is emptied.
+    /// Fails when git cannot be run or exits with a code other than 0 or 1.
     pub fn rebase_interactive(
         &self,
         branch: &str,
         onto: &str,
         log: &Log<'_>,
-    ) -> Result<(), GitError> {
+    ) -> Result<RebaseEnd, GitError> {
         let command: Command = Command::RebaseInteractive {
             onto: onto.to_string(),
             branch: branch.to_string(),
         };
-        self.run_interactive(&command, log)
+        let output: Output = self.run_interactive(&command, log)?;
+        Ok(rebase_end(output.code))
     }
 
     /// Checks out `branch` and rebases it onto `onto`. A conflict leaves the rebase in
@@ -138,19 +139,51 @@ impl Git {
     ///
     /// # Errors
     ///
-    /// Fails when git fails, for example on a conflict.
-    pub fn rebase(&self, branch: &str, onto: &str, log: &Log<'_>) -> Result<(), GitError> {
+    /// Fails when git cannot be run or exits with a code other than 0 or 1.
+    pub fn rebase(&self, branch: &str, onto: &str, log: &Log<'_>) -> Result<RebaseEnd, GitError> {
         let command: Command = Command::Rebase {
             onto: onto.to_string(),
             branch: branch.to_string(),
         };
-        self.run(&command, None, log)?;
-        Ok(())
+        let output: Output = self.run(&command, None, log)?;
+        Ok(rebase_end(output.code))
+    }
+
+    /// Whether a rebase is in progress, stopped for the user to continue or abort it.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    pub fn rebase_in_progress(&self, log: &Log<'_>) -> Result<bool, GitError> {
+        let output: Output = self.run(&Command::RebaseStatePaths, None, log)?;
+        Ok(output
+            .stdout
+            .lines()
+            .any(|path: &str| self.dir().join(path).is_dir()))
+    }
+}
+
+/// How a rebase that git ran to its end ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RebaseEnd {
+    /// The branch was rebased.
+    Finished,
+    /// Git exited with code 1: it stopped with the rebase in progress, refused to start, or
+    /// the user cancelled an interactive rebase.
+    NotFinished,
+}
+
+fn rebase_end(code: i32) -> RebaseEnd {
+    if code == 0 {
+        RebaseEnd::Finished
+    } else {
+        RebaseEnd::NotFinished
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::RebaseEnd;
     use crate::runner::GitError;
     use crate::test_repo::{Logged, TestRepo};
 
@@ -251,7 +284,11 @@ mod tests {
         repo.git_ok(&["add", "."]);
         repo.git_ok(&["commit", "-q", "-m", "main work"]);
         let logged: Logged = Logged::new();
-        repo.git().rebase("topic", "main", &logged.log()).unwrap();
+        assert_eq!(repo.git().rebase_in_progress(&logged.log()), Ok(false));
+        assert_eq!(
+            repo.git().rebase("topic", "main", &logged.log()),
+            Ok(RebaseEnd::Finished)
+        );
         assert_eq!(
             repo.git_ok(&["log", "--format=%s", "topic"]),
             "topic work\nmain work\nbase\n"
@@ -261,11 +298,30 @@ mod tests {
         repo.write("m.txt", "other\n");
         repo.git_ok(&["add", "."]);
         repo.git_ok(&["commit", "-q", "-m", "clash"]);
-        assert!(matches!(
+        assert_eq!(
             repo.git().rebase("clash", "main", &logged.log()),
-            Err(GitError::Failed { .. })
-        ));
-        assert!(repo.path().join(".git/rebase-merge").exists());
+            Ok(RebaseEnd::NotFinished)
+        );
+        assert_eq!(repo.git().rebase_in_progress(&logged.log()), Ok(true));
+        // From a subdirectory too: git gives the paths relative to where it runs.
+        let sub: std::path::PathBuf = repo.path().join("sub");
+        std::fs::create_dir(&sub).unwrap();
+        assert_eq!(
+            crate::runner::Git::new(&sub)
+                .with_env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .rebase_in_progress(&logged.log()),
+            Ok(true)
+        );
+        repo.git_ok(&["rebase", "--abort"]);
+        repo.write("m.txt", "unstaged\n");
+        assert_eq!(
+            repo.git().rebase("clash", "main", &logged.log()),
+            Ok(RebaseEnd::NotFinished)
+        );
+        assert_eq!(repo.git().rebase_in_progress(&logged.log()), Ok(false));
+        let missing: crate::runner::Git = repo.git().with_program("/nonexistent/git");
+        assert!(missing.rebase_in_progress(&logged.log()).is_err());
+        assert!(missing.rebase("clash", "main", &logged.log()).is_err());
     }
 
     #[test]
@@ -282,22 +338,28 @@ mod tests {
             .git()
             .with_env("GIT_SEQUENCE_EDITOR", "sed -i 2s/^pick/fixup/")
             .with_env("GIT_EDITOR", "true");
-        squash
-            .rebase_interactive("topic", "main", &logged.log())
-            .unwrap();
+        assert_eq!(
+            squash.rebase_interactive("topic", "main", &logged.log()),
+            Ok(RebaseEnd::Finished)
+        );
         assert_eq!(
             repo.git_ok(&["log", "--format=%s", "topic"]),
             "one\nmain work\nbase\n"
         );
-        assert_eq!(
-            logged.lines(),
-            vec!["Info: git rebase -i main topic (exit 0)"]
-        );
+        let lines: Vec<String> = logged.lines();
+        assert_eq!(lines[0], "Info: git rebase -i main topic (exit 0)");
+        assert!(lines[1].contains("Successfully rebased and updated refs/heads/topic."));
         let emptied: crate::runner::Git = repo.git().with_env("GIT_SEQUENCE_EDITOR", "sed -i d");
-        assert!(matches!(
+        assert_eq!(
             emptied.rebase_interactive("main", "topic", &logged.log()),
-            Err(GitError::Failed { .. })
-        ));
+            Ok(RebaseEnd::NotFinished)
+        );
+        assert!(
+            logged
+                .lines()
+                .iter()
+                .any(|line: &String| line == "Info: error: nothing to do\n")
+        );
         let missing: crate::runner::Git = repo.git().with_program("/nonexistent/git");
         assert!(matches!(
             missing.rebase_interactive("topic", "main", &logged.log()),

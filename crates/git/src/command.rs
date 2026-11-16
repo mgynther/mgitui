@@ -92,6 +92,10 @@ pub enum Command {
     },
     /// `git for-each-ref`: all branches and tags with the commits they point to.
     Refs,
+    /// `git rev-parse --git-path rebase-merge --git-path rebase-apply`: the directories git
+    /// keeps while a rebase is in progress, one per line, relative to the directory git runs
+    /// in. Each backend of `git rebase` uses one of them.
+    RebaseStatePaths,
     /// `git show -s --format=%B`: the full message of a commit.
     CommitMessage {
         /// The commit hash.
@@ -150,7 +154,9 @@ pub enum Command {
         /// The commit hash.
         hash: String,
     },
-    /// `git rebase <onto> <branch>`: checks out a branch and rebases it onto another.
+    /// `git rebase <onto> <branch>`: checks out a branch and rebases it onto another. Exit code
+    /// 1 means it did not finish: it stopped, for example on a conflict, or it refused to
+    /// start.
     Rebase {
         /// The branch to rebase onto.
         onto: String,
@@ -158,7 +164,8 @@ pub enum Command {
         branch: String,
     },
     /// `git rebase -i <onto> <branch>`: rebases interactively, with git running Vim for the
-    /// todo list and messages. Run with [`crate::Git::run_interactive`].
+    /// todo list and messages. Run with [`crate::Git::run_interactive`]. Exit code 1 means it
+    /// did not finish, as for [`Command::Rebase`], also when the user cancelled it.
     RebaseInteractive {
         /// The branch to rebase onto.
         onto: String,
@@ -242,6 +249,13 @@ impl Command {
             Command::DeleteBranch { .. } => &["branch", "-D"],
             Command::Rebase { .. } => &["rebase"],
             Command::RebaseInteractive { .. } => &["rebase", "-i"],
+            Command::RebaseStatePaths => &[
+                "rev-parse",
+                "--git-path",
+                "rebase-merge",
+                "--git-path",
+                "rebase-apply",
+            ],
             Command::Refs => &[
                 "for-each-ref",
                 "--format=%(HEAD)%00%(objectname)%00%(*objectname)%00%(refname)",
@@ -308,6 +322,7 @@ impl Command {
             | Command::LastMessage
             | Command::Log { .. }
             | Command::Refs
+            | Command::RebaseStatePaths
             | Command::RemoteUpdate
             | Command::FetchAllPrune => {}
         }
@@ -330,7 +345,11 @@ impl Command {
     #[must_use]
     pub fn success_codes(&self) -> &'static [i32] {
         match self {
-            Command::DiffUntracked { .. } | Command::HasHead | Command::HasParent => &[0, 1],
+            Command::DiffUntracked { .. }
+            | Command::HasHead
+            | Command::HasParent
+            | Command::Rebase { .. }
+            | Command::RebaseInteractive { .. } => &[0, 1],
             _ => &[0],
         }
     }
@@ -385,6 +404,10 @@ mod tests {
         assert_eq!(args(&Command::AddAll), "add -A");
         assert_eq!(args(&Command::HasHead), "rev-parse --verify -q HEAD");
         assert_eq!(args(&Command::HasParent), "rev-parse --verify -q HEAD^");
+        assert_eq!(
+            args(&Command::RebaseStatePaths),
+            "rev-parse --git-path rebase-merge --git-path rebase-apply"
+        );
         assert_eq!(args(&Command::EmptyTree), "hash-object -t tree /dev/null");
         assert_eq!(
             args(&Command::StagedSince {
@@ -558,6 +581,14 @@ mod tests {
     #[test]
     fn success_codes() {
         assert_eq!(Command::Status.success_codes(), &[0]);
+        assert_eq!(
+            Command::Rebase {
+                onto: String::new(),
+                branch: String::new()
+            }
+            .success_codes(),
+            &[0, 1]
+        );
         assert_eq!(
             Command::DiffUntracked {
                 path: String::new()

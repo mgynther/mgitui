@@ -519,6 +519,35 @@ fn rebase_onto_remote_main() {
 }
 
 #[test]
+fn a_rebase_stopped_by_a_conflict_says_so() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    std::fs::write(dir.path().join("a.txt"), "base\n").unwrap();
+    git_ok(dir.path(), &["add", "."]);
+    git_ok(dir.path(), &["commit", "-q", "-m", "base"]);
+    git_ok(dir.path(), &["switch", "-q", "-c", "topic"]);
+    std::fs::write(dir.path().join("a.txt"), "topic\n").unwrap();
+    git_ok(dir.path(), &["commit", "-q", "-am", "topic work"]);
+    git_ok(dir.path(), &["switch", "-q", "main"]);
+    std::fs::write(dir.path().join("a.txt"), "main\n").unwrap();
+    git_ok(dir.path(), &["commit", "-q", "-am", "main work"]);
+    let mut s: Session = session_in(&dir);
+    std::fs::write(dir.path().join("a.txt"), "uncommitted\n").unwrap();
+    s.input(b"/topic work\rb");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "Commit or discard uncommitted changes before rebasing"
+    );
+    git_ok(dir.path(), &["checkout", "--", "a.txt"]);
+    s.input(b"b1\r");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "The rebase stopped: finish or abort it outside mgitui"
+    );
+    assert!(dir.path().join(".git/rebase-merge").is_dir());
+}
+
+#[test]
 fn delete_branches_that_are_not_checked_out() {
     let dir: TempDir = TempDir::new();
     init_repo(dir.path());

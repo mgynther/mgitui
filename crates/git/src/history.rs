@@ -105,7 +105,8 @@ impl Git {
             hash: hash.to_string(),
         };
         let less: Option<OsString> = std::env::var_os("LESS");
-        with_less_default(self.clone(), less.as_deref()).run_interactive(&command, log)
+        with_less_default(self.clone(), less.as_deref()).run_interactive(&command, log)?;
+        Ok(())
     }
 
     /// The full message of a commit.

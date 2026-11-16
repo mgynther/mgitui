@@ -3,7 +3,7 @@
 use logic::log::LogLevel;
 use logic::model::{AmendBase, ChangedFile, Commit, FileDiff, Refs, Side, WorkStatus};
 use logic::note::InputProblem;
-use logic::ports::{BranchName, CommitMessage, EditedMessage, Failed};
+use logic::ports::{BranchName, CommitMessage, EditedMessage, Failed, RebaseEnd};
 
 use crate::editor::{Editor, Handoff};
 use crate::log::LogBuffer;
@@ -27,8 +27,8 @@ impl SessionPorts<'_> {
     }
 
     /// Runs `run` with the terminal handed over, for git commands that may use the terminal.
-    fn with_terminal(&self, run: &mut dyn FnMut() -> Result<(), Failed>) -> Result<(), Failed> {
-        let mut result: Result<(), Failed> = Err(Failed);
+    fn with_terminal<T>(&self, run: &mut dyn FnMut() -> Result<T, Failed>) -> Result<T, Failed> {
+        let mut result: Result<T, Failed> = Err(Failed);
         let handed: std::io::Result<()> = (self.handoff)(&mut || result = run());
         if let Err(error) = handed {
             self.log.wiring(
@@ -251,18 +251,26 @@ impl logic::ports::Ports for SessionPorts<'_> {
             .map_err(|_| Failed)
     }
 
-    fn rebase(&self, branch: &str, onto: &str) -> Result<(), Failed> {
+    fn rebase(&self, branch: &str, onto: &str) -> Result<RebaseEnd, Failed> {
         self.git
             .rebase(branch, onto, &self.log_git())
+            .map(model::rebase_end)
             .map_err(|_| Failed)
     }
 
-    fn rebase_interactive(&self, branch: &str, onto: &str) -> Result<(), Failed> {
+    fn rebase_interactive(&self, branch: &str, onto: &str) -> Result<RebaseEnd, Failed> {
         self.with_terminal(&mut || {
             self.git
                 .rebase_interactive(branch, onto, &self.log_git())
+                .map(model::rebase_end)
                 .map_err(|_| Failed)
         })
+    }
+
+    fn rebase_in_progress(&self) -> Result<bool, Failed> {
+        self.git
+            .rebase_in_progress(&self.log_git())
+            .map_err(|_| Failed)
     }
 
     fn checkout(&self, branch: &str) -> Result<(), Failed> {

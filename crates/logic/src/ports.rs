@@ -25,6 +25,16 @@ pub struct EditedMessage {
     pub editor_succeeded: bool,
 }
 
+/// How a rebase ended when git ran it to its end.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RebaseEnd {
+    /// The branch was rebased.
+    Finished,
+    /// The rebase did not finish: it stopped with the rebase in progress, it did not start,
+    /// or the user cancelled an interactive rebase.
+    NotFinished,
+}
+
 /// A failure that was already logged by the layer where it happened.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Failed;
@@ -288,16 +298,24 @@ pub trait Ports {
     ///
     /// # Errors
     ///
-    /// Fails when git fails, for example on a conflict.
-    fn rebase(&self, branch: &str, onto: &str) -> Result<(), Failed>;
+    /// Fails when git cannot be run or fails in an unexpected way.
+    fn rebase(&self, branch: &str, onto: &str) -> Result<RebaseEnd, Failed>;
 
     /// Checks out `branch` and rebases it onto `onto` interactively, with the user editing the
     /// todo list in Vim on the terminal.
     ///
     /// # Errors
     ///
-    /// Fails when git fails or the terminal cannot be handed over.
-    fn rebase_interactive(&self, branch: &str, onto: &str) -> Result<(), Failed>;
+    /// Fails when git cannot be run or fails in an unexpected way, or the terminal cannot be
+    /// handed over.
+    fn rebase_interactive(&self, branch: &str, onto: &str) -> Result<RebaseEnd, Failed>;
+
+    /// Whether a rebase is in progress, stopped for the user to continue or abort it.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn rebase_in_progress(&self) -> Result<bool, Failed>;
 
     /// Checks out a local branch.
     ///

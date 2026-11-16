@@ -134,6 +134,8 @@ pub enum Info {
     NothingToStage,
     /// The editor exited with an error, so the message was kept as it was.
     EditingMessageCancelled,
+    /// The interactive rebase ended without a rebase in progress.
+    InteractiveRebaseCancelled,
     /// The selection has no added or removed lines.
     NoChangedLinesSelected,
     /// An untracked file was deleted.
@@ -178,6 +180,10 @@ pub enum Problem {
     NoBranchCheckedOutToReset,
     /// Files git tracks have changes.
     UncommittedChangesBeforeReset,
+    /// Files git tracks have changes.
+    UncommittedChangesBeforeRebase,
+    /// The rebase stopped, for example on a conflict, and is still in progress.
+    RebaseStopped,
     /// The selected file has a merge conflict.
     MergeConflict {
         /// The file's path.
@@ -363,6 +369,7 @@ pub fn info_text(info: &Info) -> String {
         }
         Info::NothingToStage => "Nothing to stage".to_string(),
         Info::EditingMessageCancelled => "Editing the message was cancelled".to_string(),
+        Info::InteractiveRebaseCancelled => "The interactive rebase was cancelled".to_string(),
         Info::NoChangedLinesSelected => "No changed lines selected".to_string(),
         Info::DeletedFile { path } => format!("Deleted {path}"),
         Info::DiscardedChanges { path } => format!("Discarded changes in {path}"),
@@ -390,6 +397,12 @@ pub fn problem_text(problem: &Problem) -> String {
         Problem::NoBranchCheckedOutToReset => "No branch is checked out to reset".to_string(),
         Problem::UncommittedChangesBeforeReset => {
             "Commit or discard uncommitted changes before resetting".to_string()
+        }
+        Problem::UncommittedChangesBeforeRebase => {
+            "Commit or discard uncommitted changes before rebasing".to_string()
+        }
+        Problem::RebaseStopped => {
+            "The rebase stopped: finish or abort it outside mgitui".to_string()
         }
         Problem::MergeConflict { path } => {
             format!("{path} has a merge conflict; resolve it outside mgitui")
@@ -503,7 +516,7 @@ mod tests {
 
     #[test]
     fn info_texts() {
-        let cases: [(Info, &str); 23] = [
+        let cases: [(Info, &str); 24] = [
             (Info::NoCommitSelected, "No commit selected"),
             (Info::CreatedBranch { name: s("t") }, "Created branch t"),
             (Info::DeletedBranch { name: s("old") }, "Deleted branch old"),
@@ -565,6 +578,10 @@ mod tests {
                 Info::EditingMessageCancelled,
                 "Editing the message was cancelled",
             ),
+            (
+                Info::InteractiveRebaseCancelled,
+                "The interactive rebase was cancelled",
+            ),
             (Info::NoChangedLinesSelected, "No changed lines selected"),
             (Info::DeletedFile { path: s("n") }, "Deleted n"),
             (
@@ -585,7 +602,7 @@ mod tests {
 
     #[test]
     fn problem_texts() {
-        let cases: [(Problem, &str); 12] = [
+        let cases: [(Problem, &str); 14] = [
             (Problem::ChoiceNotListed, "The choice is not listed"),
             (
                 Problem::NoLocalBranchToCheckOut,
@@ -610,6 +627,14 @@ mod tests {
             (
                 Problem::UncommittedChangesBeforeReset,
                 "Commit or discard uncommitted changes before resetting",
+            ),
+            (
+                Problem::UncommittedChangesBeforeRebase,
+                "Commit or discard uncommitted changes before rebasing",
+            ),
+            (
+                Problem::RebaseStopped,
+                "The rebase stopped: finish or abort it outside mgitui",
             ),
             (
                 Problem::MergeConflict { path: s("c") },

@@ -440,6 +440,36 @@ mod pty {
     }
 
     #[test]
+    fn emptying_the_todo_list_cancels_the_interactive_rebase() {
+        let dir: TempDir = repository();
+        git(dir.path(), &["switch", "-q", "-c", "topic"]);
+        git(
+            dir.path(),
+            &["commit", "-q", "--allow-empty", "-m", "topic work"],
+        );
+        git(dir.path(), &["switch", "-q", "main"]);
+        git(
+            dir.path(),
+            &["commit", "-q", "--allow-empty", "-m", "main work"],
+        );
+        let before: String = git(dir.path(), &["rev-parse", "topic"]);
+        let vim: &str = ": > \"$1\"";
+        let mut session: Session = Session::start(dir, &[("vim", vim)]);
+        let mut shown: usize = session.wait_for("topic work", 0);
+        session.press(b"/topic work\ri");
+        shown = session.wait_for("Interactively rebase topic onto (1 main):", shown);
+        session.press(b"1\r");
+        shown = session.wait_for("The interactive rebase was cancelled", shown);
+        assert_eq!(git(session.dir.path(), &["rev-parse", "topic"]), before);
+        // Git's reason shows on the terminal while it runs, and in the log.
+        assert!(session.raw().contains("error: nothing to do"));
+        session.press(b"\x1bOR");
+        session.wait_for("error: nothing to do", shown);
+        session.press(b"qy");
+        assert_eq!(session.finish().code, "0");
+    }
+
+    #[test]
     fn quitting_restores_the_terminal() {
         let mut session: Session = Session::start(repository(), &[]);
         let shown: usize = session.wait_for("first commit", 0);

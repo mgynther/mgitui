@@ -315,7 +315,7 @@ fn confirmations_become_questions() {
 
 #[test]
 fn infos_without_data_convert() {
-    let cases: [(LInfo, UInfo); 12] = [
+    let cases: [(LInfo, UInfo); 13] = [
         (LInfo::NoCommitSelected, UInfo::NoCommitSelected),
         (
             LInfo::NoOtherBranchToRebaseOnto,
@@ -336,6 +336,10 @@ fn infos_without_data_convert() {
         (
             LInfo::EditingMessageCancelled,
             UInfo::EditingMessageCancelled,
+        ),
+        (
+            LInfo::InteractiveRebaseCancelled,
+            UInfo::InteractiveRebaseCancelled,
         ),
         (LInfo::NoChangedLinesSelected, UInfo::NoChangedLinesSelected),
         (LInfo::NoPreviousSearch, UInfo::NoPreviousSearch),
@@ -462,7 +466,7 @@ fn other_infos_with_data_convert() {
 
 #[test]
 fn problems_convert() {
-    let cases: [(LProblem, UProblem); 13] = [
+    let cases: [(LProblem, UProblem); 15] = [
         (LProblem::ChoiceNotListed, UProblem::ChoiceNotListed),
         (
             LProblem::NoLocalBranchToCheckOut,
@@ -488,6 +492,11 @@ fn problems_convert() {
             LProblem::UncommittedChangesBeforeReset,
             UProblem::UncommittedChangesBeforeReset,
         ),
+        (
+            LProblem::UncommittedChangesBeforeRebase,
+            UProblem::UncommittedChangesBeforeRebase,
+        ),
+        (LProblem::RebaseStopped, UProblem::RebaseStopped),
         (
             LProblem::MergeConflict {
                 path: "path".to_string(),

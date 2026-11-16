@@ -8,7 +8,9 @@ use crate::model::{
     WorkStatus,
 };
 use crate::note::{BranchNameProblem, InputProblem};
-use crate::ports::{BranchName, CommitMessage, EditedMessage, Failed, Ports, SearchText};
+use crate::ports::{
+    BranchName, CommitMessage, EditedMessage, Failed, Ports, RebaseEnd, SearchText,
+};
 
 /// Records calls as text and answers from its fields.
 #[expect(
@@ -49,6 +51,10 @@ pub struct TestPorts {
     /// Whether branch actions fail: creating, checking out, deleting, fetching, resetting,
     /// cherry-picking and rebasing.
     pub branch_fails: bool,
+    /// Whether rebases end without finishing, unless `branch_fails` makes them fail.
+    pub rebase_not_finished: bool,
+    /// The answer to `rebase_in_progress`; `None` fails.
+    pub rebase_in_progress: Option<bool>,
 }
 
 impl TestPorts {
@@ -76,6 +82,8 @@ impl TestPorts {
             })),
             details_fail: false,
             branch_fails: false,
+            rebase_not_finished: false,
+            rebase_in_progress: Some(false),
         }
     }
 
@@ -99,6 +107,14 @@ impl TestPorts {
     }
 
     /// Records `call` and returns the prepared diff, or one built from `path`.
+    fn rebase_end(&self) -> RebaseEnd {
+        if self.rebase_not_finished {
+            RebaseEnd::NotFinished
+        } else {
+            RebaseEnd::Finished
+        }
+    }
+
     fn diff_result(&self, call: String, path: Option<&String>) -> Result<FileDiff, Failed> {
         self.calls.borrow_mut().push(call);
         if self.diff_fails {
@@ -405,12 +421,21 @@ impl Ports for TestPorts {
         self.branch_result(format!("cherry-pick {hash}"))
     }
 
-    fn rebase(&self, branch: &str, onto: &str) -> Result<(), Failed> {
+    fn rebase(&self, branch: &str, onto: &str) -> Result<RebaseEnd, Failed> {
         self.branch_result(format!("rebase {branch} onto {onto}"))
+            .map(|()| self.rebase_end())
     }
 
-    fn rebase_interactive(&self, branch: &str, onto: &str) -> Result<(), Failed> {
+    fn rebase_interactive(&self, branch: &str, onto: &str) -> Result<RebaseEnd, Failed> {
         self.branch_result(format!("rebase -i {branch} onto {onto}"))
+            .map(|()| self.rebase_end())
+    }
+
+    fn rebase_in_progress(&self) -> Result<bool, Failed> {
+        self.calls
+            .borrow_mut()
+            .push("rebase in progress?".to_string());
+        self.rebase_in_progress.ok_or(Failed)
     }
 
     fn checkout(&self, branch: &str) -> Result<(), Failed> {

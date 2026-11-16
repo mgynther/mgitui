@@ -698,6 +698,13 @@ fn creating_an_existing_branch_resets_it_after_confirming() {
     );
     assert_eq!(git_ok(dir.path(), &["rev-parse", "pr"]).trim(), two);
     assert_eq!(git_ok(dir.path(), &["branch", "--show-current"]), "main\n");
+    // A branch created outside mgitui after the last reload is found too.
+    git_ok(dir.path(), &["branch", "outside", &one]);
+    s.input(b"coutside\r");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        format!("Branch \"outside\" exists. Reset to {}? y/n", &two[..7])
+    );
 }
 
 #[test]

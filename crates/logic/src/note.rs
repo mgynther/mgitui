@@ -164,6 +164,8 @@ pub enum Operation {
     ShowingCommit,
     /// Reading the staged and unstaged changes.
     ReadingStatus,
+    /// Reading the branches, to check whether a branch exists.
+    ReadingBranches,
     /// Resetting a branch to a commit.
     ResettingBranch,
     /// Cherry-picking a commit.

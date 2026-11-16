@@ -323,8 +323,14 @@ impl App {
                 return;
             }
         };
-        if let Some(current) = self.local_branch_commit(&name.0) {
-            self.offer_reset_existing(name.0, current, at, ports);
+        // The loaded refs may be older than a branch created outside mgitui since.
+        let Ok(refs) = ports.refs() else {
+            self.note = Note::Problem(Problem::Failed(Operation::ReadingBranches));
+            return;
+        };
+        let refs: Refs = refs;
+        if let Some((current, checked_out)) = local_branch(&refs, &name.0) {
+            self.offer_reset_existing(name.0, current, checked_out, at, ports);
             return;
         }
         let short: &str = at.get(..7).unwrap_or(at);
@@ -342,19 +348,6 @@ impl App {
         };
     }
 
-    /// The commit local branch `name` points to, if it exists.
-    fn local_branch_commit(&self, name: &str) -> Option<String> {
-        self.branches
-            .labels
-            .iter()
-            .find(|(_, labels): &(&String, &Vec<Label>)| {
-                labels.iter().any(|label: &Label| {
-                    matches!(label, Label::Local { name: local, .. } if local == name)
-                })
-            })
-            .map(|(hash, _): (&String, &Vec<Label>)| hash.clone())
-    }
-
     /// Asks whether to reset `branch`, which points to `current`, to `at` instead of creating
     /// it. A checked out branch takes the working tree with it, so it is refused like `R` is
     /// when files git tracks have changes.
@@ -362,6 +355,7 @@ impl App {
         &mut self,
         branch: String,
         current: String,
+        checked_out: bool,
         at: &str,
         ports: &dyn Ports,
     ) {
@@ -377,7 +371,6 @@ impl App {
             });
             return;
         }
-        let checked_out: bool = self.checked_out_branch().as_ref() == Some(&branch);
         if checked_out && !self.clean_for_reset(ports) {
             return;
         }
@@ -813,4 +806,15 @@ fn is_main_label(label: &Label) -> bool {
 /// Whether a branch name is one of the usual main branch names.
 fn is_main(name: &str) -> bool {
     name == "main" || name == "master"
+}
+
+/// The commit local branch `name` points to in `refs` and whether it is checked out, if the
+/// branch exists.
+fn local_branch(refs: &Refs, name: &str) -> Option<(String, bool)> {
+    refs.labels
+        .iter()
+        .find_map(|(hash, label): &(String, Label)| match label {
+            Label::Local { name: local, head } if local == name => Some((hash.clone(), *head)),
+            Label::Local { .. } | Label::Remote { .. } | Label::Tag { .. } => None,
+        })
 }

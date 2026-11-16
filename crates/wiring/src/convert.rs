@@ -233,6 +233,7 @@ fn ui_operation(operation: logic::note::Operation) -> ui::status::Operation {
         O::FetchingAndPruning => U::FetchingAndPruning,
         O::ShowingCommit => U::ShowingCommit,
         O::ReadingStatus => U::ReadingStatus,
+        O::ReadingBranches => U::ReadingBranches,
         O::ResettingBranch => U::ResettingBranch,
         O::CherryPicking => U::CherryPicking,
         O::ReloadingChanges => U::ReloadingChanges,

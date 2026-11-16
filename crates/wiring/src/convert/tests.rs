@@ -517,7 +517,7 @@ fn problems_convert() {
 
 #[test]
 fn operations_convert() {
-    let cases: [(LOperation, UOperation); 21] = [
+    let cases: [(LOperation, UOperation); 22] = [
         (LOperation::ReloadingCommits, UOperation::ReloadingCommits),
         (LOperation::LoadingCommit, UOperation::LoadingCommit),
         (LOperation::LoadingDiff, UOperation::LoadingDiff),
@@ -536,6 +536,7 @@ fn operations_convert() {
         ),
         (LOperation::ShowingCommit, UOperation::ShowingCommit),
         (LOperation::ReadingStatus, UOperation::ReadingStatus),
+        (LOperation::ReadingBranches, UOperation::ReadingBranches),
         (LOperation::ResettingBranch, UOperation::ResettingBranch),
         (LOperation::CherryPicking, UOperation::CherryPicking),
         (LOperation::ReloadingChanges, UOperation::ReloadingChanges),

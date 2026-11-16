@@ -216,7 +216,9 @@ pub enum Operation {
     ShowingCommit,
     /// Reading the staged and unstaged changes.
     ReadingStatus,
-    /// Resetting the checked out branch.
+    /// Reading the branches, to check whether a branch exists.
+    ReadingBranches,
+    /// Resetting a branch to a commit.
     ResettingBranch,
     /// Cherry-picking a commit.
     CherryPicking,
@@ -414,6 +416,7 @@ fn failure_text(operation: Operation) -> &'static str {
         Operation::FetchingAndPruning => "Fetching and pruning remotes failed, see the Log view",
         Operation::ShowingCommit => "Showing the commit failed, see the Log view",
         Operation::ReadingStatus => "Reading the status failed, see the Log view",
+        Operation::ReadingBranches => "Reading the branches failed, see the Log view",
         Operation::ResettingBranch => "Resetting the branch failed, see the Log view",
         Operation::CherryPicking => "Cherry-picking failed, see the Log view",
         Operation::ReloadingChanges => "Reloading changes failed, see the Log view",
@@ -629,7 +632,7 @@ mod tests {
 
     #[test]
     fn failure_texts() {
-        let cases: [(Operation, &str); 21] = [
+        let cases: [(Operation, &str); 22] = [
             (
                 Operation::ReloadingCommits,
                 "Reloading commits failed, see the Log view",
@@ -677,6 +680,10 @@ mod tests {
             (
                 Operation::ReadingStatus,
                 "Reading the status failed, see the Log view",
+            ),
+            (
+                Operation::ReadingBranches,
+                "Reading the branches failed, see the Log view",
             ),
             (
                 Operation::ResettingBranch,

@@ -701,6 +701,48 @@ fn creating_an_existing_branch_offers_to_reset_it() {
 }
 
 #[test]
+fn creating_a_branch_checks_the_branches_as_they_are_now() {
+    let created_since: TestPorts = labelled_ports(vec![]);
+    let mut created_app: App = loaded_app(&created_since);
+    *created_since.refs.borrow_mut() = Some(Refs {
+        labels: vec![("c2".to_string(), local("topic"))],
+        head: Some("c2".to_string()),
+    });
+    create_at_c1(&mut created_app, &created_since, "topic");
+    assert_eq!(
+        created_app.mode(),
+        &Mode::Confirm(Confirmation::ResetExistingBranch {
+            branch: "topic".to_string(),
+            hash: "c1".to_string(),
+            checked_out: false,
+        })
+    );
+
+    let deleted_since: TestPorts = labelled_ports(vec![local("topic")]);
+    let mut deleted_app: App = loaded_app(&deleted_since);
+    *deleted_since.refs.borrow_mut() = Some(Refs {
+        labels: vec![],
+        head: Some("c2".to_string()),
+    });
+    create_at_c1(&mut deleted_app, &deleted_since, "topic");
+    assert_eq!(
+        actions(&deleted_since),
+        vec!["Info: create branch topic at c1", "create topic at c1"]
+    );
+
+    let failing: TestPorts = labelled_ports(vec![]);
+    let mut failing_app: App = loaded_app(&failing);
+    *failing.refs.borrow_mut() = None;
+    create_at_c1(&mut failing_app, &failing, "topic");
+    assert_eq!(actions(&failing), Vec::<String>::new());
+    assert_eq!(failing_app.mode(), &Mode::Normal);
+    assert_eq!(
+        failing_app.note(),
+        &Note::Problem(Problem::Failed(Operation::ReadingBranches))
+    );
+}
+
+#[test]
 fn creating_the_checked_out_branch_offers_to_reset_it_with_the_working_tree() {
     let ports: TestPorts = labelled_ports(vec![head("main")]);
     *ports.status.borrow_mut() = Some(WorkStatus {

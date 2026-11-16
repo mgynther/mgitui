@@ -58,6 +58,15 @@ pub enum Confirmation {
         /// The commit hash.
         hash: String,
     },
+    /// Resetting a branch that already exists to the commit where it was to be created.
+    ResetExistingBranch {
+        /// The branch name.
+        branch: String,
+        /// The commit hash.
+        hash: String,
+        /// Whether the branch is checked out, so that the working tree moves with it.
+        checked_out: bool,
+    },
     /// Deleting an untracked file.
     DeleteUntracked {
         /// The file in the unstaged list.
@@ -273,6 +282,16 @@ impl App {
                         Confirmation::ResetBranch { branch, hash } => {
                             self.reset_branch(&branch, &hash, ports);
                         }
+                        Confirmation::ResetExistingBranch {
+                            branch,
+                            hash,
+                            checked_out: true,
+                        } => self.reset_branch(&branch, &hash, ports),
+                        Confirmation::ResetExistingBranch {
+                            branch,
+                            hash,
+                            checked_out: false,
+                        } => self.move_branch(&branch, &hash, ports),
                         Confirmation::DeleteUntracked { file } => {
                             self.delete_untracked(&file, ports);
                         }

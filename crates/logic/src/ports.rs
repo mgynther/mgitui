@@ -260,6 +260,14 @@ pub trait Ports {
     /// Fails when git fails, for example when an untracked file is in the way.
     fn reset_keep(&self, hash: &str) -> Result<(), Failed>;
 
+    /// Moves local branch `name`, which is not checked out, to commit `hash`. The working tree
+    /// is not touched.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails, for example when the branch is checked out in another worktree.
+    fn move_branch(&self, name: &str, hash: &str) -> Result<(), Failed>;
+
     /// Cherry-picks a commit onto the checked out branch.
     ///
     /// # Errors

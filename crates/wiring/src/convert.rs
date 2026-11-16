@@ -160,6 +160,10 @@ fn ui_info(info: &logic::note::Info) -> ui::status::Info {
     match info {
         I::NoCommitSelected => U::NoCommitSelected,
         I::CreatedBranch { name } => U::CreatedBranch { name: name.clone() },
+        I::BranchAlreadyPointsTo { branch, hash } => U::BranchAlreadyPointsTo {
+            branch: branch.clone(),
+            hash: hash.clone(),
+        },
         I::DeletedBranch { name } => U::DeletedBranch { name: name.clone() },
         I::NoOtherBranchToRebaseOnto => U::NoOtherBranchToRebaseOnto,
         I::Rebased { branch, onto } => U::Rebased {
@@ -276,6 +280,10 @@ fn question(confirmation: &Confirmation) -> ui::status::Question {
         Confirmation::Quit => Question::Quit,
         Confirmation::DeleteBranch { name } => Question::DeleteBranch { name: name.clone() },
         Confirmation::ResetBranch { branch, hash } => Question::ResetBranch {
+            branch: branch.clone(),
+            hash: hash.clone(),
+        },
+        Confirmation::ResetExistingBranch { branch, hash, .. } => Question::ResetExistingBranch {
             branch: branch.clone(),
             hash: hash.clone(),
         },

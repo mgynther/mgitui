@@ -46,6 +46,13 @@ pub enum Question {
         /// The full commit hash.
         hash: String,
     },
+    /// Whether to reset a branch that already exists to the commit where it was to be created.
+    ResetExistingBranch {
+        /// The branch name.
+        branch: String,
+        /// The full commit hash.
+        hash: String,
+    },
     /// Whether to delete an untracked file.
     DeleteUntracked {
         /// The file's path.
@@ -67,6 +74,13 @@ pub enum Info {
     CreatedBranch {
         /// The branch name.
         name: String,
+    },
+    /// The branch to create already exists at the commit it was to be created at.
+    BranchAlreadyPointsTo {
+        /// The branch name.
+        branch: String,
+        /// The full commit hash.
+        hash: String,
     },
     /// A branch was deleted.
     DeletedBranch {
@@ -306,6 +320,9 @@ pub fn question_label(question: &Question) -> String {
         Question::ResetBranch { branch, hash } => {
             format!("Reset {branch} to {}? y/n", short(hash))
         }
+        Question::ResetExistingBranch { branch, hash } => {
+            format!("Branch \"{branch}\" exists. Reset to {}? y/n", short(hash))
+        }
         Question::DeleteUntracked { path } => format!("Delete untracked file {path}? y/n"),
         Question::DiscardChanges { path } => format!("Discard unstaged changes in {path}? y/n"),
     }
@@ -317,6 +334,9 @@ pub fn info_text(info: &Info) -> String {
     match info {
         Info::NoCommitSelected => "No commit selected".to_string(),
         Info::CreatedBranch { name } => format!("Created branch {name}"),
+        Info::BranchAlreadyPointsTo { branch, hash } => {
+            format!("Branch {branch} already points to {}", short(hash))
+        }
         Info::DeletedBranch { name } => format!("Deleted branch {name}"),
         Info::NoOtherBranchToRebaseOnto => "No other branch to rebase onto".to_string(),
         Info::Rebased { branch, onto } => format!("Rebased {branch} onto {onto}"),
@@ -477,7 +497,7 @@ mod tests {
 
     #[test]
     fn info_texts() {
-        let cases: [(Info, &str); 21] = [
+        let cases: [(Info, &str); 22] = [
             (Info::NoCommitSelected, "No commit selected"),
             (Info::CreatedBranch { name: s("t") }, "Created branch t"),
             (Info::DeletedBranch { name: s("old") }, "Deleted branch old"),
@@ -511,6 +531,13 @@ mod tests {
                     hash: s("1234567890"),
                 },
                 "Reset main to 1234567",
+            ),
+            (
+                Info::BranchAlreadyPointsTo {
+                    branch: s("topic"),
+                    hash: s("1234567890"),
+                },
+                "Branch topic already points to 1234567",
             ),
             (
                 Info::CherryPicked {
@@ -790,7 +817,7 @@ mod tests {
 
     #[test]
     fn question_labels() {
-        let cases: [(Question, &str); 6] = [
+        let cases: [(Question, &str); 7] = [
             (Question::Quit, "Quit? y/n"),
             (
                 Question::DeleteBranch {
@@ -811,6 +838,13 @@ mod tests {
                     hash: "123".to_string(),
                 },
                 "Reset main to 123? y/n",
+            ),
+            (
+                Question::ResetExistingBranch {
+                    branch: "topic".to_string(),
+                    hash: "1234567890".to_string(),
+                },
+                "Branch \"topic\" exists. Reset to 1234567? y/n",
             ),
             (
                 Question::DeleteUntracked {

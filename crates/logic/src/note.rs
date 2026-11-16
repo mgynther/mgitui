@@ -23,6 +23,13 @@ pub enum Info {
         /// The branch name.
         name: String,
     },
+    /// The branch to create already exists at the commit it was to be created at.
+    BranchAlreadyPointsTo {
+        /// The branch name.
+        branch: String,
+        /// The full commit hash.
+        hash: String,
+    },
     /// A branch was deleted.
     DeletedBranch {
         /// The branch name.
@@ -53,7 +60,7 @@ pub enum Info {
     UpdatedRemotes,
     /// All remotes were fetched and stale remote branches pruned.
     FetchedAndPruned,
-    /// The checked out branch was reset to a commit.
+    /// A branch was reset to a commit.
     ResetBranch {
         /// The branch name.
         branch: String,
@@ -157,7 +164,7 @@ pub enum Operation {
     ShowingCommit,
     /// Reading the staged and unstaged changes.
     ReadingStatus,
-    /// Resetting the checked out branch.
+    /// Resetting a branch to a commit.
     ResettingBranch,
     /// Cherry-picking a commit.
     CherryPicking,

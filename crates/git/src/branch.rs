@@ -19,6 +19,20 @@ impl Git {
         Ok(())
     }
 
+    /// Moves existing local branch `name` to commit `to`, leaving the working tree as it is.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails, for example when the branch is checked out.
+    pub fn move_branch(&self, name: &str, to: &str, log: &Log<'_>) -> Result<(), GitError> {
+        let command: Command = Command::MoveBranch {
+            name: name.to_string(),
+            to: to.to_string(),
+        };
+        self.run(&command, None, log)?;
+        Ok(())
+    }
+
     /// Deletes local branch `name`, also when it is not merged, as after a squash merge.
     ///
     /// # Errors
@@ -139,6 +153,26 @@ impl Git {
 mod tests {
     use crate::runner::GitError;
     use crate::test_repo::{Logged, TestRepo};
+
+    #[test]
+    fn move_branch_moves_only_a_branch_that_is_not_checked_out() {
+        let repo: TestRepo = TestRepo::new();
+        repo.git_ok(&["commit", "-q", "--allow-empty", "-m", "one"]);
+        let first: String = repo.git_ok(&["rev-parse", "HEAD"]).trim().to_string();
+        repo.git_ok(&["commit", "-q", "--allow-empty", "-m", "two"]);
+        let second: String = repo.git_ok(&["rev-parse", "HEAD"]).trim().to_string();
+        repo.git_ok(&["branch", "topic", &first]);
+        let logged: Logged = Logged::new();
+        repo.git()
+            .move_branch("topic", &second, &logged.log())
+            .unwrap();
+        assert_eq!(repo.git_ok(&["rev-parse", "topic"]).trim(), second);
+        assert!(matches!(
+            repo.git().move_branch("main", &first, &logged.log()),
+            Err(GitError::Failed { .. })
+        ));
+        assert_eq!(repo.git_ok(&["rev-parse", "main"]).trim(), second);
+    }
 
     #[test]
     fn create_and_switch() {

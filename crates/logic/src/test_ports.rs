@@ -391,6 +391,10 @@ impl Ports for TestPorts {
         self.branch_result(format!("reset --keep {hash}"))
     }
 
+    fn move_branch(&self, name: &str, hash: &str) -> Result<(), Failed> {
+        self.branch_result(format!("move {name} to {hash}"))
+    }
+
     fn cherry_pick(&self, hash: &str) -> Result<(), Failed> {
         self.branch_result(format!("cherry-pick {hash}"))
     }

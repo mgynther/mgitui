@@ -132,6 +132,7 @@ fn git_failures_become_failed() {
     assert_eq!(ports.remote_update(), Err(Failed));
     assert_eq!(ports.fetch_all_prune(), Err(Failed));
     assert_eq!(ports.reset_keep("h"), Err(Failed));
+    assert_eq!(ports.move_branch("b", "h"), Err(Failed));
     assert_eq!(ports.show_commit("h"), Err(Failed));
     assert_eq!(ports.delete_branch("b"), Err(Failed));
     assert_eq!(ports.rebase("b", "main"), Err(Failed));
@@ -271,12 +272,18 @@ fn branch_validation_creation_and_checkout() {
         ports.create_branch(&name, &head).unwrap();
         ports.checkout("topic").unwrap();
         assert_eq!(git_ok(dir.path(), &["branch", "--show-current"]), "topic\n");
-        let validation_errors: usize = log
+        git_ok(dir.path(), &["commit", "-q", "--allow-empty", "-m", "two"]);
+        let two: String = git_ok(dir.path(), &["rev-parse", "HEAD"])
+            .trim()
+            .to_string();
+        ports.move_branch("main", &two).unwrap();
+        assert_eq!(git_ok(dir.path(), &["rev-parse", "main"]).trim(), two);
+        let validation_entries: usize = log
             .drain()
             .iter()
             .filter(|e: &&LogEntry| e.layer == Layer::Validation)
             .count();
-        assert_eq!(validation_errors, 2);
+        assert_eq!(validation_entries, 2);
     });
 }
 

@@ -243,7 +243,7 @@ fn prompt_kinds_convert() {
 
 #[test]
 fn confirmations_become_questions() {
-    let cases: [(Confirmation, Question); 5] = [
+    let cases: [(Confirmation, Question); 7] = [
         (Confirmation::Quit, Question::Quit),
         (
             Confirmation::DeleteBranch {
@@ -259,6 +259,28 @@ fn confirmations_become_questions() {
                 hash: "1234567890".to_string(),
             },
             Question::ResetBranch {
+                branch: "main".to_string(),
+                hash: "1234567890".to_string(),
+            },
+        ),
+        (
+            Confirmation::ResetExistingBranch {
+                branch: "topic".to_string(),
+                hash: "1234567890".to_string(),
+                checked_out: false,
+            },
+            Question::ResetExistingBranch {
+                branch: "topic".to_string(),
+                hash: "1234567890".to_string(),
+            },
+        ),
+        (
+            Confirmation::ResetExistingBranch {
+                branch: "main".to_string(),
+                hash: "1234567890".to_string(),
+                checked_out: true,
+            },
+            Question::ResetExistingBranch {
                 branch: "main".to_string(),
                 hash: "1234567890".to_string(),
             },
@@ -321,14 +343,24 @@ fn infos_without_data_convert() {
 }
 
 #[test]
-fn infos_with_data_convert() {
-    let cases: [(LInfo, UInfo); 10] = [
+fn branch_infos_with_data_convert() {
+    let cases: [(LInfo, UInfo); 7] = [
         (
             LInfo::CreatedBranch {
                 name: "name".to_string(),
             },
             UInfo::CreatedBranch {
                 name: "name".to_string(),
+            },
+        ),
+        (
+            LInfo::BranchAlreadyPointsTo {
+                branch: "topic".to_string(),
+                hash: "1234567890".to_string(),
+            },
+            UInfo::BranchAlreadyPointsTo {
+                branch: "topic".to_string(),
+                hash: "1234567890".to_string(),
             },
         ),
         (
@@ -377,6 +409,15 @@ fn infos_with_data_convert() {
                 hash: "hash".to_string(),
             },
         ),
+    ];
+    for (from, to) in cases {
+        assert_eq!(ui_info(&from), to);
+    }
+}
+
+#[test]
+fn other_infos_with_data_convert() {
+    let cases: [(LInfo, UInfo); 4] = [
         (
             LInfo::CherryPicked {
                 hash: "hash".to_string(),

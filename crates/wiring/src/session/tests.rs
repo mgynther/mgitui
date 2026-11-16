@@ -668,6 +668,39 @@ fn s_shows_the_selected_commit_with_the_terminal_handed_over() {
 }
 
 #[test]
+fn creating_an_existing_branch_resets_it_after_confirming() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    git_ok(dir.path(), &["commit", "-q", "--allow-empty", "-m", "one"]);
+    git_ok(dir.path(), &["branch", "pr"]);
+    let one: String = git_ok(dir.path(), &["rev-parse", "HEAD"])
+        .trim()
+        .to_string();
+    git_ok(dir.path(), &["commit", "-q", "--allow-empty", "-m", "two"]);
+    let two: String = git_ok(dir.path(), &["rev-parse", "HEAD"])
+        .trim()
+        .to_string();
+    let mut s: Session = session_in(&dir);
+    s.input(b"jcpr\r");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        format!("Branch pr already points to {}", &one[..7])
+    );
+    s.input(b"kcpr\r");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        format!("Branch \"pr\" exists. Reset to {}? y/n", &two[..7])
+    );
+    s.input(b"y");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        format!("Reset pr to {}", &two[..7])
+    );
+    assert_eq!(git_ok(dir.path(), &["rev-parse", "pr"]).trim(), two);
+    assert_eq!(git_ok(dir.path(), &["branch", "--show-current"]), "main\n");
+}
+
+#[test]
 fn reset_branch_to_selected_commit() {
     let dir: TempDir = TempDir::new();
     init_repo(dir.path());

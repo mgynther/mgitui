@@ -116,6 +116,14 @@ pub enum Command {
         /// The commit the branch points to.
         at: String,
     },
+    /// `git branch -f <name> <commit>`: moves an existing branch to a commit without touching
+    /// the working tree. Git refuses for a branch that is checked out.
+    MoveBranch {
+        /// The branch name.
+        name: String,
+        /// The commit the branch is moved to.
+        to: String,
+    },
     /// `git branch -D <name>`: deletes a local branch, also when it is not merged.
     DeleteBranch {
         /// The branch name.
@@ -224,6 +232,7 @@ impl Command {
                 "-M",
             ],
             Command::CreateBranch { .. } => &["branch"],
+            Command::MoveBranch { .. } => &["branch", "-f"],
             Command::Switch { .. } => &["switch"],
             Command::CherryPick { .. } => &["cherry-pick"],
             Command::ResetKeep { .. } => &["reset", "--keep"],
@@ -270,7 +279,7 @@ impl Command {
             Command::CommitMessage { hash } | Command::CommitFiles { hash } => {
                 args.push(hash.clone());
             }
-            Command::CreateBranch { name, at } => {
+            Command::CreateBranch { name, at } | Command::MoveBranch { name, to: at } => {
                 args.push(name.clone());
                 args.push(at.clone());
             }
@@ -464,6 +473,13 @@ mod tests {
                 at: "abc".to_string()
             }),
             "branch feature abc"
+        );
+        assert_eq!(
+            args(&Command::MoveBranch {
+                name: "feature".to_string(),
+                to: "abc".to_string()
+            }),
+            "branch -f feature abc"
         );
         assert_eq!(
             args(&Command::Switch {

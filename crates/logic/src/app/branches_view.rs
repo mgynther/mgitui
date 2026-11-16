@@ -323,6 +323,10 @@ impl App {
                 return;
             }
         };
+        if let Some(current) = self.local_branch_commit(&name.0) {
+            self.offer_reset_existing(name.0, current, at, ports);
+            return;
+        }
         let short: &str = at.get(..7).unwrap_or(at);
         ports.log(
             LogLevel::Info,
@@ -336,6 +340,52 @@ impl App {
             }),
             Err(Failed) => Note::Problem(Problem::Failed(Operation::CreatingBranch)),
         };
+    }
+
+    /// The commit local branch `name` points to, if it exists.
+    fn local_branch_commit(&self, name: &str) -> Option<String> {
+        self.branches
+            .labels
+            .iter()
+            .find(|(_, labels): &(&String, &Vec<Label>)| {
+                labels.iter().any(|label: &Label| {
+                    matches!(label, Label::Local { name: local, .. } if local == name)
+                })
+            })
+            .map(|(hash, _): (&String, &Vec<Label>)| hash.clone())
+    }
+
+    /// Asks whether to reset `branch`, which points to `current`, to `at` instead of creating
+    /// it. A checked out branch takes the working tree with it, so it is refused like `R` is
+    /// when files git tracks have changes.
+    fn offer_reset_existing(
+        &mut self,
+        branch: String,
+        current: String,
+        at: &str,
+        ports: &dyn Ports,
+    ) {
+        if current == at {
+            let short: &str = at.get(..7).unwrap_or(at);
+            ports.log(
+                LogLevel::Info,
+                &format!("Branch {branch} already points to {short}"),
+            );
+            self.note = Note::Info(Info::BranchAlreadyPointsTo {
+                branch,
+                hash: current,
+            });
+            return;
+        }
+        let checked_out: bool = self.checked_out_branch().as_ref() == Some(&branch);
+        if checked_out && !self.clean_for_reset(ports) {
+            return;
+        }
+        self.mode = Mode::Confirm(Confirmation::ResetExistingBranch {
+            branch,
+            hash: at.to_string(),
+            checked_out,
+        });
     }
 
     /// The local branches of the selected commit.
@@ -607,6 +657,14 @@ impl App {
             self.note = Note::Problem(Problem::NoBranchCheckedOutToReset);
             return;
         };
+        if self.clean_for_reset(ports) {
+            self.mode = Mode::Confirm(Confirmation::ResetBranch { branch, hash });
+        }
+    }
+
+    /// Whether files git tracks are free of changes, so that the checked out branch can be
+    /// reset. Otherwise the note says why not.
+    fn clean_for_reset(&mut self, ports: &dyn Ports) -> bool {
         let status: Result<WorkStatus, Failed> = ports.status();
         match status {
             Ok(status) if status.has_tracked_changes() => {
@@ -615,12 +673,29 @@ impl App {
                     "Commit or discard uncommitted changes before resetting",
                 );
                 self.note = Note::Problem(Problem::UncommittedChangesBeforeReset);
+                false
             }
-            Ok(_) => self.mode = Mode::Confirm(Confirmation::ResetBranch { branch, hash }),
+            Ok(_) => true,
             Err(Failed) => {
                 self.note = Note::Problem(Problem::Failed(Operation::ReadingStatus));
+                false
             }
         }
+    }
+
+    /// Moves `branch`, which is not checked out, to `hash`.
+    pub(super) fn move_branch(&mut self, branch: &str, hash: &str, ports: &dyn Ports) {
+        let short: &str = hash.get(..7).unwrap_or(hash);
+        ports.log(LogLevel::Info, &format!("move {branch} to {short}"));
+        let result: Result<(), Failed> = ports.move_branch(branch, hash);
+        self.refresh(ports);
+        self.note = match result {
+            Ok(()) => Note::Info(Info::ResetBranch {
+                branch: branch.to_string(),
+                hash: hash.to_string(),
+            }),
+            Err(Failed) => Note::Problem(Problem::Failed(Operation::ResettingBranch)),
+        };
     }
 
     pub(super) fn reset_branch(&mut self, branch: &str, hash: &str, ports: &dyn Ports) {

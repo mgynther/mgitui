@@ -54,6 +54,7 @@ fn actions(ports: &TestPorts) -> Vec<String> {
                 || c.starts_with("remote")
                 || c.starts_with("fetch")
                 || c.starts_with("reset")
+                || c.starts_with("move")
                 || c.starts_with("show-commit")
                 || c.starts_with("rebase")
                 || c.contains(": ")
@@ -656,6 +657,134 @@ fn head(name: &str) -> Label {
         name: name.to_string(),
         head: true,
     }
+}
+
+/// Opens the branch name prompt on commit `c1`, below `c2`, and submits `name`.
+fn create_at_c1(app: &mut App, ports: &TestPorts, name: &str) {
+    run(app, ports, &[Event::MoveDown, Event::CreateBranch]);
+    typed(app, ports, name);
+    run(app, ports, &[Event::InputSubmit]);
+}
+
+#[test]
+fn creating_an_existing_branch_offers_to_reset_it() {
+    let ports: TestPorts = labelled_ports(vec![local("topic")]);
+    let mut app: App = loaded_app(&ports);
+    create_at_c1(&mut app, &ports, "topic");
+    let confirmation: Mode = Mode::Confirm(Confirmation::ResetExistingBranch {
+        branch: "topic".to_string(),
+        hash: "c1".to_string(),
+        checked_out: false,
+    });
+    assert_eq!(app.mode(), &confirmation);
+    assert_eq!(actions(&ports), Vec::<String>::new());
+    run(&mut app, &ports, &[Event::No]);
+    assert_eq!(app.mode(), &Mode::Normal);
+    assert_eq!(actions(&ports), Vec::<String>::new());
+    run(&mut app, &ports, &[Event::CreateBranch]);
+    typed(&mut app, &ports, "topic");
+    run(&mut app, &ports, &[Event::InputSubmit]);
+    assert_eq!(app.mode(), &confirmation);
+    run(&mut app, &ports, &[Event::Yes]);
+    assert_eq!(
+        actions(&ports),
+        vec!["Info: move topic to c1", "move topic to c1"]
+    );
+    assert!(ports.calls().contains(&"refs".to_string()));
+    assert_eq!(
+        app.note(),
+        &Note::Info(Info::ResetBranch {
+            branch: "topic".to_string(),
+            hash: "c1".to_string()
+        })
+    );
+}
+
+#[test]
+fn creating_the_checked_out_branch_offers_to_reset_it_with_the_working_tree() {
+    let ports: TestPorts = labelled_ports(vec![head("main")]);
+    *ports.status.borrow_mut() = Some(WorkStatus {
+        staged: vec![],
+        unstaged: vec![changed("new.txt", ChangeKind::Untracked)],
+    });
+    let mut app: App = loaded_app(&ports);
+    create_at_c1(&mut app, &ports, "main");
+    assert_eq!(
+        app.mode(),
+        &Mode::Confirm(Confirmation::ResetExistingBranch {
+            branch: "main".to_string(),
+            hash: "c1".to_string(),
+            checked_out: true,
+        })
+    );
+    run(&mut app, &ports, &[Event::Yes]);
+    assert_eq!(
+        actions(&ports),
+        vec!["Info: reset main to c1", "reset --keep c1"]
+    );
+    assert_eq!(
+        app.note(),
+        &Note::Info(Info::ResetBranch {
+            branch: "main".to_string(),
+            hash: "c1".to_string()
+        })
+    );
+}
+
+#[test]
+fn resetting_an_existing_branch_problems() {
+    let same: TestPorts = labelled_ports(vec![local("topic")]);
+    let mut same_app: App = loaded_app(&same);
+    run(&mut same_app, &same, &[Event::CreateBranch]);
+    typed(&mut same_app, &same, "topic");
+    run(&mut same_app, &same, &[Event::InputSubmit]);
+    assert_eq!(same_app.mode(), &Mode::Normal);
+    assert_eq!(
+        actions(&same),
+        vec!["Info: Branch topic already points to c2"]
+    );
+    assert_eq!(
+        same_app.note(),
+        &Note::Info(Info::BranchAlreadyPointsTo {
+            branch: "topic".to_string(),
+            hash: "c2".to_string()
+        })
+    );
+
+    let changes: TestPorts = labelled_ports(vec![head("main")]);
+    *changes.status.borrow_mut() = Some(WorkStatus {
+        staged: vec![],
+        unstaged: vec![modified("a.txt")],
+    });
+    let mut changes_app: App = loaded_app(&changes);
+    create_at_c1(&mut changes_app, &changes, "main");
+    assert_eq!(changes_app.mode(), &Mode::Normal);
+    assert_eq!(
+        changes_app.note(),
+        &Note::Problem(Problem::UncommittedChangesBeforeReset)
+    );
+
+    let no_status: TestPorts = labelled_ports(vec![head("main")]);
+    let mut no_status_app: App = loaded_app(&no_status);
+    *no_status.status.borrow_mut() = None;
+    create_at_c1(&mut no_status_app, &no_status, "main");
+    assert_eq!(no_status_app.mode(), &Mode::Normal);
+    assert_eq!(
+        no_status_app.note(),
+        &Note::Problem(Problem::Failed(Operation::ReadingStatus))
+    );
+
+    let failing: TestPorts = TestPorts {
+        branch_fails: true,
+        ..labelled_ports(vec![local("topic")])
+    };
+    let mut failing_app: App = loaded_app(&failing);
+    create_at_c1(&mut failing_app, &failing, "topic");
+    run(&mut failing_app, &failing, &[Event::Yes]);
+    assert_eq!(
+        failing_app.note(),
+        &Note::Problem(Problem::Failed(Operation::ResettingBranch))
+    );
 }
 
 fn changed(path: &str, kind: ChangeKind) -> ChangedFile {

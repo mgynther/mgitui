@@ -278,6 +278,19 @@ mod pty {
         out
     }
 
+    /// Checks that the terminal was handed over once, with `shown` written by the program it was
+    /// handed to: on a cleared screen, and without leaving the alternate screen before the last
+    /// frame, so that the program's output never reaches the screen the shell uses.
+    fn assert_handed_over_on_a_blank_alternate_screen(finished: &Finished, shown: &str) {
+        let raw: &str = &finished.raw;
+        let cleared: usize = raw.find("\x1b[H\x1b[2J").unwrap();
+        assert_eq!(raw.matches("\x1b[H\x1b[2J").count(), 1, "{raw}");
+        assert!(cleared < raw.find(shown).unwrap(), "{raw}");
+        let last_frame: usize = raw.rfind(FRAME_START).unwrap();
+        assert!(cleared < last_frame, "{raw}");
+        assert!(!raw[..last_frame].contains("\x1b[?1049l"), "{raw}");
+    }
+
     /// Whether `stty -a` output shows a terminal in normal mode: line editing and echo on.
     fn is_normal_mode(settings: &str) -> bool {
         settings.contains(" icanon ") && settings.contains(" echo ")
@@ -366,14 +379,17 @@ mod pty {
 
     #[test]
     fn vim_failing_is_shown() {
-        let mut session: Session = Session::start(repository(), &[("vim", "exit 1")]);
+        let vim: &str = "echo from-vim\nexit 1";
+        let mut session: Session = Session::start(repository(), &[("vim", vim)]);
         let mut shown: usize = session.wait_for("first commit", 0);
         session.press(b"\x1bOQ");
         shown = session.wait_for("Commit message", shown);
         session.press(b"e");
         session.wait_for("Editing the message failed, see the Log view", shown);
         session.press(b"qy");
-        assert_eq!(session.finish().code, "0");
+        let finished: Finished = session.finish();
+        assert_eq!(finished.code, "0");
+        assert_handed_over_on_a_blank_alternate_screen(&finished, "from-vim");
     }
 
     #[test]
@@ -390,7 +406,7 @@ mod pty {
             &["commit", "-q", "--allow-empty", "-m", "main work"],
         );
         // git runs `vim` on the todo list; leaving it unchanged rebases every commit.
-        let vim: &str = "stty -a > \"$0.settings\"";
+        let vim: &str = "stty -a > \"$0.settings\"\necho from-vim";
         let mut session: Session = Session::start(dir, &[("vim", vim)]);
         let mut shown: usize = session.wait_for("topic work", 0);
         session.press(b"/topic work\ri");
@@ -403,7 +419,9 @@ mod pty {
             "topic work\nmain work\nfirst commit\n"
         );
         session.press(b"qy");
-        assert_eq!(session.finish().code, "0");
+        let finished: Finished = session.finish();
+        assert_eq!(finished.code, "0");
+        assert_handed_over_on_a_blank_alternate_screen(&finished, "from-vim");
     }
 
     #[test]

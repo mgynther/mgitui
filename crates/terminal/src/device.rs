@@ -12,6 +12,8 @@ use crate::size::{Size, parse_stty_size};
 const ENTER: &str = "\x1b[?1049h\x1b[?25l";
 /// Resets styles, shows the cursor and leaves the alternate screen.
 const LEAVE: &str = "\x1b[0m\x1b[?25h\x1b[?1049l";
+/// Resets styles, shows the cursor and clears the screen, staying on the alternate screen.
+const SUSPEND: &str = "\x1b[0m\x1b[?25h\x1b[H\x1b[2J";
 /// Raw mode where reads return after at most 0.1 seconds.
 const RAW: [&str; 6] = ["raw", "-echo", "min", "0", "time", "1"];
 
@@ -92,6 +94,15 @@ pub fn restore_on_panic(saved: String) {
     }));
 }
 
+/// Restores terminal settings for running another program, which starts on a blank screen.
+/// The program runs on the alternate screen, so that its output never reaches the screen the
+/// shell uses: it would show again in the next handover, and after mgitui exits. Errors are
+/// ignored, as in [`restore`]: the program then runs in the terminal as it is.
+fn suspend(saved: &str) {
+    let _ = write_out(SUSPEND);
+    let _ = stty(&[saved]);
+}
+
 /// Switches back to raw mode and the alternate screen.
 ///
 /// # Errors
@@ -108,7 +119,7 @@ pub fn resume() -> io::Result<()> {
 ///
 /// Fails when the terminal cannot be taken back.
 pub fn hand_over(saved: &str, run: &mut dyn FnMut()) -> io::Result<()> {
-    restore(saved);
+    suspend(saved);
     run();
     resume()
 }
@@ -120,7 +131,7 @@ pub fn hand_over(saved: &str, run: &mut dyn FnMut()) -> io::Result<()> {
 /// Fails when Vim cannot be started or exits with an error, or the terminal cannot be taken
 /// back.
 pub fn run_vim(saved: &str, path: &Path) -> io::Result<()> {
-    restore(saved);
+    suspend(saved);
     let status: io::Result<std::process::ExitStatus> = Command::new("vim").arg(path).status();
     resume()?;
     let status: std::process::ExitStatus = status?;

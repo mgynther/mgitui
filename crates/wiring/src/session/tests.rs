@@ -21,14 +21,15 @@ fn session_in(dir: &TempDir) -> Session {
     let log: LogBuffer = LogBuffer::new(fixed_clock);
     log.wiring(logic::log::LogLevel::Info, "started");
     let git: git::Git = test_git(dir.path()).with_temp_dir(dir.path());
-    let editor = |path: &std::path::Path| -> std::io::Result<()> {
+    let editor = |path: &std::path::Path| -> std::io::Result<terminal::edit::EditorExit> {
         let old: String = std::fs::read_to_string(path).unwrap();
         let new: String = if old.is_empty() {
             "New commit\n".to_string()
         } else {
             old.replace("New", "Amended")
         };
-        std::fs::write(path, new)
+        std::fs::write(path, new).unwrap();
+        Ok(terminal::edit::EditorExit::Success)
     };
     let mut session: Session = Session::new(git, log, Box::new(editor), Box::new(run_here));
     session.resize(SIZE);
@@ -214,7 +215,7 @@ fn branches_view_shows_graph_details_and_panes() {
     let mut s: Session = Session::new(
         git,
         log,
-        Box::new(|_: &std::path::Path| Ok(())),
+        Box::new(|_: &std::path::Path| Ok(terminal::edit::EditorExit::Success)),
         Box::new(run_here),
     );
     s.resize(SIZE);
@@ -456,7 +457,7 @@ fn interactive_rebase_prompt() {
     let mut s: Session = Session::new(
         git,
         log,
-        Box::new(|_: &std::path::Path| Ok(())),
+        Box::new(|_: &std::path::Path| Ok(terminal::edit::EditorExit::Success)),
         Box::new(run_here),
     );
     s.resize(SIZE);
@@ -646,7 +647,7 @@ fn s_shows_the_selected_commit_with_the_terminal_handed_over() {
     let mut s: Session = Session::new(
         test_git(dir.path()),
         LogBuffer::new(fixed_clock),
-        Box::new(|_: &std::path::Path| Ok(())),
+        Box::new(|_: &std::path::Path| Ok(terminal::edit::EditorExit::Success)),
         Box::new(handoff),
     );
     s.resize(SIZE);

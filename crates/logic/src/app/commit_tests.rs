@@ -1,6 +1,6 @@
 use super::App;
 use crate::event::{Event, ViewId};
-use crate::note::{InputProblem, Note, Operation, Problem};
+use crate::note::{Info, InputProblem, Note, Operation, Problem};
 use crate::test_ports::{TestPorts, modified};
 
 fn app(ports: &TestPorts) -> App {
@@ -53,6 +53,28 @@ fn empty_message_is_refused() {
         &Note::Problem(Problem::Invalid(InputProblem::EmptyCommitMessage))
     );
     assert_eq!(ports.calls(), Vec::<String>::new());
+}
+
+#[test]
+fn an_editor_exiting_with_an_error_keeps_the_message() {
+    let ports: TestPorts = TestPorts::new();
+    let mut app: App = app(&ports);
+    run(&mut app, &ports, &[Event::EditMessage]);
+    let quitting: TestPorts = TestPorts {
+        editor_exits_with_error: true,
+        ..TestPorts::new()
+    };
+    run(&mut app, &quitting, &[Event::EditMessage]);
+    assert_eq!(app.diff().message(), "edited\n");
+    assert_eq!(app.note(), &Note::Info(Info::EditingMessageCancelled));
+    assert_eq!(
+        quitting.calls(),
+        vec![
+            "Info: edit commit message",
+            "edit \"edited\\n\"",
+            "Info: the editor exited with an error; keeping the message",
+        ]
+    );
 }
 
 #[test]

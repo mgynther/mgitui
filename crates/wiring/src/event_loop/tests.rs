@@ -73,7 +73,7 @@ fn session(dir: &TempDir) -> Session {
     Session::new(
         test_git(dir.path()),
         LogBuffer::new(fixed_clock),
-        Box::new(|_: &std::path::Path| Ok(())),
+        Box::new(|_: &std::path::Path| Ok(terminal::edit::EditorExit::Success)),
         Box::new(|run: &mut dyn FnMut()| {
             run();
             Ok(())

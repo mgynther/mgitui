@@ -6,6 +6,7 @@ use std::io::{self, Read, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+use crate::edit::EditorExit;
 use crate::size::{Size, parse_stty_size};
 
 /// Switches to the alternate screen and hides the cursor.
@@ -128,17 +129,17 @@ pub fn hand_over(saved: &str, run: &mut dyn FnMut()) -> io::Result<()> {
 ///
 /// # Errors
 ///
-/// Fails when Vim cannot be started or exits with an error, or the terminal cannot be taken
+/// Fails when Vim cannot be started or is ended by a signal, or the terminal cannot be taken
 /// back.
-pub fn run_vim(saved: &str, path: &Path) -> io::Result<()> {
+pub fn run_vim(saved: &str, path: &Path) -> io::Result<EditorExit> {
     suspend(saved);
     let status: io::Result<std::process::ExitStatus> = Command::new("vim").arg(path).status();
     resume()?;
     let status: std::process::ExitStatus = status?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(io::Error::other(format!("vim exited with {status}")))
+    match status.code() {
+        Some(0) => Ok(EditorExit::Success),
+        Some(code) => Ok(EditorExit::Code(code)),
+        None => Err(io::Error::other(format!("vim exited with {status}"))),
     }
 }
 

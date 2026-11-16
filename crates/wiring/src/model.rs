@@ -1,4 +1,5 @@
-//! Conversions from the git and validation layers' types to the logic layer's types, and back.
+//! Conversions from the git, validation and terminal layers' types to the logic layer's types,
+//! and back.
 
 use logic::model::{
     AmendBase, ChangeKind, ChangedFile, Commit, DiffLine, FileDiff, Hunk, Label, LineKind, Refs,
@@ -153,10 +154,23 @@ pub fn refs(refs: Vec<git::Ref>, head: Option<String>) -> Refs {
     }
 }
 
+/// The logic layer's edited message for the terminal layer's edit result.
+#[must_use]
+pub fn edited_message(edited: terminal::edit::Edited) -> logic::ports::EditedMessage {
+    logic::ports::EditedMessage {
+        text: edited.text,
+        editor_succeeded: match edited.exit {
+            terminal::edit::EditorExit::Success => true,
+            terminal::edit::EditorExit::Code(_) => false,
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        amend_base, change_kind, changed_files, commit, file_diff, input_problem, refs, work_status,
+        amend_base, change_kind, changed_files, commit, edited_message, file_diff, input_problem,
+        refs, work_status,
     };
     use logic::model::{ChangeKind, Label, LineKind};
 
@@ -188,6 +202,32 @@ mod tests {
         );
         assert_eq!(input_problem(&E::EmptySearch), I::EmptySearch);
         assert_eq!(input_problem(&E::EmptyCommitMessage), I::EmptyCommitMessage);
+    }
+
+    #[test]
+    fn edited_messages() {
+        use logic::ports::EditedMessage;
+        use terminal::edit::{Edited, EditorExit};
+        assert_eq!(
+            edited_message(Edited {
+                text: "saved".to_string(),
+                exit: EditorExit::Success,
+            }),
+            EditedMessage {
+                text: "saved".to_string(),
+                editor_succeeded: true,
+            }
+        );
+        assert_eq!(
+            edited_message(Edited {
+                text: "quit".to_string(),
+                exit: EditorExit::Code(1),
+            }),
+            EditedMessage {
+                text: "quit".to_string(),
+                editor_succeeded: false,
+            }
+        );
     }
 
     #[test]

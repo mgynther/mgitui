@@ -315,7 +315,7 @@ fn confirmations_become_questions() {
 
 #[test]
 fn infos_without_data_convert() {
-    let cases: [(LInfo, UInfo); 11] = [
+    let cases: [(LInfo, UInfo); 12] = [
         (LInfo::NoCommitSelected, UInfo::NoCommitSelected),
         (
             LInfo::NoOtherBranchToRebaseOnto,
@@ -333,6 +333,10 @@ fn infos_without_data_convert() {
             UInfo::OnlyUnstagedChangesCanBeDiscarded,
         ),
         (LInfo::NothingToStage, UInfo::NothingToStage),
+        (
+            LInfo::EditingMessageCancelled,
+            UInfo::EditingMessageCancelled,
+        ),
         (LInfo::NoChangedLinesSelected, UInfo::NoChangedLinesSelected),
         (LInfo::NoPreviousSearch, UInfo::NoPreviousSearch),
         (LInfo::SearchWrapped, UInfo::SearchWrapped),

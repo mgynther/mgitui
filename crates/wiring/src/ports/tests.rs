@@ -4,7 +4,7 @@ use crate::test_support::{TempDir, fixed_clock, git_ok, init_repo, test_git};
 use logic::log::{Layer, LogEntry, LogLevel};
 use logic::model::{AmendBase, ChangeKind, ChangedFile, FileDiff, LineKind, Side, WorkStatus};
 use logic::note::{BranchNameProblem, InputProblem};
-use logic::ports::{CommitMessage, Failed, Ports, SearchText};
+use logic::ports::{CommitMessage, EditedMessage, Failed, Ports, SearchText};
 
 #[expect(
     clippy::unnecessary_wraps,
@@ -15,9 +15,14 @@ fn run_here(run: &mut dyn FnMut()) -> std::io::Result<()> {
     Ok(())
 }
 
-fn append_line(path: &std::path::Path) -> std::io::Result<()> {
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "it has the signature of an editor"
+)]
+fn append_line(path: &std::path::Path) -> std::io::Result<terminal::edit::EditorExit> {
     let old: String = std::fs::read_to_string(path).unwrap();
-    std::fs::write(path, format!("{old}line\n"))
+    std::fs::write(path, format!("{old}line\n")).unwrap();
+    Ok(terminal::edit::EditorExit::Success)
 }
 
 fn with_ports(dir: &std::path::Path, test: impl Fn(&SessionPorts<'_>, &LogBuffer)) {
@@ -192,7 +197,10 @@ fn edit_validate_commit_and_amend() {
         assert_eq!(ports.has_commits(), Ok(false));
         assert_eq!(
             ports.edit_message("First\n"),
-            Ok("First\nline\n".to_string())
+            Ok(EditedMessage {
+                text: "First\nline\n".to_string(),
+                editor_succeeded: true,
+            })
         );
         assert_eq!(
             ports.validate_commit_message(" "),

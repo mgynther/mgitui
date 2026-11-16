@@ -132,6 +132,8 @@ pub enum Info {
     OnlyUnstagedChangesCanBeDiscarded,
     /// There are no unstaged changes.
     NothingToStage,
+    /// The editor exited with an error, so the message was kept as it was.
+    EditingMessageCancelled,
     /// The selection has no added or removed lines.
     NoChangedLinesSelected,
     /// An untracked file was deleted.
@@ -360,6 +362,7 @@ pub fn info_text(info: &Info) -> String {
             "Only unstaged changes can be discarded: unstage the file first".to_string()
         }
         Info::NothingToStage => "Nothing to stage".to_string(),
+        Info::EditingMessageCancelled => "Editing the message was cancelled".to_string(),
         Info::NoChangedLinesSelected => "No changed lines selected".to_string(),
         Info::DeletedFile { path } => format!("Deleted {path}"),
         Info::DiscardedChanges { path } => format!("Discarded changes in {path}"),
@@ -500,7 +503,7 @@ mod tests {
 
     #[test]
     fn info_texts() {
-        let cases: [(Info, &str); 22] = [
+        let cases: [(Info, &str); 23] = [
             (Info::NoCommitSelected, "No commit selected"),
             (Info::CreatedBranch { name: s("t") }, "Created branch t"),
             (Info::DeletedBranch { name: s("old") }, "Deleted branch old"),
@@ -558,6 +561,10 @@ mod tests {
                 "Only unstaged changes can be discarded: unstage the file first",
             ),
             (Info::NothingToStage, "Nothing to stage"),
+            (
+                Info::EditingMessageCancelled,
+                "Editing the message was cancelled",
+            ),
             (Info::NoChangedLinesSelected, "No changed lines selected"),
             (Info::DeletedFile { path: s("n") }, "Deleted n"),
             (

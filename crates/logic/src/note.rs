@@ -80,6 +80,8 @@ pub enum Info {
     OnlyUnstagedChangesCanBeDiscarded,
     /// There are no unstaged changes.
     NothingToStage,
+    /// The editor exited with an error, so the message was kept as it was.
+    EditingMessageCancelled,
     /// The selection has no added or removed lines.
     NoChangedLinesSelected,
     /// An untracked file was deleted.

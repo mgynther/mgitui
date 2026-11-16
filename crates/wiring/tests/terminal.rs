@@ -378,8 +378,25 @@ mod pty {
     }
 
     #[test]
-    fn vim_failing_is_shown() {
-        let vim: &str = "echo from-vim\nexit 1";
+    fn vim_exiting_with_an_error_keeps_the_message() {
+        // As `:cq` after typing: the edit is thrown away.
+        let vim: &str = "printf 'From vim\\n' >> \"$1\"\necho from-vim\nexit 1";
+        let mut session: Session = Session::start(repository(), &[("vim", vim)]);
+        let mut shown: usize = session.wait_for("first commit", 0);
+        session.press(b"\x1bOQ");
+        shown = session.wait_for("Commit message", shown);
+        session.press(b"e");
+        session.wait_for("Editing the message was cancelled", shown);
+        assert!(!session.frame().contains("From vim"));
+        session.press(b"qy");
+        let finished: Finished = session.finish();
+        assert_eq!(finished.code, "0");
+        assert_handed_over_on_a_blank_alternate_screen(&finished, "from-vim");
+    }
+
+    #[test]
+    fn vim_ended_by_a_signal_is_shown() {
+        let vim: &str = "kill -9 $$";
         let mut session: Session = Session::start(repository(), &[("vim", vim)]);
         let mut shown: usize = session.wait_for("first commit", 0);
         session.press(b"\x1bOQ");
@@ -387,9 +404,7 @@ mod pty {
         session.press(b"e");
         session.wait_for("Editing the message failed, see the Log view", shown);
         session.press(b"qy");
-        let finished: Finished = session.finish();
-        assert_eq!(finished.code, "0");
-        assert_handed_over_on_a_blank_alternate_screen(&finished, "from-vim");
+        assert_eq!(session.finish().code, "0");
     }
 
     #[test]

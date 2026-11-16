@@ -188,6 +188,7 @@ fn ui_info(info: &logic::note::Info) -> ui::status::Info {
         I::OnlyWholeFilesCanBeStagedHere => U::OnlyWholeFilesCanBeStagedHere,
         I::OnlyUnstagedChangesCanBeDiscarded => U::OnlyUnstagedChangesCanBeDiscarded,
         I::NothingToStage => U::NothingToStage,
+        I::EditingMessageCancelled => U::EditingMessageCancelled,
         I::NoChangedLinesSelected => U::NoChangedLinesSelected,
         I::DeletedFile { path } => U::DeletedFile { path: path.clone() },
         I::DiscardedChanges { path } => U::DiscardedChanges { path: path.clone() },

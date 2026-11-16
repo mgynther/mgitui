@@ -8,7 +8,7 @@ use crate::model::{
     WorkStatus,
 };
 use crate::note::{BranchNameProblem, InputProblem};
-use crate::ports::{BranchName, CommitMessage, Failed, Ports, SearchText};
+use crate::ports::{BranchName, CommitMessage, EditedMessage, Failed, Ports, SearchText};
 
 /// Records calls as text and answers from its fields.
 #[expect(
@@ -36,6 +36,8 @@ pub struct TestPorts {
     pub last_message: Option<String>,
     /// What the editor appends to the text; `None` fails.
     pub editor_appends: Option<String>,
+    /// Whether the editor exits with an error, after appending `editor_appends`.
+    pub editor_exits_with_error: bool,
     /// Whether committing fails.
     pub commit_fails: bool,
     /// The whole history; `commits` returns chunks of it. `None` fails.
@@ -65,6 +67,7 @@ impl TestPorts {
             amended: Some(Vec::new()),
             last_message: Some("Last\n".to_string()),
             editor_appends: Some("edited\n".to_string()),
+            editor_exits_with_error: false,
             commit_fails: false,
             history: RefCell::new(Some(Vec::new())),
             refs: RefCell::new(Some(Refs {
@@ -292,11 +295,14 @@ impl Ports for TestPorts {
         self.last_message.clone().ok_or(Failed)
     }
 
-    fn edit_message(&self, text: &str) -> Result<String, Failed> {
+    fn edit_message(&self, text: &str) -> Result<EditedMessage, Failed> {
         self.calls.borrow_mut().push(format!("edit {text:?}"));
         self.editor_appends
             .as_ref()
-            .map(|added: &String| format!("{text}{added}"))
+            .map(|added: &String| EditedMessage {
+                text: format!("{text}{added}"),
+                editor_succeeded: !self.editor_exits_with_error,
+            })
             .ok_or(Failed)
     }
 

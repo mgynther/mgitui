@@ -16,6 +16,15 @@ pub struct BranchName(pub String);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommitMessage(pub String);
 
+/// The message after the editor exited.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EditedMessage {
+    /// The edited text, also when the editor exited with an error.
+    pub text: String,
+    /// Whether the editor exited successfully. Vim exits with an error on `:cq`.
+    pub editor_succeeded: bool,
+}
+
 /// A failure that was already logged by the layer where it happened.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Failed;
@@ -150,8 +159,8 @@ pub trait Ports {
     ///
     /// # Errors
     ///
-    /// Fails when the editor cannot be run.
-    fn edit_message(&self, text: &str) -> Result<String, Failed>;
+    /// Fails when the editor cannot be run or is ended by a signal.
+    fn edit_message(&self, text: &str) -> Result<EditedMessage, Failed>;
 
     /// Validates a commit message.
     ///

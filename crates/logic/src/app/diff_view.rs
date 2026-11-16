@@ -11,7 +11,7 @@ use crate::model::{
 };
 use crate::note::{Info, Note, Operation, Problem};
 use crate::patch::{LineRef, build_patch};
-use crate::ports::{Failed, Ports};
+use crate::ports::{EditedMessage, Failed, Ports};
 use crate::search::{self, Direction, Found};
 
 /// Which pane of the Diff view has focus.
@@ -453,7 +453,21 @@ impl App {
     fn edit_message(&mut self, ports: &dyn Ports) {
         ports.log(LogLevel::Info, "edit commit message");
         match ports.edit_message(self.diff.message()) {
-            Ok(text) => *self.diff.message_mut() = text,
+            Ok(EditedMessage {
+                text,
+                editor_succeeded: true,
+            }) => *self.diff.message_mut() = text,
+            // Like git, which aborts the commit when its editor exits with an error.
+            Ok(EditedMessage {
+                editor_succeeded: false,
+                ..
+            }) => {
+                ports.log(
+                    LogLevel::Info,
+                    "the editor exited with an error; keeping the message",
+                );
+                self.note = Note::Info(Info::EditingMessageCancelled);
+            }
             Err(Failed) => {
                 self.note = Note::Problem(Problem::Failed(Operation::EditingMessage));
             }

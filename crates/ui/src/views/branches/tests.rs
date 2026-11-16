@@ -88,6 +88,7 @@ fn commit_row_with_graph_labels_author_and_date() {
                 branch: "main".to_string(),
             },
             LabelView::Tag("v1".to_string()),
+            LabelView::RebaseHead,
         ],
         true,
         true,
@@ -95,21 +96,24 @@ fn commit_row_with_graph_labels_author_and_date() {
     let buffer: Buffer = draw(&view(BranchesFocus::Graph, vec![commit]));
     let text: String = buffer.row_text(2);
     assert!(
-        text.starts_with("◉─╮  [main] [origin/main] <v1> Subject"),
+        text.starts_with("◉─╮  [main] [origin/main] <v1> (REBASE_HEAD) Subject"),
         "{text}"
     );
     assert!(
         text.ends_with("Ada Author         2025-01-02 03:04"),
         "{text}"
     );
-    assert_eq!(buffer.cell(0, 2).unwrap().style.fg, Color::Blue);
+    assert_eq!(buffer.cell(0, 2).unwrap().style.fg, Color::Yellow);
     assert_eq!(buffer.cell(1, 2).unwrap().style.fg, Color::Magenta);
+    assert_eq!(buffer.cell(2, 2).unwrap().style.fg, Color::Magenta);
     assert!(buffer.cell(0, 2).unwrap().style.reverse);
     assert!(buffer.cell(6, 2).unwrap().style.bold);
     assert_eq!(buffer.cell(6, 2).unwrap().style.fg, Color::Green);
     assert_eq!(buffer.cell(14, 2).unwrap().style.fg, Color::Orange);
     assert_eq!(buffer.cell(21, 2).unwrap().style.fg, Color::Green);
     assert_eq!(buffer.cell(27, 2).unwrap().style.fg, Color::Yellow);
+    assert_eq!(buffer.cell(32, 2).unwrap().style.fg, Color::Red);
+    assert!(buffer.cell(32, 2).unwrap().style.bold);
 }
 
 #[test]
@@ -129,6 +133,7 @@ fn unfocused_selection_is_bold_and_other_panes_are_drawn() {
     assert!(buffer.cell(3, 2).unwrap().style.bold);
     assert!(!buffer.cell(3, 2).unwrap().style.reverse);
     assert!(buffer.row_text(3).starts_with("●  [dev] Subject"));
+    assert_eq!(buffer.cell(0, 3).unwrap().style.fg, Color::Blue);
     assert!(!buffer.cell(3, 3).unwrap().style.bold);
     assert!(buffer.row_text(10).starts_with("─ Commit ─"));
     assert!(buffer.row_text(11).starts_with("commit abc"));
@@ -189,6 +194,7 @@ fn glyphs_and_lane_colors() {
         assert_eq!(glyph(shape, false), expected);
     }
     assert_eq!(glyph(GraphShape::Commit, true), '◉');
-    assert_eq!(lane_color(6), Color::Blue);
-    assert_eq!(lane_color(5), Color::Red);
+    assert_eq!(lane_color(5), Color::Blue);
+    assert_eq!(lane_color(4), Color::Red);
+    assert_eq!(lane_color(3), Color::Green);
 }

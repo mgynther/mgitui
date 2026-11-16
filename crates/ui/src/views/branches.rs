@@ -11,15 +11,16 @@ use crate::views::file_list::{self, FileRow};
 const DATE_WIDTH: usize = 16;
 /// Width of the author column.
 const AUTHOR_WIDTH: usize = 18;
-/// Colors of the lanes, used in turn.
-const LANE_COLORS: [Color; 6] = [
+/// Colors of the lanes, used in turn. Yellow is left out: it marks the `HEAD` commit.
+const LANE_COLORS: [Color; 5] = [
     Color::Blue,
     Color::Magenta,
     Color::Cyan,
-    Color::Yellow,
     Color::Green,
     Color::Red,
 ];
+/// Color of the `HEAD` commit's dot, as in gitk. During a rebase it shows where git stopped.
+const HEAD_COLOR: Color = Color::Yellow;
 
 /// Which side of a cell the commit of the row is on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,6 +82,8 @@ pub enum LabelView {
     },
     /// A tag.
     Tag(String),
+    /// The commit a stopped rebase was applying.
+    RebaseHead,
 }
 
 /// The information about the selected commit shown in the commit box.
@@ -264,7 +267,12 @@ fn draw_graph(
     };
     let mut column: usize = x;
     for cell in row.cells.iter().take(fits) {
-        let style: Style = Style::fg(lane_color(cell.lane)).reversed_if(reverse);
+        let color: Color = if row.head && cell.shape == GraphShape::Commit {
+            HEAD_COLOR
+        } else {
+            lane_color(cell.lane)
+        };
+        let style: Style = Style::fg(color).reversed_if(reverse);
         buffer.set(column, y, glyph(cell.shape, row.head), style);
         let (link, link_style): (char, Style) = match cell.link_right {
             Some(lane) => ('─', Style::fg(lane_color(lane)).reversed_if(reverse)),
@@ -306,6 +314,10 @@ fn draw_label(
         LabelView::Tag(name) => vec![(
             format!("<{name}>"),
             Style::fg(Color::Yellow).reversed_if(reverse),
+        )],
+        LabelView::RebaseHead => vec![(
+            "(REBASE_HEAD)".to_string(),
+            Style::fg(Color::Red).bold().reversed_if(reverse),
         )],
     };
     let mut used: usize = 0;

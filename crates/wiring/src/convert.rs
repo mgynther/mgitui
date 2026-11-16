@@ -238,6 +238,7 @@ fn ui_operation(operation: logic::note::Operation) -> ui::status::Operation {
         O::ShowingCommit => U::ShowingCommit,
         O::ReadingStatus => U::ReadingStatus,
         O::ReadingBranches => U::ReadingBranches,
+        O::CheckingConflictMarkers => U::CheckingConflictMarkers,
         O::ResettingBranch => U::ResettingBranch,
         O::CherryPicking => U::CherryPicking,
         O::ReloadingChanges => U::ReloadingChanges,
@@ -296,6 +297,9 @@ fn question(confirmation: &Confirmation) -> ui::status::Question {
             path: file.path.clone(),
         },
         Confirmation::DiscardChanges { file } => Question::DiscardChanges {
+            path: file.path.clone(),
+        },
+        Confirmation::StageWithConflictMarkers { file } => Question::StageWithConflictMarkers {
             path: file.path.clone(),
         },
     }
@@ -474,6 +478,7 @@ fn label_view(label: &Label) -> ui::views::branches::LabelView {
             branch: branch.clone(),
         },
         Label::Tag { name } => LabelView::Tag(name.clone()),
+        Label::RebaseHead => LabelView::RebaseHead,
     }
 }
 

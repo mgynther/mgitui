@@ -80,6 +80,13 @@ pub trait Ports {
     /// Fails when git fails.
     fn stage_paths(&self, paths: &[String]) -> Result<(), Failed>;
 
+    /// Whether file `path` still has the markers git writes into a conflicted file.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the file exists but cannot be read.
+    fn has_conflict_markers(&self, path: &str) -> Result<bool, Failed>;
+
     /// Stages all changes in the working tree, including deletions and untracked files.
     ///
     /// # Errors

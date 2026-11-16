@@ -81,6 +81,12 @@ impl logic::ports::Ports for SessionPorts<'_> {
         self.git.add(paths, &self.log_git()).map_err(|_| Failed)
     }
 
+    fn has_conflict_markers(&self, path: &str) -> Result<bool, Failed> {
+        self.git
+            .has_conflict_markers(path, &self.log_git())
+            .map_err(|_| Failed)
+    }
+
     fn stage_all(&self) -> Result<(), Failed> {
         self.git.add_all(&self.log_git()).map_err(|_| Failed)
     }
@@ -184,7 +190,11 @@ impl logic::ports::Ports for SessionPorts<'_> {
             .and_then(|refs: Vec<git::Ref>| {
                 self.git
                     .head(&self.log_git())
-                    .map(|head: Option<String>| model::refs(refs, head))
+                    .and_then(|head: Option<String>| {
+                        self.git
+                            .rebase_head(&self.log_git())
+                            .map(|rebase_head: Option<String>| model::refs(refs, head, rebase_head))
+                    })
             })
             .map_err(|_| Failed)
     }

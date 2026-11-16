@@ -545,6 +545,23 @@ fn a_rebase_stopped_by_a_conflict_says_so() {
         "The rebase stopped: finish or abort it outside mgitui"
     );
     assert!(dir.path().join(".git/rebase-merge").is_dir());
+    let screen: ui::buffer::Buffer = s.render(SIZE);
+    let rows: Vec<String> = (2..10).map(|y: usize| screen.row_text(y)).collect();
+    assert!(
+        rows.iter()
+            .any(|row: &String| row.contains("[topic] (REBASE_HEAD) topic work")),
+        "{rows:?}"
+    );
+    // Staging the conflicted file asks while it has markers, and marks it resolved.
+    s.input(b"\x1bOQ\r");
+    assert_eq!(
+        s.render(SIZE).row_text(23).trim_end(),
+        "a.txt still has conflict markers. Stage anyway? y/n"
+    );
+    s.input(b"n");
+    std::fs::write(dir.path().join("a.txt"), "resolved\n").unwrap();
+    s.input(b"\r");
+    assert_eq!(git_ok(dir.path(), &["status", "--porcelain"]), "M  a.txt\n");
 }
 
 #[test]

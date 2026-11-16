@@ -67,6 +67,11 @@ pub enum Confirmation {
         /// Whether the branch is checked out, so that the working tree moves with it.
         checked_out: bool,
     },
+    /// Staging a conflicted file that still has conflict markers, which marks it resolved.
+    StageWithConflictMarkers {
+        /// The file in the unstaged list.
+        file: ChangedFile,
+    },
     /// Deleting an untracked file.
     DeleteUntracked {
         /// The file in the unstaged list.
@@ -297,6 +302,9 @@ impl App {
                         }
                         Confirmation::DiscardChanges { file } => {
                             self.discard_changes(&file, ports);
+                        }
+                        Confirmation::StageWithConflictMarkers { file } => {
+                            self.stage_file(&file, ports);
                         }
                     }
                 }

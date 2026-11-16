@@ -262,6 +262,8 @@ pub enum Label {
         /// The tag name.
         name: String,
     },
+    /// The commit a stopped rebase was applying, for example the one that conflicted.
+    RebaseHead,
 }
 
 /// All labels and the commit `HEAD` points to.

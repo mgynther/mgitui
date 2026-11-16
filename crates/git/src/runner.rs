@@ -53,6 +53,8 @@ pub enum GitError {
     },
     /// The output could not be parsed.
     Parse(String),
+    /// A file in the working tree could not be read.
+    Read(String),
 }
 
 impl fmt::Display for GitError {
@@ -64,6 +66,7 @@ impl fmt::Display for GitError {
             } => write!(f, "git failed with exit code {code}"),
             GitError::Failed { code: None, .. } => write!(f, "git was stopped by a signal"),
             GitError::Parse(reason) => write!(f, "could not parse git output: {reason}"),
+            GitError::Read(reason) => write!(f, "could not read a file: {reason}"),
         }
     }
 }
@@ -510,7 +513,7 @@ mod tests {
 
     #[test]
     fn error_messages() {
-        let cases: [(GitError, &str); 4] = [
+        let cases: [(GitError, &str); 5] = [
             (GitError::Spawn("no".to_string()), "could not run git: no"),
             (
                 GitError::Failed {
@@ -529,6 +532,10 @@ mod tests {
             (
                 GitError::Parse("bad".to_string()),
                 "could not parse git output: bad",
+            ),
+            (
+                GitError::Read("gone".to_string()),
+                "could not read a file: gone",
             ),
         ];
         for (error, message) in cases {

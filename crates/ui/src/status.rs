@@ -63,6 +63,11 @@ pub enum Question {
         /// The file's path.
         path: String,
     },
+    /// Whether to stage a conflicted file that still has conflict markers.
+    StageWithConflictMarkers {
+        /// The file's path.
+        path: String,
+    },
 }
 
 /// Information shown in the status line.
@@ -226,6 +231,8 @@ pub enum Operation {
     ReadingStatus,
     /// Reading the branches, to check whether a branch exists.
     ReadingBranches,
+    /// Checking a conflicted file for conflict markers before staging it.
+    CheckingConflictMarkers,
     /// Resetting a branch to a commit.
     ResettingBranch,
     /// Cherry-picking a commit.
@@ -335,6 +342,9 @@ pub fn question_label(question: &Question) -> String {
         }
         Question::DeleteUntracked { path } => format!("Delete untracked file {path}? y/n"),
         Question::DiscardChanges { path } => format!("Discard unstaged changes in {path}? y/n"),
+        Question::StageWithConflictMarkers { path } => {
+            format!("{path} still has conflict markers. Stage anyway? y/n")
+        }
     }
 }
 
@@ -405,7 +415,7 @@ pub fn problem_text(problem: &Problem) -> String {
             "The rebase stopped: finish or abort it outside mgitui".to_string()
         }
         Problem::MergeConflict { path } => {
-            format!("{path} has a merge conflict; resolve it outside mgitui")
+            format!("{path} has a merge conflict: resolve it, then stage the whole file")
         }
         Problem::MergeConflictsBeforeStagingAll => {
             "Resolve merge conflicts outside mgitui before staging all".to_string()
@@ -433,6 +443,9 @@ fn failure_text(operation: Operation) -> &'static str {
         Operation::ShowingCommit => "Showing the commit failed, see the Log view",
         Operation::ReadingStatus => "Reading the status failed, see the Log view",
         Operation::ReadingBranches => "Reading the branches failed, see the Log view",
+        Operation::CheckingConflictMarkers => {
+            "Checking for conflict markers failed, see the Log view"
+        }
         Operation::ResettingBranch => "Resetting the branch failed, see the Log view",
         Operation::CherryPicking => "Cherry-picking failed, see the Log view",
         Operation::ReloadingChanges => "Reloading changes failed, see the Log view",
@@ -638,7 +651,7 @@ mod tests {
             ),
             (
                 Problem::MergeConflict { path: s("c") },
-                "c has a merge conflict; resolve it outside mgitui",
+                "c has a merge conflict: resolve it, then stage the whole file",
             ),
             (
                 Problem::MergeConflictsBeforeStagingAll,
@@ -664,7 +677,7 @@ mod tests {
 
     #[test]
     fn failure_texts() {
-        let cases: [(Operation, &str); 22] = [
+        let cases: [(Operation, &str); 23] = [
             (
                 Operation::ReloadingCommits,
                 "Reloading commits failed, see the Log view",
@@ -716,6 +729,10 @@ mod tests {
             (
                 Operation::ReadingBranches,
                 "Reading the branches failed, see the Log view",
+            ),
+            (
+                Operation::CheckingConflictMarkers,
+                "Checking for conflict markers failed, see the Log view",
             ),
             (
                 Operation::ResettingBranch,
@@ -856,7 +873,7 @@ mod tests {
 
     #[test]
     fn question_labels() {
-        let cases: [(Question, &str); 7] = [
+        let cases: [(Question, &str); 8] = [
             (Question::Quit, "Quit? y/n"),
             (
                 Question::DeleteBranch {
@@ -896,6 +913,12 @@ mod tests {
                     path: "a.txt".to_string(),
                 },
                 "Discard unstaged changes in a.txt? y/n",
+            ),
+            (
+                Question::StageWithConflictMarkers {
+                    path: "c.txt".to_string(),
+                },
+                "c.txt still has conflict markers. Stage anyway? y/n",
             ),
         ];
         for (question, label) in cases {

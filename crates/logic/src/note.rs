@@ -175,6 +175,8 @@ pub enum Operation {
     ReadingStatus,
     /// Reading the branches, to check whether a branch exists.
     ReadingBranches,
+    /// Checking a conflicted file for conflict markers before staging it.
+    CheckingConflictMarkers,
     /// Resetting a branch to a commit.
     ResettingBranch,
     /// Cherry-picking a commit.

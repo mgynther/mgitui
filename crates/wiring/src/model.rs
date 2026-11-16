@@ -132,9 +132,10 @@ pub fn commit(commit: git::Commit) -> Commit {
     }
 }
 
-/// The logic refs for git refs and the `HEAD` commit.
+/// The logic refs for git refs, the `HEAD` commit, and the commit a stopped rebase was
+/// applying, which gets a label of its own.
 #[must_use]
-pub fn refs(refs: Vec<git::Ref>, head: Option<String>) -> Refs {
+pub fn refs(refs: Vec<git::Ref>, head: Option<String>, rebase_head: Option<String>) -> Refs {
     Refs {
         labels: refs
             .into_iter()
@@ -149,6 +150,7 @@ pub fn refs(refs: Vec<git::Ref>, head: Option<String>) -> Refs {
                 };
                 (r.target, label)
             })
+            .chain(rebase_head.map(|hash: String| (hash, Label::RebaseHead)))
             .collect(),
         head,
     }
@@ -316,6 +318,7 @@ mod tests {
                 git_ref(git::RefKind::Tag("v1".to_string())),
             ],
             Some("t".to_string()),
+            Some("r".to_string()),
         );
         assert_eq!(converted_refs.head, Some("t".to_string()));
         assert_eq!(
@@ -341,7 +344,15 @@ mod tests {
                         name: "v1".to_string()
                     }
                 ),
+                ("r".to_string(), Label::RebaseHead),
             ]
+        );
+        assert_eq!(
+            refs(vec![], None, None),
+            logic::model::Refs {
+                labels: vec![],
+                head: None
+            }
         );
     }
 

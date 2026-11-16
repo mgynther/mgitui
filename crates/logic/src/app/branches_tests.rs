@@ -191,6 +191,7 @@ fn search_by_branch_and_tag_names() {
                     name: "v1.2".to_string(),
                 },
             ),
+            label("c3", Label::RebaseHead),
         ],
         head: None,
     });
@@ -237,6 +238,7 @@ fn next_main_branch_cycles_through_exact_main_and_master_names() {
                 },
             ),
             local("c6", "Main"),
+            ("c6".to_string(), Label::RebaseHead),
             remote("c5", "origin", "master"),
             remote("c4", "origin", "feature/main"),
             remote("c3", "upstream", "main"),

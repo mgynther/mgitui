@@ -89,6 +89,17 @@ impl Git {
         let hash: &str = output.stdout.trim();
         Ok((output.code == 0 && !hash.is_empty()).then(|| hash.to_string()))
     }
+
+    /// The commit a stopped rebase was applying, or `None` when no rebase is stopped.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    pub fn rebase_head(&self, log: &Log<'_>) -> Result<Option<String>, GitError> {
+        let output: Output = self.run(&Command::RebaseHead, None, log)?;
+        let hash: &str = output.stdout.trim();
+        Ok((output.code == 0 && !hash.is_empty()).then(|| hash.to_string()))
+    }
 }
 
 impl Git {

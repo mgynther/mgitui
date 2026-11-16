@@ -152,6 +152,45 @@ fn checkout_the_only_local_branch() {
 }
 
 #[test]
+fn the_rebase_head_label_is_no_branch() {
+    let ports: TestPorts = rebase_ports(vec![local("topic"), Label::RebaseHead]);
+    let mut app: App = loaded_app(&ports);
+    run(&mut app, &ports, &[Event::Checkout]);
+    assert_eq!(
+        actions(&ports),
+        vec!["Info: check out topic", "checkout topic"]
+    );
+    run(&mut app, &ports, &[Event::DeleteBranch]);
+    assert_eq!(
+        app.mode(),
+        &Mode::Confirm(Confirmation::DeleteBranch {
+            name: "topic".to_string()
+        })
+    );
+    run(&mut app, &ports, &[Event::No, Event::Rebase]);
+    assert!(matches!(
+        app.mode(),
+        Mode::Prompt(Prompt {
+            kind: PromptKind::RebaseOnto { .. },
+            ..
+        })
+    ));
+    run(&mut app, &ports, &[Event::InputCancel, Event::ResetBranch]);
+    assert_eq!(
+        app.note(),
+        &Note::Problem(Problem::NoBranchCheckedOutToReset)
+    );
+    ports.clear();
+    run(&mut app, &ports, &[Event::CreateBranch]);
+    typed(&mut app, &ports, "new");
+    run(&mut app, &ports, &[Event::InputSubmit]);
+    assert_eq!(
+        actions(&ports),
+        vec!["Info: create branch new at c2", "create new at c2"]
+    );
+}
+
+#[test]
 fn checkout_without_local_branch_is_refused() {
     let ports: TestPorts = labelled_ports(vec![Label::Tag {
         name: "v1".to_string(),

@@ -172,20 +172,82 @@ fn enter_on_empty_list_does_nothing() {
 }
 
 #[test]
-fn conflicts_are_refused_and_logged() {
+fn line_staging_is_refused_on_conflicts_and_logged() {
     let ports: TestPorts = ports_with(vec![file("c", ChangeKind::Conflict)], vec![]);
     let mut app: App = app(&ports);
-    run(&mut app, &ports, &[Event::Activate]);
-    let message: &str = "c has a merge conflict; resolve it outside mgitui";
-    assert_eq!(ports.calls(), vec![format!("Info: {message}")]);
+    run(&mut app, &ports, &[Event::NextPane, Event::StartSelection]);
+    assert_eq!(app.diff().selection(), None);
+    let message: &str = "c has a merge conflict: resolve it, then stage the whole file";
+    assert!(ports.calls().contains(&format!("Info: {message}")));
     assert_eq!(
         app.note(),
         &Note::Problem(Problem::MergeConflict {
             path: "c".to_string()
         })
     );
-    run(&mut app, &ports, &[Event::NextPane, Event::StartSelection]);
-    assert_eq!(app.diff().selection(), None);
+}
+
+#[test]
+fn enter_stages_a_resolved_conflict() {
+    let ports: TestPorts = TestPorts {
+        conflict_markers: Some(false),
+        ..ports_with(vec![file("c", ChangeKind::Conflict)], vec![])
+    };
+    let mut app: App = app(&ports);
+    run(&mut app, &ports, &[Event::Activate]);
+    assert_eq!(
+        ports.calls()[..3],
+        ["markers? c", "Info: stage c", "stage c"]
+    );
+    assert_eq!(app.note(), &Note::None);
+}
+
+#[test]
+fn staging_a_conflict_with_markers_asks_first() {
+    let ports: TestPorts = TestPorts {
+        conflict_markers: Some(true),
+        ..ports_with(vec![file("c", ChangeKind::Conflict)], vec![])
+    };
+    let mut app: App = app(&ports);
+    run(&mut app, &ports, &[Event::Activate]);
+    let asking: Mode = Mode::Confirm(Confirmation::StageWithConflictMarkers {
+        file: file("c", ChangeKind::Conflict),
+    });
+    assert_eq!(app.mode(), &asking);
+    assert_eq!(
+        ports.calls(),
+        vec!["markers? c", "Info: c still has conflict markers"]
+    );
+    run(&mut app, &ports, &[Event::No]);
+    assert_eq!(app.mode(), &Mode::Normal);
+    assert!(!ports.calls().contains(&"stage c".to_string()));
+    ports.clear();
+    run(&mut app, &ports, &[Event::Activate, Event::Yes]);
+    assert_eq!(
+        ports.calls()[..4],
+        [
+            "markers? c",
+            "Info: c still has conflict markers",
+            "Info: stage c",
+            "stage c"
+        ]
+    );
+}
+
+#[test]
+fn a_failing_conflict_marker_check_stages_nothing() {
+    let ports: TestPorts = TestPorts {
+        conflict_markers: None,
+        ..ports_with(vec![file("c", ChangeKind::Conflict)], vec![])
+    };
+    let mut app: App = app(&ports);
+    run(&mut app, &ports, &[Event::Activate]);
+    assert_eq!(ports.calls(), vec!["markers? c"]);
+    assert_eq!(app.mode(), &Mode::Normal);
+    assert_eq!(
+        app.note(),
+        &Note::Problem(Problem::Failed(Operation::CheckingConflictMarkers))
+    );
 }
 
 #[test]
@@ -371,7 +433,7 @@ fn d_is_refused_on_staged_conflicted_and_missing_files_and_in_the_diff() {
     assert_eq!(app.mode(), &Mode::Normal);
     assert_eq!(
         ports.calls(),
-        vec!["Info: c has a merge conflict; resolve it outside mgitui"]
+        vec!["Info: c has a merge conflict: resolve it, then stage the whole file"]
     );
     run(&mut app, &ports, &[Event::SwitchList, Event::DiscardFile]);
     assert_eq!(app.mode(), &Mode::Normal);

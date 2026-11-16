@@ -297,6 +297,18 @@ fn branch_validation_creation_and_checkout() {
 }
 
 #[test]
+fn conflict_markers_are_checked_in_the_repository() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    std::fs::write(dir.path().join("c.txt"), "<<<<<<< HEAD\n").unwrap();
+    std::fs::create_dir(dir.path().join("sub")).unwrap();
+    with_ports(dir.path(), |ports: &SessionPorts<'_>, _: &LogBuffer| {
+        assert_eq!(ports.has_conflict_markers("c.txt"), Ok(true));
+        assert_eq!(ports.has_conflict_markers("sub"), Err(Failed));
+    });
+}
+
+#[test]
 fn interactive_rebase_hands_the_terminal_to_git() {
     let dir: TempDir = TempDir::new();
     init_repo(dir.path());

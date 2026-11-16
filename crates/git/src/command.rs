@@ -55,6 +55,10 @@ pub enum Command {
     },
     /// `git rev-parse --verify HEAD`: whether there is a commit yet. Exit code 1 means no.
     HasHead,
+    /// `git rev-parse --verify REBASE_HEAD`: the commit a stopped rebase was applying, which
+    /// git sets on a conflict or an `edit` and removes when the rebase ends. Exit code 1
+    /// means no rebase is stopped.
+    RebaseHead,
     /// `git restore --staged`: unstages the paths.
     RestoreStaged {
         /// The paths.
@@ -202,6 +206,7 @@ impl Command {
             Command::Add { .. } => &["add", "-A", "--"],
             Command::AddAll => &["add", "-A"],
             Command::HasHead => &["rev-parse", "--verify", "-q", "HEAD"],
+            Command::RebaseHead => &["rev-parse", "--verify", "-q", "REBASE_HEAD"],
             Command::HasParent => &["rev-parse", "--verify", "-q", "HEAD^"],
             Command::EmptyTree => &["hash-object", "-t", "tree", "/dev/null"],
             Command::StagedSince { .. } => &["diff", "--cached", "--name-status", "-z", "-M"],
@@ -315,6 +320,7 @@ impl Command {
             Command::ShowToplevel
             | Command::Status
             | Command::HasHead
+            | Command::RebaseHead
             | Command::AddAll
             | Command::HasParent
             | Command::EmptyTree
@@ -347,6 +353,7 @@ impl Command {
         match self {
             Command::DiffUntracked { .. }
             | Command::HasHead
+            | Command::RebaseHead
             | Command::HasParent
             | Command::Rebase { .. }
             | Command::RebaseInteractive { .. } => &[0, 1],
@@ -404,6 +411,10 @@ mod tests {
         assert_eq!(args(&Command::AddAll), "add -A");
         assert_eq!(args(&Command::HasHead), "rev-parse --verify -q HEAD");
         assert_eq!(args(&Command::HasParent), "rev-parse --verify -q HEAD^");
+        assert_eq!(
+            args(&Command::RebaseHead),
+            "rev-parse --verify -q REBASE_HEAD"
+        );
         assert_eq!(
             args(&Command::RebaseStatePaths),
             "rev-parse --git-path rebase-merge --git-path rebase-apply"

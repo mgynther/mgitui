@@ -243,7 +243,7 @@ fn prompt_kinds_convert() {
 
 #[test]
 fn confirmations_become_questions() {
-    let cases: [(Confirmation, Question); 7] = [
+    let cases: [(Confirmation, Question); 8] = [
         (Confirmation::Quit, Question::Quit),
         (
             Confirmation::DeleteBranch {
@@ -299,6 +299,14 @@ fn confirmations_become_questions() {
             },
             Question::DiscardChanges {
                 path: "a.txt".to_string(),
+            },
+        ),
+        (
+            Confirmation::StageWithConflictMarkers {
+                file: changed("c.txt", ChangeKind::Conflict),
+            },
+            Question::StageWithConflictMarkers {
+                path: "c.txt".to_string(),
             },
         ),
     ];
@@ -530,7 +538,7 @@ fn problems_convert() {
 
 #[test]
 fn operations_convert() {
-    let cases: [(LOperation, UOperation); 22] = [
+    let cases: [(LOperation, UOperation); 23] = [
         (LOperation::ReloadingCommits, UOperation::ReloadingCommits),
         (LOperation::LoadingCommit, UOperation::LoadingCommit),
         (LOperation::LoadingDiff, UOperation::LoadingDiff),
@@ -550,6 +558,10 @@ fn operations_convert() {
         (LOperation::ShowingCommit, UOperation::ShowingCommit),
         (LOperation::ReadingStatus, UOperation::ReadingStatus),
         (LOperation::ReadingBranches, UOperation::ReadingBranches),
+        (
+            LOperation::CheckingConflictMarkers,
+            UOperation::CheckingConflictMarkers,
+        ),
         (LOperation::ResettingBranch, UOperation::ResettingBranch),
         (LOperation::CherryPicking, UOperation::CherryPicking),
         (LOperation::ReloadingChanges, UOperation::ReloadingChanges),
@@ -903,4 +915,5 @@ fn graph_cells_and_labels() {
         }),
         LabelView::Tag("v".to_string())
     );
+    assert_eq!(label_view(&Label::RebaseHead), LabelView::RebaseHead);
 }

@@ -287,13 +287,14 @@ impl App {
     }
 
     /// The selected file, unless it has a conflict: then the action is refused and logged.
+    /// Only staging the whole file works on a conflicted file.
     fn file_for_action(&mut self, ports: &dyn Ports) -> Option<ChangedFile> {
         let file: ChangedFile = self.diff.selected_file()?.clone();
         if file.kind == ChangeKind::Conflict {
             ports.log(
                 LogLevel::Info,
                 &format!(
-                    "{} has a merge conflict; resolve it outside mgitui",
+                    "{} has a merge conflict: resolve it, then stage the whole file",
                     file.path
                 ),
             );
@@ -315,19 +316,43 @@ impl App {
     }
 
     fn stage_whole_file(&mut self, ports: &dyn Ports) {
-        let Some(file) = self.file_for_action(ports) else {
+        let Some(file) = self.diff.selected_file().cloned() else {
             return;
         };
-        let result: Result<(), Failed> = match self.diff.side {
-            Side::Unstaged => {
-                ports.log(LogLevel::Info, &format!("stage {}", file.path));
-                ports.stage_paths(&file.paths(Side::Unstaged))
-            }
-            Side::Staged => {
+        match (self.diff.side, file.kind) {
+            (Side::Unstaged, ChangeKind::Conflict) => self.stage_resolved(file, ports),
+            (Side::Unstaged, _) => self.stage_file(&file, ports),
+            (Side::Staged, _) => {
                 ports.log(LogLevel::Info, &format!("unstage {}", file.path));
-                unstage_whole_file(&file, self.diff.amend_base, ports)
+                let result: Result<(), Failed> =
+                    unstage_whole_file(&file, self.diff.amend_base, ports);
+                self.after_staging(result, ports);
             }
-        };
+        }
+    }
+
+    /// Stages a conflicted file, which git takes as resolved. Asks first when the file still
+    /// has conflict markers: staging would mark it resolved, markers and all.
+    fn stage_resolved(&mut self, file: ChangedFile, ports: &dyn Ports) {
+        match ports.has_conflict_markers(&file.path) {
+            Ok(false) => self.stage_file(&file, ports),
+            Ok(true) => {
+                ports.log(
+                    LogLevel::Info,
+                    &format!("{} still has conflict markers", file.path),
+                );
+                self.mode = Mode::Confirm(Confirmation::StageWithConflictMarkers { file });
+            }
+            Err(Failed) => {
+                self.note = Note::Problem(Problem::Failed(Operation::CheckingConflictMarkers));
+            }
+        }
+    }
+
+    /// Stages all changes of `file` from the unstaged list.
+    pub(super) fn stage_file(&mut self, file: &ChangedFile, ports: &dyn Ports) {
+        ports.log(LogLevel::Info, &format!("stage {}", file.path));
+        let result: Result<(), Failed> = ports.stage_paths(&file.paths(Side::Unstaged));
         self.after_staging(result, ports);
     }
 

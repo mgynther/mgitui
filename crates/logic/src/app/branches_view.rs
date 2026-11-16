@@ -395,7 +395,7 @@ impl App {
             .iter()
             .filter_map(|label: &Label| match label {
                 Label::Local { name, .. } => Some(name.clone()),
-                Label::Remote { .. } | Label::Tag { .. } => None,
+                Label::Remote { .. } | Label::Tag { .. } | Label::RebaseHead => None,
             })
             .collect()
     }
@@ -451,7 +451,10 @@ impl App {
             .iter()
             .filter_map(|label: &Label| match label {
                 Label::Local { name, head: false } => Some(name.clone()),
-                Label::Local { .. } | Label::Remote { .. } | Label::Tag { .. } => None,
+                Label::Local { .. }
+                | Label::Remote { .. }
+                | Label::Tag { .. }
+                | Label::RebaseHead => None,
             })
             .collect();
         match branches.as_slice() {
@@ -543,7 +546,10 @@ impl App {
                 } if !interactive && is_main(remote_branch) => {
                     Some((2, format!("{remote}/{remote_branch}")))
                 }
-                Label::Local { .. } | Label::Remote { .. } | Label::Tag { .. } => None,
+                Label::Local { .. }
+                | Label::Remote { .. }
+                | Label::Tag { .. }
+                | Label::RebaseHead => None,
             })
             .collect();
         onto.sort();
@@ -651,7 +657,10 @@ impl App {
             .flatten()
             .find_map(|label: &Label| match label {
                 Label::Local { name, head: true } => Some(name.clone()),
-                Label::Local { .. } | Label::Remote { .. } | Label::Tag { .. } => None,
+                Label::Local { .. }
+                | Label::Remote { .. }
+                | Label::Tag { .. }
+                | Label::RebaseHead => None,
             })
     }
 
@@ -814,6 +823,7 @@ fn label_matches(label: &Label, term: &str) -> bool {
         Label::Remote { remote, branch } => {
             search::text_matches(&format!("{remote}/{branch}"), term)
         }
+        Label::RebaseHead => false,
     }
 }
 
@@ -823,7 +833,7 @@ fn is_main_label(label: &Label) -> bool {
     match label {
         Label::Local { name, .. } => is_main(name),
         Label::Remote { branch, .. } => is_main(branch),
-        Label::Tag { .. } => false,
+        Label::Tag { .. } | Label::RebaseHead => false,
     }
 }
 
@@ -839,7 +849,9 @@ fn local_branch(refs: &Refs, name: &str) -> Option<(String, bool)> {
         .iter()
         .find_map(|(hash, label): &(String, Label)| match label {
             Label::Local { name: local, head } if local == name => Some((hash.clone(), *head)),
-            Label::Local { .. } | Label::Remote { .. } | Label::Tag { .. } => None,
+            Label::Local { .. } | Label::Remote { .. } | Label::Tag { .. } | Label::RebaseHead => {
+                None
+            }
         })
 }
 

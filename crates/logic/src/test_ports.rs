@@ -55,6 +55,8 @@ pub struct TestPorts {
     pub rebase_not_finished: bool,
     /// The answer to `rebase_in_progress`; `None` fails.
     pub rebase_in_progress: Option<bool>,
+    /// The answer to `has_conflict_markers`; `None` fails.
+    pub conflict_markers: Option<bool>,
 }
 
 impl TestPorts {
@@ -84,6 +86,7 @@ impl TestPorts {
             branch_fails: false,
             rebase_not_finished: false,
             rebase_in_progress: Some(false),
+            conflict_markers: Some(false),
         }
     }
 
@@ -252,6 +255,11 @@ impl Ports for TestPorts {
 
     fn stage_paths(&self, paths: &[String]) -> Result<(), Failed> {
         self.record(format!("stage {}", paths.join(" ")))
+    }
+
+    fn has_conflict_markers(&self, path: &str) -> Result<bool, Failed> {
+        self.calls.borrow_mut().push(format!("markers? {path}"));
+        self.conflict_markers.ok_or(Failed)
     }
 
     fn stage_all(&self) -> Result<(), Failed> {

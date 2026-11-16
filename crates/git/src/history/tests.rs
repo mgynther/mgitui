@@ -116,6 +116,26 @@ fn history_failures() {
     assert!(git.log(0, 1, &logged.log()).is_err());
     assert!(git.refs(&logged.log()).is_err());
     assert!(git.head(&logged.log()).is_err());
+    assert!(git.rebase_head(&logged.log()).is_err());
+}
+
+#[test]
+fn rebase_head_is_the_commit_a_stopped_rebase_was_applying() {
+    let repo: TestRepo = TestRepo::new();
+    let logged: Logged = Logged::new();
+    repo.write("a.txt", "base\n");
+    repo.git_ok(&["add", "."]);
+    repo.git_ok(&["commit", "-q", "-m", "base"]);
+    repo.git_ok(&["switch", "-q", "-c", "topic"]);
+    repo.write("a.txt", "topic\n");
+    repo.git_ok(&["commit", "-q", "-am", "topic"]);
+    let topic: String = repo.git_ok(&["rev-parse", "HEAD"]).trim().to_string();
+    repo.git_ok(&["switch", "-q", "main"]);
+    repo.write("a.txt", "main\n");
+    repo.git_ok(&["commit", "-q", "-am", "main"]);
+    assert_eq!(repo.git().rebase_head(&logged.log()), Ok(None));
+    assert!(repo.git().rebase("topic", "main", &logged.log()).is_ok());
+    assert_eq!(repo.git().rebase_head(&logged.log()), Ok(Some(topic)));
 }
 
 #[test]

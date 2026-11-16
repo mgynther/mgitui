@@ -1,7 +1,7 @@
 //! Staging and unstaging.
 
 use crate::command::Command;
-use crate::log::Log;
+use crate::log::{Log, LogLevel};
 use crate::runner::{Git, GitError, Output};
 
 impl Git {
@@ -112,8 +112,39 @@ impl Git {
     }
 }
 
+impl Git {
+    /// Whether file `path`, relative to the repository root, still has the conflict markers
+    /// git writes into a conflicted file: a line starting with `<<<<<<<` or `>>>>>>>`. The
+    /// `=======` between them is not looked for, because it also underlines headings in
+    /// Markdown. A missing file has none, as when one side of the conflict deleted it.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the file exists but cannot be read.
+    pub fn has_conflict_markers(&self, path: &str, log: &Log<'_>) -> Result<bool, GitError> {
+        match std::fs::read(self.dir().join(path)) {
+            Ok(content) => Ok(content.split(|byte: &u8| *byte == b'\n').any(is_marker)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(error) => {
+                log(LogLevel::Error, &format!("reading {path}: {error}"));
+                Err(GitError::Read(format!("{path}: {error}")))
+            }
+        }
+    }
+}
+
+/// Whether `line` starts a conflict's first or last marker: seven `<` or `>`, then a space,
+/// a carriage return or the end of the line.
+fn is_marker(line: &[u8]) -> bool {
+    [b"<<<<<<<", b">>>>>>>"].iter().any(|marker: &&[u8; 7]| {
+        line.strip_prefix(&marker[..])
+            .is_some_and(|rest: &[u8]| matches!(rest.first(), None | Some(b' ' | b'\r')))
+    })
+}
+
 #[cfg(test)]
 mod tests {
+    use super::is_marker;
     use crate::runner::GitError;
     use crate::status::{ChangeKind, Status};
     use crate::test_repo::{Logged, TestRepo};
@@ -259,5 +290,55 @@ mod tests {
         assert_eq!(logged.lines(), vec!["Info: git add -A (exit 0)"]);
         let missing: crate::runner::Git = repo.git().with_program("/nonexistent/git");
         assert!(missing.add_all(&logged.log()).is_err());
+    }
+
+    #[test]
+    fn conflict_marker_lines() {
+        let cases: [(&str, bool); 8] = [
+            ("<<<<<<< HEAD", true),
+            (">>>>>>> 9b0c2a9 (topic)", true),
+            ("<<<<<<<", true),
+            (">>>>>>>\r", true),
+            ("=======", false),
+            ("<<<<<<<<", false),
+            (" <<<<<<< indented", false),
+            ("text", false),
+        ];
+        for (line, marker) in cases {
+            assert_eq!(is_marker(line.as_bytes()), marker, "{line:?}");
+        }
+    }
+
+    #[test]
+    fn conflict_markers_in_files() {
+        let repo: TestRepo = TestRepo::new();
+        let logged: Logged = Logged::new();
+        repo.write(
+            "conflicted.txt",
+            "<<<<<<< HEAD\nmain\n=======\ntopic\n>>>>>>> t\n",
+        );
+        repo.write("resolved.md", "Title\n=======\n\ntext\n");
+        assert_eq!(
+            repo.git()
+                .has_conflict_markers("conflicted.txt", &logged.log()),
+            Ok(true)
+        );
+        assert_eq!(
+            repo.git()
+                .has_conflict_markers("resolved.md", &logged.log()),
+            Ok(false)
+        );
+        assert_eq!(
+            repo.git()
+                .has_conflict_markers("deleted.txt", &logged.log()),
+            Ok(false)
+        );
+        std::fs::create_dir(repo.path().join("dir")).unwrap();
+        assert!(matches!(
+            repo.git().has_conflict_markers("dir", &logged.log()),
+            Err(GitError::Read(_))
+        ));
+        assert_eq!(logged.lines().len(), 1);
+        assert!(logged.lines()[0].starts_with("Error: reading dir: "));
     }
 }

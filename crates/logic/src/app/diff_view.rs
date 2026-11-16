@@ -291,7 +291,7 @@ impl App {
         let file: ChangedFile = self.diff.selected_file()?.clone();
         if file.kind == ChangeKind::Conflict {
             ports.log(
-                LogLevel::Error,
+                LogLevel::Info,
                 &format!(
                     "{} has a merge conflict; resolve it outside mgitui",
                     file.path
@@ -345,7 +345,7 @@ impl App {
             .any(|file: &ChangedFile| file.kind == ChangeKind::Conflict)
         {
             ports.log(
-                LogLevel::Error,
+                LogLevel::Info,
                 "Resolve merge conflicts outside mgitui before staging all",
             );
             self.note = Note::Problem(Problem::MergeConflictsBeforeStagingAll);
@@ -471,7 +471,7 @@ impl App {
         }
         match ports.has_commits() {
             Ok(false) => {
-                ports.log(LogLevel::Warn, "Nothing to amend: there are no commits yet");
+                ports.log(LogLevel::Info, "Nothing to amend: there are no commits yet");
                 self.note = Note::Problem(Problem::NothingToAmend);
             }
             Ok(true) => match ports.last_commit_message() {
@@ -495,7 +495,7 @@ impl App {
     fn commit(&mut self, ports: &dyn Ports) {
         if self.diff.amend && self.diff.status.staged.is_empty() {
             ports.log(
-                LogLevel::Error,
+                LogLevel::Info,
                 "The amended commit would be empty: stage changes first",
             );
             self.note = Note::Problem(Problem::AmendedCommitWouldBeEmpty);

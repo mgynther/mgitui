@@ -356,7 +356,7 @@ impl App {
         match branches.as_slice() {
             [] => {
                 ports.log(
-                    LogLevel::Error,
+                    LogLevel::Info,
                     "No local branch at this commit to check out",
                 );
                 self.note = Note::Problem(Problem::NoLocalBranchToCheckOut);
@@ -418,7 +418,7 @@ impl App {
                         "No local branch at this commit to delete",
                     )
                 };
-                ports.log(LogLevel::Error, message);
+                ports.log(LogLevel::Info, message);
                 self.note = Note::Problem(problem);
             }
             [branch] => self.confirm_delete_branch(branch.clone()),
@@ -447,7 +447,7 @@ impl App {
         let branches: Vec<String> = self.local_branches();
         match branches.as_slice() {
             [] => {
-                ports.log(LogLevel::Error, "No local branch at this commit to rebase");
+                ports.log(LogLevel::Info, "No local branch at this commit to rebase");
                 self.note = Note::Problem(Problem::NoLocalBranchToRebase);
             }
             [branch] => self.ask_rebase_onto(branch.clone(), interactive),
@@ -603,7 +603,7 @@ impl App {
             return;
         };
         let Some(branch) = self.checked_out_branch() else {
-            ports.log(LogLevel::Error, "No branch is checked out to reset");
+            ports.log(LogLevel::Info, "No branch is checked out to reset");
             self.note = Note::Problem(Problem::NoBranchCheckedOutToReset);
             return;
         };
@@ -611,7 +611,7 @@ impl App {
         match status {
             Ok(status) if status.has_tracked_changes() => {
                 ports.log(
-                    LogLevel::Error,
+                    LogLevel::Info,
                     "Commit or discard uncommitted changes before resetting",
                 );
                 self.note = Note::Problem(Problem::UncommittedChangesBeforeReset);

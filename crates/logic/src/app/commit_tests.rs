@@ -136,7 +136,7 @@ fn amend_needs_a_commit() {
     assert_eq!(app.note(), &Note::Problem(Problem::NothingToAmend));
     assert_eq!(
         ports.calls(),
-        vec!["has commits".to_string(), format!("Warn: {message}")]
+        vec!["has commits".to_string(), format!("Info: {message}")]
     );
     assert!(!app.diff().amend());
 }

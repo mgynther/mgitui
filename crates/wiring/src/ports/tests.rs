@@ -55,7 +55,7 @@ fn search_is_validated_by_validation_layer() {
             let entries: Vec<LogEntry> = log.drain();
             assert_eq!(entries.len(), 1);
             assert_eq!(entries[0].layer, Layer::Validation);
-            assert_eq!(entries[0].level, LogLevel::Error);
+            assert_eq!(entries[0].level, LogLevel::Info);
         },
     );
 }

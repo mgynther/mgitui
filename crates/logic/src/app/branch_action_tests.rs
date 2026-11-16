@@ -151,14 +151,14 @@ fn checkout_the_only_local_branch() {
 }
 
 #[test]
-fn checkout_without_local_branch_is_an_error() {
+fn checkout_without_local_branch_is_refused() {
     let ports: TestPorts = labelled_ports(vec![Label::Tag {
         name: "v1".to_string(),
     }]);
     let mut app: App = loaded_app(&ports);
     run(&mut app, &ports, &[Event::Checkout]);
     let message: &str = "No local branch at this commit to check out";
-    assert_eq!(actions(&ports), vec![format!("Error: {message}")]);
+    assert_eq!(actions(&ports), vec![format!("Info: {message}")]);
     assert_eq!(app.note(), &Note::Problem(Problem::NoLocalBranchToCheckOut));
     let empty: TestPorts = TestPorts::new();
     let mut empty_app: App = loaded_app(&empty);
@@ -358,7 +358,7 @@ fn rebase_problems() {
     let mut app: App = loaded_app(&ports);
     run(&mut app, &ports, &[Event::Rebase]);
     let message: &str = "No local branch at this commit to rebase";
-    assert_eq!(actions(&ports), vec![format!("Error: {message}")]);
+    assert_eq!(actions(&ports), vec![format!("Info: {message}")]);
     assert_eq!(app.note(), &Note::Problem(Problem::NoLocalBranchToRebase));
     let alone: TestPorts = labelled_ports(vec![local("only")]);
     let mut alone_app: App = loaded_app(&alone);
@@ -579,7 +579,7 @@ fn delete_problems() {
     let mut app: App = loaded_app(&head_only);
     run(&mut app, &head_only, &[Event::DeleteBranch]);
     let checked_out: &str = "The checked out branch cannot be deleted";
-    assert_eq!(actions(&head_only), vec![format!("Error: {checked_out}")]);
+    assert_eq!(actions(&head_only), vec![format!("Info: {checked_out}")]);
     assert_eq!(
         app.note(),
         &Note::Problem(Problem::CheckedOutBranchCannotBeDeleted)
@@ -707,7 +707,7 @@ fn reset_branch_problems() {
     let mut app: App = loaded_app(&detached);
     run(&mut app, &detached, &[Event::ResetBranch]);
     let no_branch: &str = "No branch is checked out to reset";
-    assert_eq!(actions(&detached), vec![format!("Error: {no_branch}")]);
+    assert_eq!(actions(&detached), vec![format!("Info: {no_branch}")]);
     assert_eq!(
         app.note(),
         &Note::Problem(Problem::NoBranchCheckedOutToReset)
@@ -729,7 +729,7 @@ fn reset_branch_problems() {
         let mut changes_app: App = loaded_app(&changes);
         run(&mut changes_app, &changes, &[Event::ResetBranch]);
         let uncommitted: &str = "Commit or discard uncommitted changes before resetting";
-        assert_eq!(actions(&changes), vec![format!("Error: {uncommitted}")]);
+        assert_eq!(actions(&changes), vec![format!("Info: {uncommitted}")]);
         assert_eq!(
             changes_app.note(),
             &Note::Problem(Problem::UncommittedChangesBeforeReset)

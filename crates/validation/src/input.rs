@@ -55,7 +55,7 @@ pub fn checkout_choice(
         Ok(number) if number >= 1 && number <= count => Ok(CheckoutChoice(number - 1)),
         Ok(_) => Err(ValidationError::OutOfRange { count }),
     };
-    log_error(&result, input, log);
+    log_rejected(&result, input, log);
     result
 }
 
@@ -70,7 +70,7 @@ pub fn search_text(input: &str, log: &Log<'_>) -> Result<SearchText, ValidationE
     } else {
         Ok(SearchText(input.to_string()))
     };
-    log_error(&result, input, log);
+    log_rejected(&result, input, log);
     result
 }
 
@@ -86,13 +86,13 @@ pub fn commit_message(input: &str, log: &Log<'_>) -> Result<CommitMessage, Valid
     } else {
         Ok(CommitMessage(input.to_string()))
     };
-    log_error(&result, input, log);
+    log_rejected(&result, input, log);
     result
 }
 
-fn log_error<T>(result: &Result<T, ValidationError>, input: &str, log: &Log<'_>) {
+fn log_rejected<T>(result: &Result<T, ValidationError>, input: &str, log: &Log<'_>) {
     if let Err(error) = result {
-        log(LogLevel::Error, &format!("{error}: {input:?}"));
+        log(LogLevel::Info, &format!("{error}: {input:?}"));
     }
 }
 
@@ -148,13 +148,13 @@ mod tests {
         assert_eq!(
             logged.lines(),
             vec![
-                (LogLevel::Error, "choice is not a number: \"x\"".to_string()),
+                (LogLevel::Info, "choice is not a number: \"x\"".to_string()),
                 (
-                    LogLevel::Error,
+                    LogLevel::Info,
                     "choice must be a number from 1 to 3: \"0\"".to_string()
                 ),
                 (
-                    LogLevel::Error,
+                    LogLevel::Info,
                     "choice must be a number from 1 to 3: \"4\"".to_string()
                 ),
             ]
@@ -172,7 +172,7 @@ mod tests {
         assert_eq!(search_text("", &log), Err(ValidationError::EmptySearch));
         assert_eq!(
             logged.lines(),
-            vec![(LogLevel::Error, "search text is empty: \"\"".to_string())]
+            vec![(LogLevel::Info, "search text is empty: \"\"".to_string())]
         );
     }
 
@@ -191,7 +191,7 @@ mod tests {
         assert_eq!(
             logged.lines(),
             vec![(
-                LogLevel::Error,
+                LogLevel::Info,
                 "commit message is empty: \" \\n \"".to_string()
             )]
         );

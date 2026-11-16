@@ -74,7 +74,7 @@ pub fn branch_name(input: &str, log: &Log<'_>) -> Result<BranchName, ValidationE
         None => Ok(BranchName(input.to_string())),
         Some(problem) => {
             let error: ValidationError = ValidationError::BranchName(problem);
-            log(LogLevel::Error, &format!("{error}: {input:?}"));
+            log(LogLevel::Info, &format!("{error}: {input:?}"));
             Err(error)
         }
     }
@@ -128,7 +128,7 @@ mod tests {
     use crate::error::ValidationError;
     use crate::log::LogLevel;
 
-    /// Validates `input`, also checking that a refused name is logged as one error.
+    /// Validates `input`, also checking that a refused name is logged once.
     fn check(input: &str) -> Result<String, ValidationError> {
         let logged: RefCell<Vec<(LogLevel, String)>> = RefCell::new(Vec::new());
         let log = |level: LogLevel, message: &str| {
@@ -139,7 +139,7 @@ mod tests {
         let expected_log_lines: usize = usize::from(result.is_err());
         assert_eq!(logged.borrow().len(), expected_log_lines);
         if let Some((level, message)) = logged.borrow().first() {
-            assert_eq!(*level, LogLevel::Error);
+            assert_eq!(*level, LogLevel::Info);
             assert!(message.starts_with("invalid branch name: "));
         }
         result

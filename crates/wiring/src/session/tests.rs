@@ -100,7 +100,7 @@ fn log_view_search_with_validation() {
     assert_eq!(position("logic      Info  start"), Some(3));
     assert!(position("git        Info  git log --all") > Some(3));
     assert!(
-        position("validation Error search text is empty") > position("git        Info  git status")
+        position("validation Info  search text is empty") > position("git        Info  git status")
     );
 }
 
@@ -347,9 +347,10 @@ fn empty_repository_and_small_terminal() {
         amend_refused.row_text(23).trim_end(),
         "Nothing to amend: there are no commits yet"
     );
+    // The status line explains the refusal, so the Log tab does not turn red for it.
     assert_eq!(
         amend_refused.cell(25, 0).unwrap().style.fg,
-        ui::style::Color::Red
+        ui::style::Color::Default
     );
     s.input(b"\x1bOR");
     let log: ui::buffer::Buffer = s.render(SIZE);
@@ -357,13 +358,9 @@ fn empty_repository_and_small_terminal() {
     assert!(
         lines
             .iter()
-            .any(|l: &String| l.contains("logic      Warn  Nothing to amend"))
+            .any(|l: &String| l.contains("logic      Info  Nothing to amend"))
     );
     s.input(b"\x1bOP");
-    assert_eq!(
-        s.render(SIZE).cell(25, 0).unwrap().style.fg,
-        ui::style::Color::Default
-    );
     let small: Size = Size {
         width: 60,
         height: 20,

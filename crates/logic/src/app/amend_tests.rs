@@ -123,7 +123,7 @@ fn an_amend_that_would_leave_the_commit_empty_is_refused() {
     ports.clear();
     run(&mut app, &ports, &[Event::Commit]);
     let message: &str = "The amended commit would be empty: stage changes first";
-    assert_eq!(ports.calls(), vec![format!("Error: {message}")]);
+    assert_eq!(ports.calls(), vec![format!("Info: {message}")]);
     assert_eq!(
         app.note(),
         &Note::Problem(Problem::AmendedCommitWouldBeEmpty)

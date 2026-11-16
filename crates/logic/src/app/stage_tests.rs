@@ -177,7 +177,7 @@ fn conflicts_are_refused_and_logged() {
     let mut app: App = app(&ports);
     run(&mut app, &ports, &[Event::Activate]);
     let message: &str = "c has a merge conflict; resolve it outside mgitui";
-    assert_eq!(ports.calls(), vec![format!("Error: {message}")]);
+    assert_eq!(ports.calls(), vec![format!("Info: {message}")]);
     assert_eq!(
         app.note(),
         &Note::Problem(Problem::MergeConflict {
@@ -371,7 +371,7 @@ fn d_is_refused_on_staged_conflicted_and_missing_files_and_in_the_diff() {
     assert_eq!(app.mode(), &Mode::Normal);
     assert_eq!(
         ports.calls(),
-        vec!["Error: c has a merge conflict; resolve it outside mgitui"]
+        vec!["Info: c has a merge conflict; resolve it outside mgitui"]
     );
     run(&mut app, &ports, &[Event::SwitchList, Event::DiscardFile]);
     assert_eq!(app.mode(), &Mode::Normal);
@@ -422,7 +422,7 @@ fn stage_all_problems() {
     let message: &str = "Resolve merge conflicts outside mgitui before staging all";
     assert_eq!(
         conflicted.calls(),
-        vec!["status".to_string(), format!("Error: {message}")]
+        vec!["status".to_string(), format!("Info: {message}")]
     );
     assert_eq!(
         conflicted_app.note(),

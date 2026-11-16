@@ -76,18 +76,28 @@ impl LogStore {
         }
     }
 
-    /// Adds an entry. Multi-line messages become one entry per line. When the log is full,
-    /// the oldest lines are dropped. Warnings and errors added while the log is not being
-    /// viewed are remembered as unseen.
+    /// Adds an entry. Multi-line messages become one entry per line. A carriage return also
+    /// starts a line: git overwrites progress lines with it on a terminal, and here every
+    /// state of the progress is kept, as in a log file. When the log is full, the oldest
+    /// lines are dropped. Warnings and errors added while the log is not being viewed are
+    /// remembered as unseen.
     pub fn push(&mut self, entry: &LogEntry, viewing: bool) {
         if entry.level.is_problem() && !viewing {
             self.unseen_problems = true;
         }
         for line in entry.message.lines() {
-            self.entries.push_back(LogEntry {
-                message: line.to_string(),
-                ..entry.clone()
-            });
+            // Git writes `\r\r` before its last progress line; empty pieces add nothing.
+            let pieces: Vec<&str> = line
+                .split('\r')
+                .filter(|piece: &&str| !piece.is_empty())
+                .collect();
+            let pieces: Vec<&str> = if pieces.is_empty() { vec![""] } else { pieces };
+            for piece in pieces {
+                self.entries.push_back(LogEntry {
+                    message: piece.to_string(),
+                    ..entry.clone()
+                });
+            }
         }
         if entry.message.is_empty() {
             self.entries.push_back(entry.clone());
@@ -151,6 +161,29 @@ mod tests {
         assert_eq!(messages(&store), vec!["first", "second"]);
         assert_eq!(store.entries()[1].time, 7);
         assert_eq!(store.entries()[1].layer, Layer::Git);
+    }
+
+    #[test]
+    fn carriage_returns_start_lines() {
+        let mut store: LogStore = LogStore::new(10);
+        store.push(
+            &entry(
+                LogLevel::Info,
+                "Rebasing (1/2)\rRebasing (2/2)\r\r\x1b[KDone.\n\nwindows\r\nend",
+            ),
+            false,
+        );
+        assert_eq!(
+            messages(&store),
+            vec![
+                "Rebasing (1/2)",
+                "Rebasing (2/2)",
+                "\x1b[KDone.",
+                "",
+                "windows",
+                "end"
+            ]
+        );
     }
 
     #[test]

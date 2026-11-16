@@ -64,10 +64,30 @@ pub fn render(buffer: &mut Buffer, view: &LogView, size: Size) {
             format_utc(row.time),
             layer_name(row.layer),
             level_name(row.level),
-            row.message
+            without_escape_sequences(&row.message)
         );
         buffer.put_str(content.x, y, &text, style, content.width);
     }
+}
+
+/// `text` without the terminal escape sequences that git writes, such as `ESC [ K` that
+/// clears the rest of the line: an escape, `[`, parameters, and a final character from `@` to
+/// `~`. Other control characters are left for the buffer, which shows them as `?`.
+fn without_escape_sequences(text: &str) -> String {
+    let mut out: String = String::new();
+    let mut chars: std::iter::Peekable<std::str::Chars<'_>> = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\x1b' && chars.next_if_eq(&'[').is_some() {
+            for in_sequence in chars.by_ref() {
+                if ('@'..='~').contains(&in_sequence) {
+                    break;
+                }
+            }
+        } else {
+            out.push(ch);
+        }
+    }
+    out
 }
 
 fn level_color(level: LogLevel) -> Color {
@@ -100,7 +120,7 @@ fn level_name(level: LogLevel) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{Layer, LogRow, LogView, layer_name, render};
+    use super::{Layer, LogRow, LogView, layer_name, render, without_escape_sequences};
     use crate::buffer::Buffer;
     use crate::layout::Size;
     use crate::log::LogLevel;
@@ -119,6 +139,29 @@ mod tests {
             message: message.to_string(),
             selected,
         }
+    }
+
+    #[test]
+    fn escape_sequences_are_left_out() {
+        let cases: [(&str, &str); 5] = [
+            ("\x1b[KSuccessfully rebased", "Successfully rebased"),
+            ("\x1b[1;31mred\x1b[m plain", "red plain"),
+            ("lone \x1b escape", "lone \x1b escape"),
+            ("unfinished \x1b[12", "unfinished "),
+            ("tab\tstays", "tab\tstays"),
+        ];
+        for (text, shown) in cases {
+            assert_eq!(without_escape_sequences(text), shown);
+        }
+        let view: LogView = LogView {
+            rows: vec![row(LogLevel::Info, "\x1b[KDone.", false)],
+        };
+        let mut buffer: Buffer = Buffer::new(SIZE);
+        render(&mut buffer, &view, SIZE);
+        assert_eq!(
+            buffer.row_text(2).trim_end(),
+            "2025-01-02 03:04:05 git        Info  Done."
+        );
     }
 
     #[test]

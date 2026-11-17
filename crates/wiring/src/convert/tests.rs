@@ -2,9 +2,9 @@ use std::collections::VecDeque;
 
 use super::{
     branches_focus, commit_info, commit_rows, diff_focus, diff_row_kind, event, file_change,
-    file_rows, graph_cell, input_mode, label_view, log_view, logic_view, screen, status,
-    ui_branch_name_problem, ui_busy, ui_info, ui_input_problem, ui_layer, ui_level, ui_operation,
-    ui_problem, ui_size, ui_view, viewports,
+    file_rows, graph_cell, input_mode, label_view, log_view, logic_view, repository_name, screen,
+    status, ui_branch_name_problem, ui_busy, ui_info, ui_input_problem, ui_layer, ui_level,
+    ui_operation, ui_problem, ui_size, ui_view, viewports,
 };
 use logic::app::{App, BranchesPane, Confirmation, DiffPane, Mode, Prompt, PromptKind, Viewports};
 use logic::cursor::Cursor;
@@ -537,6 +537,15 @@ fn problems_convert() {
 }
 
 #[test]
+fn repository_name_is_the_last_directory() {
+    assert_eq!(
+        repository_name(std::path::Path::new("/home/ada/mgitui")),
+        "mgitui"
+    );
+    assert_eq!(repository_name(std::path::Path::new("/")), "/");
+}
+
+#[test]
 fn busy_converts() {
     assert_eq!(
         ui_busy(logic::ports::Busy::RunningGc),
@@ -688,8 +697,9 @@ fn viewports_follow_layout() {
 
 #[test]
 fn startup_screen() {
-    let s: ui::screen::Screen = screen(&App::new());
+    let s: ui::screen::Screen = screen(&App::new(), "repo");
     assert_eq!(s.tabs.active, UV::Branches);
+    assert_eq!(s.tabs.repository, "repo");
     assert_eq!(s.status, ui::screen::Status::Empty);
     assert!(matches!(s.body, ui::screen::Body::Branches(_)));
 }

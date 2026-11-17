@@ -16,11 +16,13 @@ pub struct Session {
     editor: Box<Editor>,
     handoff: Box<Handoff<'static>>,
     draw: Box<Draw<'static>>,
+    repository: String,
 }
 
 impl Session {
-    /// Starts the application for the repository `git` runs in, editing commit messages with
-    /// `editor`, handing the terminal to git with `handoff` when git runs Vim, and showing
+    /// Starts the application for the repository `git` runs in, which must be its root
+    /// directory: the tab row shows that directory's name. Edits commit messages with
+    /// `editor`, hands the terminal to git with `handoff` when git runs Vim, and shows
     /// what keeps the user waiting before the user interface with `draw`. Entries already in
     /// `log` are moved into the application log.
     #[must_use]
@@ -31,6 +33,7 @@ impl Session {
         handoff: Box<Handoff<'static>>,
         draw: Box<Draw<'static>>,
     ) -> Self {
+        let repository: String = convert::repository_name(git.dir());
         let mut session: Session = Session {
             app: App::new(),
             git,
@@ -38,6 +41,7 @@ impl Session {
             editor,
             handoff,
             draw,
+            repository,
         };
         session.with_ports(|app: &mut App, ports: &dyn Ports| app.start(ports));
         session
@@ -82,7 +86,7 @@ impl Session {
     /// Draws the current state.
     #[must_use]
     pub fn render(&self, size: ui::layout::Size) -> ui::buffer::Buffer {
-        ui::screen::render(&convert::screen(&self.app), size)
+        ui::screen::render(&convert::screen(&self.app, &self.repository), size)
     }
 
     /// Whether the user confirmed quitting.

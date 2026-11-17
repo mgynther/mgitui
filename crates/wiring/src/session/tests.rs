@@ -72,6 +72,21 @@ fn shows_tabs_and_quits_after_confirmation() {
 }
 
 #[test]
+fn tab_row_shows_the_repository_directory_name() {
+    let (dir, s): (TempDir, Session) = session();
+    let name: String = dir
+        .path()
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    assert_eq!(
+        s.render(SIZE).row_text(0).trim_end(),
+        format!(" F1 Branches   F2 Diff   F3 Log  {name}")
+    );
+}
+
+#[test]
 fn function_keys_switch_views_and_unknown_keys_are_logged() {
     let (_dir, mut s): (TempDir, Session) = session();
     s.input(b"\x1bOR\x1b[Z");

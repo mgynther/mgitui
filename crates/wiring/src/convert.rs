@@ -97,6 +97,16 @@ pub fn ui_size(size: terminal::size::Size) -> ui::layout::Size {
     }
 }
 
+/// The name of the repository's root directory, or the whole path when it has no name, as
+/// `/` has not.
+#[must_use]
+pub fn repository_name(root: &std::path::Path) -> String {
+    root.file_name().map_or_else(
+        || root.display().to_string(),
+        |name: &std::ffi::OsStr| name.to_string_lossy().into_owned(),
+    )
+}
+
 /// The ui busy work for the logic busy work.
 #[must_use]
 pub fn ui_busy(busy: logic::ports::Busy) -> ui::busy::Busy {
@@ -125,10 +135,11 @@ pub fn viewports(size: ui::layout::Size) -> Viewports {
 /// [`App`] only pick values out of it for the conversions, which take those values, so that each
 /// conversion can be tested without driving an [`App`] into a state.
 #[must_use]
-pub fn screen(app: &App) -> ui::screen::Screen {
+pub fn screen(app: &App, repository: &str) -> ui::screen::Screen {
     ui::screen::Screen {
         tabs: ui::screen::Tabs {
             active: ui_view(app.view()),
+            repository: repository.to_string(),
             diff_has_changes: app.diff().status().has_changes(),
             log_has_problems: app.log().has_unseen_problems(),
         },

@@ -23,10 +23,12 @@ pub struct Screen {
 }
 
 /// The tab row at the top.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tabs {
     /// The active view.
     pub active: ViewId,
+    /// The name of the repository's directory, shown in green after the tabs.
+    pub repository: String,
     /// Whether there are staged or unstaged changes, which shows the Diff tab in red.
     pub diff_has_changes: bool,
     /// Whether there are unseen warnings or errors, which shows the Log tab in red.
@@ -78,7 +80,7 @@ pub fn render(screen: &Screen, size: Size) -> Buffer {
         buffer.put_str(0, 0, &message, Style::PLAIN, size.width);
         return buffer;
     }
-    draw_tabs(&mut buffer, screen.tabs);
+    draw_tabs(&mut buffer, &screen.tabs);
     draw_status(&mut buffer, &screen.status, size);
     match &screen.body {
         Body::Branches(view) => crate::views::branches::render(&mut buffer, view, size),
@@ -88,7 +90,7 @@ pub fn render(screen: &Screen, size: Size) -> Buffer {
     buffer
 }
 
-fn draw_tabs(buffer: &mut Buffer, tabs: Tabs) {
+fn draw_tabs(buffer: &mut Buffer, tabs: &Tabs) {
     let entries: [(ViewId, &str, bool); 3] = [
         (ViewId::Branches, " F1 Branches ", false),
         (ViewId::Diff, " F2 Diff ", tabs.diff_has_changes),
@@ -101,6 +103,8 @@ fn draw_tabs(buffer: &mut Buffer, tabs: Tabs) {
         x += buffer.put_str(x, 0, label, style, label.len());
         x += 1;
     }
+    let width: usize = buffer.size().width.saturating_sub(x);
+    buffer.put_str(x, 0, &tabs.repository, Style::fg(Color::Green), width);
 }
 
 fn draw_status(buffer: &mut Buffer, status: &Status, size: Size) {
@@ -218,6 +222,7 @@ mod tests {
         Screen {
             tabs: Tabs {
                 active,
+                repository: "placeholder repository".to_string(),
                 diff_has_changes: true,
                 log_has_problems: false,
             },
@@ -261,6 +266,38 @@ mod tests {
         assert_eq!(diff, Style::fg(Color::Red).reversed_if(true));
         let branches: Style = buffer.cell(1, 0).unwrap().style;
         assert_eq!(branches, Style::PLAIN);
+    }
+
+    #[test]
+    fn repository_name_follows_the_tabs_in_green() {
+        let mut s: Screen = screen(
+            ViewId::Log,
+            Status::Empty,
+            Body::Log(LogView { rows: vec![] }),
+        );
+        s.tabs.repository = "mgitui".to_string();
+        let buffer: Buffer = render(&s, SIZE);
+        assert_eq!(
+            buffer.row_text(0).trim_end(),
+            " F1 Branches   F2 Diff   F3 Log  mgitui"
+        );
+        assert_eq!(buffer.cell(32, 0).unwrap().style, Style::PLAIN);
+        assert_eq!(buffer.cell(33, 0).unwrap().style, Style::fg(Color::Green));
+    }
+
+    #[test]
+    fn long_repository_name_is_clipped_at_the_edge() {
+        let mut s: Screen = screen(
+            ViewId::Log,
+            Status::Empty,
+            Body::Log(LogView { rows: vec![] }),
+        );
+        s.tabs.repository = "x".repeat(100);
+        let buffer: Buffer = render(&s, SIZE);
+        assert_eq!(
+            buffer.row_text(0),
+            format!(" F1 Branches   F2 Diff   F3 Log  {}", "x".repeat(47))
+        );
     }
 
     #[test]

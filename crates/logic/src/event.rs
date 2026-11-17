@@ -28,6 +28,10 @@ pub enum Event {
     MoveDown,
     /// Move the selection up.
     MoveUp,
+    /// Move the selection down by a page of rows, stopping at the bottom.
+    PageDown,
+    /// Move the selection up by a page of rows, stopping at the top.
+    PageUp,
     /// Jump to the top.
     Top,
     /// Jump to the bottom.

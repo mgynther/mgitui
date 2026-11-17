@@ -156,6 +156,21 @@ fn log_selection_follows_new_lines_at_the_end() {
 }
 
 #[test]
+fn page_down_and_up_move_twenty_rows_and_stop_at_the_ends() {
+    let messages: Vec<String> = (0..30).map(|n: usize| format!("m{n}")).collect();
+    let refs: Vec<&str> = messages.iter().map(String::as_str).collect();
+    let mut app: App = log_app(&refs);
+    run(&mut app, &[Event::Top, Event::PageDown]);
+    assert_eq!(app.log_cursor().selected(), 20);
+    run(&mut app, &[Event::PageDown]);
+    assert_eq!(app.log_cursor().selected(), 29);
+    run(&mut app, &[Event::PageUp]);
+    assert_eq!(app.log_cursor().selected(), 9);
+    run(&mut app, &[Event::PageUp]);
+    assert_eq!(app.log_cursor().selected(), 0);
+}
+
+#[test]
 fn log_navigation() {
     let mut app: App = log_app(&["a", "b", "c", "d"]);
     run(&mut app, &[Event::Top]);

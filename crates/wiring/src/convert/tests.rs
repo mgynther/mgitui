@@ -34,7 +34,7 @@ use ui::views::diff::DiffFocus;
 
 #[test]
 fn every_event_converts() {
-    let cases: [(U, L); 37] = [
+    let cases: [(U, L); 39] = [
         (U::SwitchView(UV::Log), L::SwitchView(LV::Log)),
         (U::Quit, L::Quit),
         (U::Yes, L::Yes),
@@ -42,6 +42,8 @@ fn every_event_converts() {
         (U::Reload, L::Reload),
         (U::MoveDown, L::MoveDown),
         (U::MoveUp, L::MoveUp),
+        (U::PageDown, L::PageDown),
+        (U::PageUp, L::PageUp),
         (U::Top, L::Top),
         (U::Bottom, L::Bottom),
         (U::NextPane, L::NextPane),

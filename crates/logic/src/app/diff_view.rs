@@ -590,11 +590,16 @@ impl App {
     }
 }
 
-/// Moves `cursor` for the navigation events j, k, g and G.
+/// How many rows J and K move the selection.
+const PAGE: usize = 20;
+
+/// Moves `cursor` for the navigation events j, k, J, K, g and G.
 pub(super) fn move_cursor(cursor: &mut Cursor, event: Event, len: usize, height: usize) {
     match event {
-        Event::MoveDown => cursor.down(len, height),
-        Event::MoveUp => cursor.up(len, height),
+        Event::MoveDown => cursor.down(1, len, height),
+        Event::MoveUp => cursor.up(1, len, height),
+        Event::PageDown => cursor.down(PAGE, len, height),
+        Event::PageUp => cursor.up(PAGE, len, height),
         Event::Top => cursor.top(),
         Event::Bottom => cursor.bottom(len, height),
         _ => {}

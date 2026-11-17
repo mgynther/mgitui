@@ -41,6 +41,10 @@ pub enum Event {
     MoveDown,
     /// Move the selection up.
     MoveUp,
+    /// Move the selection down by a page of rows, stopping at the bottom.
+    PageDown,
+    /// Move the selection up by a page of rows, stopping at the top.
+    PageUp,
     /// Jump to the top.
     Top,
     /// Jump to the bottom.
@@ -136,6 +140,8 @@ fn common_event(key: Key) -> Option<Event> {
         Key::Char('r') => Some(Event::Reload),
         Key::Char('j') => Some(Event::MoveDown),
         Key::Char('k') => Some(Event::MoveUp),
+        Key::Char('J') => Some(Event::PageDown),
+        Key::Char('K') => Some(Event::PageUp),
         Key::Char('g') => Some(Event::Top),
         Key::Char('G') => Some(Event::Bottom),
         Key::Char('/') => Some(Event::StartSearch),
@@ -181,7 +187,7 @@ mod tests {
 
     #[test]
     fn common_keys_work_in_every_view() {
-        let cases: [(Key, Event); 13] = [
+        let cases: [(Key, Event); 15] = [
             (Key::F(1), Event::SwitchView(ViewId::Branches)),
             (Key::F(2), Event::SwitchView(ViewId::Diff)),
             (Key::F(3), Event::SwitchView(ViewId::Log)),
@@ -189,6 +195,8 @@ mod tests {
             (Key::Char('r'), Event::Reload),
             (Key::Char('j'), Event::MoveDown),
             (Key::Char('k'), Event::MoveUp),
+            (Key::Char('J'), Event::PageDown),
+            (Key::Char('K'), Event::PageUp),
             (Key::Char('g'), Event::Top),
             (Key::Char('G'), Event::Bottom),
             (Key::Char('/'), Event::StartSearch),

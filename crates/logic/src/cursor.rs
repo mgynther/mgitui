@@ -20,14 +20,16 @@ impl Cursor {
         self.offset
     }
 
-    /// Selects the next item of a list of `len` items shown in `height` rows.
-    pub fn down(&mut self, len: usize, height: usize) {
-        self.select(self.selected + 1, len, height);
+    /// Selects the item `count` items further down a list of `len` items shown in `height`
+    /// rows, or the last item when there are fewer below.
+    pub fn down(&mut self, count: usize, len: usize, height: usize) {
+        self.select(self.selected.saturating_add(count), len, height);
     }
 
-    /// Selects the previous item.
-    pub fn up(&mut self, len: usize, height: usize) {
-        self.select(self.selected.saturating_sub(1), len, height);
+    /// Selects the item `count` items further up, or the first item when there are fewer
+    /// above.
+    pub fn up(&mut self, count: usize, len: usize, height: usize) {
+        self.select(self.selected.saturating_sub(count), len, height);
     }
 
     /// Selects the first item.
@@ -74,10 +76,10 @@ mod tests {
     #[test]
     fn moving_down_scrolls_at_the_bottom_edge() {
         let mut cursor: Cursor = Cursor::default();
-        cursor.down(10, 3);
-        cursor.down(10, 3);
+        cursor.down(1, 10, 3);
+        cursor.down(1, 10, 3);
         assert_eq!(cursor, at(2, 0));
-        cursor.down(10, 3);
+        cursor.down(1, 10, 3);
         assert_eq!(cursor, at(3, 1));
         assert_eq!((cursor.selected(), cursor.offset()), (3, 1));
     }
@@ -85,10 +87,10 @@ mod tests {
     #[test]
     fn moving_up_scrolls_at_the_top_edge() {
         let mut cursor: Cursor = at(3, 3);
-        cursor.up(10, 3);
+        cursor.up(1, 10, 3);
         assert_eq!(cursor, at(2, 2));
         let mut first: Cursor = Cursor::default();
-        first.up(10, 3);
+        first.up(1, 10, 3);
         assert_eq!(first, at(0, 0));
     }
 
@@ -97,10 +99,27 @@ mod tests {
         let mut cursor: Cursor = Cursor::default();
         cursor.bottom(10, 3);
         assert_eq!(cursor, at(9, 7));
-        cursor.down(10, 3);
+        cursor.down(1, 10, 3);
         assert_eq!(cursor, at(9, 7));
         cursor.top();
         assert_eq!(cursor, at(0, 0));
+    }
+
+    #[test]
+    fn moving_by_many_stops_at_the_ends() {
+        let mut cursor: Cursor = Cursor::default();
+        cursor.down(20, 50, 10);
+        assert_eq!(cursor, at(20, 11));
+        cursor.down(20, 30, 10);
+        assert_eq!(cursor, at(29, 20));
+        cursor.down(20, 30, 10);
+        assert_eq!(cursor, at(29, 20));
+        cursor.up(20, 30, 10);
+        assert_eq!(cursor, at(9, 9));
+        cursor.up(20, 30, 10);
+        assert_eq!(cursor, at(0, 0));
+        cursor.down(usize::MAX, 30, 10);
+        assert_eq!(cursor, at(29, 20));
     }
 
     #[test]

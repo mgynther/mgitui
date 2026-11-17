@@ -25,6 +25,8 @@ pub fn event(event: ui::event::Event) -> logic::event::Event {
         U::Reload => L::Reload,
         U::MoveDown => L::MoveDown,
         U::MoveUp => L::MoveUp,
+        U::PageDown => L::PageDown,
+        U::PageUp => L::PageUp,
         U::Top => L::Top,
         U::Bottom => L::Bottom,
         U::NextPane => L::NextPane,

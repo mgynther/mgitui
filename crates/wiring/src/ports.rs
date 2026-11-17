@@ -5,7 +5,8 @@ use logic::model::{AmendBase, ChangedFile, Commit, FileDiff, Refs, Side, WorkSta
 use logic::note::InputProblem;
 use logic::ports::{BranchName, CommitMessage, EditedMessage, Failed, RebaseEnd};
 
-use crate::editor::{Editor, Handoff};
+use crate::convert;
+use crate::editor::{Draw, Editor, Handoff};
 use crate::log::LogBuffer;
 use crate::model;
 
@@ -19,6 +20,8 @@ pub struct SessionPorts<'a> {
     pub editor: &'a Editor,
     /// Hands the terminal to git when git runs Vim itself.
     pub handoff: &'a Handoff<'a>,
+    /// Writes a frame to the terminal, for text shown before the user interface.
+    pub draw: &'a Draw<'a>,
 }
 
 impl SessionPorts<'_> {
@@ -48,6 +51,20 @@ impl SessionPorts<'_> {
 impl logic::ports::Ports for SessionPorts<'_> {
     fn log(&self, level: logic::log::LogLevel, message: &str) {
         self.log.logic(level, message);
+    }
+
+    fn show_busy(&self, busy: logic::ports::Busy) {
+        let frame: String = ui::busy::render_busy(convert::ui_busy(busy)).to_ansi();
+        if let Err(error) = (self.draw)(&frame) {
+            self.log.wiring(
+                LogLevel::Error,
+                &format!("showing what is running failed: {error}"),
+            );
+        }
+    }
+
+    fn gc(&self) -> Result<(), Failed> {
+        self.git.gc(&self.log_git()).map_err(|_| Failed)
     }
 
     fn validate_search(&self, input: &str) -> Result<logic::ports::SearchText, InputProblem> {

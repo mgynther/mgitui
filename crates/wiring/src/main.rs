@@ -4,6 +4,7 @@
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::rc::Rc;
 
 use terminal::device::{self, Terminal};
 use ui::exit::{ExitProblem, exit_text};
@@ -31,14 +32,23 @@ fn fail(problem: &ExitProblem) -> ExitCode {
 }
 
 fn run(git: git::Git, log: LogBuffer) -> io::Result<()> {
-    let terminal: Terminal = Terminal::enter()?;
+    // Shared, because the session keeps drawing to the terminal while the main loop uses it.
+    let terminal: Rc<Terminal> = Rc::new(Terminal::enter()?);
     let saved: String = terminal.saved().to_string();
     device::restore_on_panic(saved.clone());
     let for_handoff: String = saved.clone();
+    let for_draw: Rc<Terminal> = Rc::clone(&terminal);
     let editor = move |path: &Path| device::run_vim(&saved, path);
     let handoff = move |run: &mut dyn FnMut()| device::hand_over(&for_handoff, run);
-    let mut session: Session = Session::new(git, log, Box::new(editor), Box::new(handoff));
-    let result: io::Result<()> = wiring::event_loop::run(&terminal, &mut session);
+    let draw = move |frame: &str| for_draw.draw(frame);
+    let mut session: Session = Session::new(
+        git,
+        log,
+        Box::new(editor),
+        Box::new(handoff),
+        Box::new(draw),
+    );
+    let result: io::Result<()> = wiring::event_loop::run(terminal.as_ref(), &mut session);
     terminal.leave();
     result
 }

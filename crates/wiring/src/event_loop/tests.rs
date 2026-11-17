@@ -78,6 +78,7 @@ fn session(dir: &TempDir) -> Session {
             run();
             Ok(())
         }),
+        Box::new(|_: &str| Ok(())),
     )
 }
 

@@ -9,7 +9,7 @@ use crate::model::{
 };
 use crate::note::{BranchNameProblem, InputProblem};
 use crate::ports::{
-    BranchName, CommitMessage, EditedMessage, Failed, Ports, RebaseEnd, SearchText,
+    BranchName, Busy, CommitMessage, EditedMessage, Failed, Ports, RebaseEnd, SearchText,
 };
 
 /// Records calls as text and answers from its fields.
@@ -57,6 +57,8 @@ pub struct TestPorts {
     pub rebase_in_progress: Option<bool>,
     /// The answer to `has_conflict_markers`; `None` fails.
     pub conflict_markers: Option<bool>,
+    /// Whether `gc` fails.
+    pub gc_fails: bool,
 }
 
 impl TestPorts {
@@ -87,6 +89,7 @@ impl TestPorts {
             rebase_not_finished: false,
             rebase_in_progress: Some(false),
             conflict_markers: Some(false),
+            gc_fails: false,
         }
     }
 
@@ -230,6 +233,15 @@ impl Ports for TestPorts {
         self.calls
             .borrow_mut()
             .push(format!("{level:?}: {message}"));
+    }
+
+    fn show_busy(&self, busy: Busy) {
+        self.calls.borrow_mut().push(format!("show busy {busy:?}"));
+    }
+
+    fn gc(&self) -> Result<(), Failed> {
+        self.calls.borrow_mut().push("gc".to_string());
+        if self.gc_fails { Err(Failed) } else { Ok(()) }
     }
 
     fn validate_search(&self, input: &str) -> Result<SearchText, InputProblem> {

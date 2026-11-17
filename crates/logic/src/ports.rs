@@ -35,6 +35,13 @@ pub enum RebaseEnd {
     NotFinished,
 }
 
+/// Work that keeps the user waiting before the user interface can be shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Busy {
+    /// Running `git gc` at startup.
+    RunningGc,
+}
+
 /// A failure that was already logged by the layer where it happened.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Failed;
@@ -44,6 +51,16 @@ pub struct Failed;
 pub trait Ports {
     /// Logs a message from the logic layer.
     fn log(&self, level: LogLevel, message: &str);
+
+    /// Tells the user what the application is busy with, before the user interface is shown.
+    fn show_busy(&self, busy: Busy);
+
+    /// Cleans up and packs the repository with git's default settings.
+    ///
+    /// # Errors
+    ///
+    /// Fails when git fails.
+    fn gc(&self) -> Result<(), Failed>;
 
     /// Validates search text typed by the user.
     ///

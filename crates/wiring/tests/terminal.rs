@@ -340,6 +340,32 @@ mod pty {
     }
 
     #[test]
+    fn shows_running_gc_until_gc_finishes() {
+        // The stand-in holds `git gc` until the test creates `git.go` next to it, for at most
+        // ten seconds so that a failing test does not leave it waiting.
+        let git: String = format!(
+            "if [ \"$1\" = gc ]; then\n\
+             for _ in $(seq 200); do [ -f \"$0.go\" ] && break; sleep 0.05; done\n\
+             fi\n\
+             exec {} \"$@\"",
+            real("git")
+        );
+        let mut session: Session = Session::start(repository(), &[("git", &git)]);
+        let shown: usize = session.wait_for("Running gc", 0);
+        assert!(!session.text().contains(FRAME_START));
+        let go: PathBuf = session
+            .dir
+            .path()
+            .join(".git")
+            .join("stand-ins")
+            .join("git.go");
+        std::fs::write(go, "").unwrap();
+        session.wait_for("first commit", shown);
+        session.press(b"qy");
+        assert_eq!(session.finish().code, "0");
+    }
+
+    #[test]
     fn redraws_when_the_terminal_is_resized() {
         let mut session: Session = Session::start(repository(), &[]);
         let mut shown: usize = session.wait_for("first commit", 0);

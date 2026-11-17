@@ -141,6 +141,8 @@ pub enum Command {
     RemoteUpdate,
     /// `git fetch --all --prune`: fetches all remotes pruning stale remote branches.
     FetchAllPrune,
+    /// `git gc`: cleans up and packs the repository, with git's default settings.
+    Gc,
     /// `git reset --keep <commit>`: moves the checked out branch to a commit and updates the
     /// working tree. Unlike `--hard`, it refuses to overwrite local changes and untracked files.
     ResetKeep {
@@ -251,6 +253,7 @@ impl Command {
             Command::ShowCommit { .. } => &["show"],
             Command::RemoteUpdate => &["remote", "update"],
             Command::FetchAllPrune => &["fetch", "--all", "--prune"],
+            Command::Gc => &["gc"],
             Command::DeleteBranch { .. } => &["branch", "-D"],
             Command::Rebase { .. } => &["rebase"],
             Command::RebaseInteractive { .. } => &["rebase", "-i"],
@@ -330,7 +333,8 @@ impl Command {
             | Command::Refs
             | Command::RebaseStatePaths
             | Command::RemoteUpdate
-            | Command::FetchAllPrune => {}
+            | Command::FetchAllPrune
+            | Command::Gc => {}
         }
         args
     }
@@ -533,6 +537,7 @@ mod tests {
         );
         assert_eq!(args(&Command::RemoteUpdate), "remote update");
         assert_eq!(args(&Command::FetchAllPrune), "fetch --all --prune");
+        assert_eq!(args(&Command::Gc), "gc");
         assert_eq!(
             args(&Command::ResetKeep {
                 hash: "abc".to_string()

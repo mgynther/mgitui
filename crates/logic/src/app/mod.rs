@@ -26,8 +26,8 @@ use crate::cursor::Cursor;
 use crate::event::{Event, ViewId};
 use crate::log::{DEFAULT_CAPACITY, LogLevel, LogStore};
 use crate::model::ChangedFile;
-use crate::note::{Info, Note, Problem};
-use crate::ports::{Ports, SearchText};
+use crate::note::{Info, Note, Operation, Problem};
+use crate::ports::{Busy, Failed, Ports, SearchText};
 use crate::search::{Direction, Found};
 
 /// What key presses are currently used for.
@@ -267,10 +267,16 @@ impl App {
         self.clamp_branch_cursors();
     }
 
-    /// Loads everything from git when the application starts.
+    /// Runs `git gc` and then loads everything from git when the application starts. The
+    /// user is told about gc because it can take a while in a large repository.
     pub fn start(&mut self, ports: &dyn Ports) {
         ports.log(LogLevel::Info, "start");
+        ports.show_busy(Busy::RunningGc);
+        let gc: Result<(), Failed> = ports.gc();
         self.refresh(ports);
+        if gc.is_err() {
+            self.note = Note::Problem(Problem::Failed(Operation::RunningGc));
+        }
     }
 
     /// Changes the state for `event`, using `ports` for everything outside the state.

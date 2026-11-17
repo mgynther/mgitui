@@ -205,6 +205,8 @@ pub enum Problem {
 /// What failed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Operation {
+    /// Running `git gc` at startup.
+    RunningGc,
     /// Reloading the commits and refs.
     ReloadingCommits,
     /// Loading the message and files of the selected commit.
@@ -430,6 +432,7 @@ pub fn problem_text(problem: &Problem) -> String {
 /// Each failure has its own full message, so that the wording can differ where it needs to.
 fn failure_text(operation: Operation) -> &'static str {
     match operation {
+        Operation::RunningGc => "Running gc failed, see the Log view",
         Operation::ReloadingCommits => "Reloading commits failed, see the Log view",
         Operation::LoadingCommit => "Loading the commit failed, see the Log view",
         Operation::LoadingDiff => "Loading the diff failed, see the Log view",
@@ -677,7 +680,8 @@ mod tests {
 
     #[test]
     fn failure_texts() {
-        let cases: [(Operation, &str); 23] = [
+        let cases: [(Operation, &str); 24] = [
+            (Operation::RunningGc, "Running gc failed, see the Log view"),
             (
                 Operation::ReloadingCommits,
                 "Reloading commits failed, see the Log view",

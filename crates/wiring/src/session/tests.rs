@@ -17,6 +17,14 @@ fn run_here(run: &mut dyn FnMut()) -> std::io::Result<()> {
     Ok(())
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "it has the signature of drawing to the terminal"
+)]
+fn draw_nowhere(_: &str) -> std::io::Result<()> {
+    Ok(())
+}
+
 fn session_in(dir: &TempDir) -> Session {
     let log: LogBuffer = LogBuffer::new(fixed_clock);
     log.wiring(logic::log::LogLevel::Info, "started");
@@ -31,7 +39,13 @@ fn session_in(dir: &TempDir) -> Session {
         std::fs::write(path, new).unwrap();
         Ok(terminal::edit::EditorExit::Success)
     };
-    let mut session: Session = Session::new(git, log, Box::new(editor), Box::new(run_here));
+    let mut session: Session = Session::new(
+        git,
+        log,
+        Box::new(editor),
+        Box::new(run_here),
+        Box::new(draw_nowhere),
+    );
     session.resize(SIZE);
     session
 }
@@ -217,6 +231,7 @@ fn branches_view_shows_graph_details_and_panes() {
         log,
         Box::new(|_: &std::path::Path| Ok(terminal::edit::EditorExit::Success)),
         Box::new(run_here),
+        Box::new(draw_nowhere),
     );
     s.resize(SIZE);
     let first_selected: ui::buffer::Buffer = s.render(SIZE);
@@ -459,6 +474,7 @@ fn interactive_rebase_prompt() {
         log,
         Box::new(|_: &std::path::Path| Ok(terminal::edit::EditorExit::Success)),
         Box::new(run_here),
+        Box::new(draw_nowhere),
     );
     s.resize(SIZE);
     s.input(b"/topic work\ri");
@@ -695,6 +711,7 @@ fn s_shows_the_selected_commit_with_the_terminal_handed_over() {
         LogBuffer::new(fixed_clock),
         Box::new(|_: &std::path::Path| Ok(terminal::edit::EditorExit::Success)),
         Box::new(handoff),
+        Box::new(draw_nowhere),
     );
     s.resize(SIZE);
     s.input(b"js");
@@ -963,4 +980,42 @@ fn d_discards_changes_and_deletes_untracked_files_after_confirming() {
     s.input(b"y");
     assert_eq!(s.render(SIZE).row_text(23).trim_end(), "Deleted new.txt");
     assert!(!dir.path().join("new.txt").exists());
+}
+
+#[test]
+fn start_shows_running_gc_and_packs_the_repository() {
+    let dir: TempDir = TempDir::new();
+    init_repo(dir.path());
+    std::fs::write(dir.path().join("a.txt"), "a\n").unwrap();
+    git_ok(dir.path(), &["add", "."]);
+    git_ok(dir.path(), &["commit", "-q", "-m", "first"]);
+    let loose = || -> String {
+        git_ok(dir.path(), &["count-objects", "-v"])
+            .lines()
+            .find(|line: &&str| line.starts_with("count: "))
+            .unwrap()
+            .to_string()
+    };
+    assert_eq!(loose(), "count: 3");
+    let frames: std::rc::Rc<std::cell::RefCell<Vec<String>>> =
+        std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let recorded: std::rc::Rc<std::cell::RefCell<Vec<String>>> = std::rc::Rc::clone(&frames);
+    let draw = move |frame: &str| -> std::io::Result<()> {
+        recorded.borrow_mut().push(frame.to_string());
+        Ok(())
+    };
+    let mut s: Session = Session::new(
+        test_git(dir.path()),
+        LogBuffer::new(fixed_clock),
+        Box::new(|_: &std::path::Path| Ok(terminal::edit::EditorExit::Success)),
+        Box::new(run_here),
+        Box::new(draw),
+    );
+    assert_eq!(
+        frames.borrow().as_slice(),
+        ["\x1b[1;1H\x1b[0;39mRunning gc\x1b[0m"]
+    );
+    assert_eq!(loose(), "count: 0");
+    s.resize(SIZE);
+    assert!(s.render(SIZE).row_text(2).contains("first"));
 }

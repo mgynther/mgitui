@@ -97,6 +97,14 @@ pub fn ui_size(size: terminal::size::Size) -> ui::layout::Size {
     }
 }
 
+/// The ui busy work for the logic busy work.
+#[must_use]
+pub fn ui_busy(busy: logic::ports::Busy) -> ui::busy::Busy {
+    match busy {
+        logic::ports::Busy::RunningGc => ui::busy::Busy::RunningGc,
+    }
+}
+
 /// How many rows each list has for a terminal of `size`.
 #[must_use]
 pub fn viewports(size: ui::layout::Size) -> Viewports {
@@ -225,6 +233,7 @@ fn ui_operation(operation: logic::note::Operation) -> ui::status::Operation {
     use logic::note::Operation as O;
     use ui::status::Operation as U;
     match operation {
+        O::RunningGc => U::RunningGc,
         O::ReloadingCommits => U::ReloadingCommits,
         O::LoadingCommit => U::LoadingCommit,
         O::LoadingDiff => U::LoadingDiff,

@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use super::{
     branches_focus, commit_info, commit_rows, diff_focus, diff_row_kind, event, file_change,
     file_rows, graph_cell, input_mode, label_view, log_view, logic_view, screen, status,
-    ui_branch_name_problem, ui_info, ui_input_problem, ui_layer, ui_level, ui_operation,
+    ui_branch_name_problem, ui_busy, ui_info, ui_input_problem, ui_layer, ui_level, ui_operation,
     ui_problem, ui_size, ui_view, viewports,
 };
 use logic::app::{App, BranchesPane, Confirmation, DiffPane, Mode, Prompt, PromptKind, Viewports};
@@ -537,8 +537,17 @@ fn problems_convert() {
 }
 
 #[test]
+fn busy_converts() {
+    assert_eq!(
+        ui_busy(logic::ports::Busy::RunningGc),
+        ui::busy::Busy::RunningGc
+    );
+}
+
+#[test]
 fn operations_convert() {
-    let cases: [(LOperation, UOperation); 23] = [
+    let cases: [(LOperation, UOperation); 24] = [
+        (LOperation::RunningGc, UOperation::RunningGc),
         (LOperation::ReloadingCommits, UOperation::ReloadingCommits),
         (LOperation::LoadingCommit, UOperation::LoadingCommit),
         (LOperation::LoadingDiff, UOperation::LoadingDiff),

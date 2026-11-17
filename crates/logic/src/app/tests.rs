@@ -1,7 +1,7 @@
 use super::{App, Confirmation, Mode, Prompt, PromptKind, Viewports};
 use crate::event::{Event, ViewId};
 use crate::log::{Layer, LogEntry, LogLevel};
-use crate::note::{Info, InputProblem, Note, Problem};
+use crate::note::{Info, InputProblem, Note, Operation, Problem};
 use crate::ports::Ports;
 use crate::test_ports::TestPorts;
 
@@ -44,13 +44,46 @@ fn log_app(messages: &[&str]) -> App {
 }
 
 #[test]
-fn start_loads_everything() {
+fn start_runs_gc_then_loads_everything() {
     let ports: TestPorts = TestPorts::new();
     let mut app: App = App::new();
     app.start(&ports);
     assert_eq!(
         ports.calls(),
-        vec!["Info: start", "refs", "commits 0 2000", "status"]
+        vec![
+            "Info: start",
+            "show busy RunningGc",
+            "gc",
+            "refs",
+            "commits 0 2000",
+            "status"
+        ]
+    );
+    assert_eq!(app.note(), &Note::None);
+}
+
+#[test]
+fn start_still_loads_everything_when_gc_fails() {
+    let ports: TestPorts = TestPorts {
+        gc_fails: true,
+        ..TestPorts::new()
+    };
+    let mut app: App = App::new();
+    app.start(&ports);
+    assert_eq!(
+        ports.calls(),
+        vec![
+            "Info: start",
+            "show busy RunningGc",
+            "gc",
+            "refs",
+            "commits 0 2000",
+            "status"
+        ]
+    );
+    assert_eq!(
+        app.note(),
+        &Note::Problem(Problem::Failed(Operation::RunningGc))
     );
 }
 

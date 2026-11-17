@@ -8,6 +8,7 @@ mod command;
 mod commit;
 mod diff;
 mod history;
+mod maintenance;
 mod runner;
 mod stage;
 mod status;

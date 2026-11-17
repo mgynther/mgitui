@@ -149,6 +149,8 @@ pub enum Problem {
 /// What failed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Operation {
+    /// Running `git gc` at startup.
+    RunningGc,
     /// Reloading the commits and refs.
     ReloadingCommits,
     /// Loading the message and files of the selected commit.

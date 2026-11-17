@@ -4,7 +4,7 @@ use crate::test_support::{TempDir, fixed_clock, git_ok, init_repo, test_git};
 use logic::log::{Layer, LogEntry, LogLevel};
 use logic::model::{AmendBase, ChangeKind, ChangedFile, FileDiff, LineKind, Side, WorkStatus};
 use logic::note::{BranchNameProblem, InputProblem};
-use logic::ports::{CommitMessage, EditedMessage, Failed, Ports, RebaseEnd, SearchText};
+use logic::ports::{Busy, CommitMessage, EditedMessage, Failed, Ports, RebaseEnd, SearchText};
 
 #[expect(
     clippy::unnecessary_wraps,
@@ -25,6 +25,14 @@ fn append_line(path: &std::path::Path) -> std::io::Result<terminal::edit::Editor
     Ok(terminal::edit::EditorExit::Success)
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "it has the signature of drawing to the terminal"
+)]
+fn draw_nowhere(_: &str) -> std::io::Result<()> {
+    Ok(())
+}
+
 fn with_ports(dir: &std::path::Path, test: impl Fn(&SessionPorts<'_>, &LogBuffer)) {
     let log: LogBuffer = LogBuffer::new(fixed_clock);
     let git: git::Git = test_git(dir).with_temp_dir(dir);
@@ -33,6 +41,7 @@ fn with_ports(dir: &std::path::Path, test: impl Fn(&SessionPorts<'_>, &LogBuffer
         git: &git,
         editor: &append_line,
         handoff: &run_here,
+        draw: &draw_nowhere,
     };
     test(&ports, &log);
 }
@@ -105,6 +114,7 @@ fn git_failures_become_failed() {
         git: &git,
         editor: &append_line,
         handoff: &run_here,
+        draw: &draw_nowhere,
     };
     assert_eq!(ports.status(), Err(Failed));
     let x: Vec<String> = vec!["x".to_string()];
@@ -136,6 +146,7 @@ fn git_failures_become_failed() {
     assert_eq!(ports.cherry_pick("h"), Err(Failed));
     assert_eq!(ports.remote_update(), Err(Failed));
     assert_eq!(ports.fetch_all_prune(), Err(Failed));
+    assert_eq!(ports.gc(), Err(Failed));
     assert_eq!(ports.reset_keep("h"), Err(Failed));
     assert_eq!(ports.move_branch("b", "h"), Err(Failed));
     assert_eq!(ports.show_commit("h"), Err(Failed));
@@ -336,6 +347,7 @@ fn interactive_rebase_hands_the_terminal_to_git() {
         git: &git,
         editor: &append_line,
         handoff: &counting,
+        draw: &draw_nowhere,
     };
     assert_eq!(
         ports.rebase_interactive("topic", "main"),
@@ -355,6 +367,7 @@ fn interactive_rebase_hands_the_terminal_to_git() {
         git: &git,
         editor: &append_line,
         handoff: &broken,
+        draw: &draw_nowhere,
     };
     assert_eq!(failing.rebase_interactive("topic", "main"), Err(Failed));
     assert!(
@@ -363,4 +376,42 @@ fn interactive_rebase_hands_the_terminal_to_git() {
             .any(|e: &LogEntry| e.layer == Layer::Wiring
                 && e.message == "handing the terminal to git failed: no tty")
     );
+}
+
+#[test]
+fn showing_busy_draws_its_text_and_logs_when_drawing_fails() {
+    let log: LogBuffer = LogBuffer::new(fixed_clock);
+    let git: git::Git = test_git(std::path::Path::new("."));
+    let frames: std::cell::RefCell<Vec<String>> = std::cell::RefCell::new(Vec::new());
+    let recording = |frame: &str| -> std::io::Result<()> {
+        frames.borrow_mut().push(frame.to_string());
+        Ok(())
+    };
+    let ports: SessionPorts<'_> = SessionPorts {
+        log: &log,
+        git: &git,
+        editor: &append_line,
+        handoff: &run_here,
+        draw: &recording,
+    };
+    ports.show_busy(Busy::RunningGc);
+    assert_eq!(
+        frames.borrow().as_slice(),
+        ["\x1b[1;1H\x1b[0;39mRunning gc\x1b[0m"]
+    );
+    assert_eq!(log.drain(), vec![]);
+    let broken = |_: &str| -> std::io::Result<()> { Err(std::io::Error::other("no tty")) };
+    let failing: SessionPorts<'_> = SessionPorts {
+        log: &log,
+        git: &git,
+        editor: &append_line,
+        handoff: &run_here,
+        draw: &broken,
+    };
+    failing.show_busy(Busy::RunningGc);
+    let logged: Vec<LogEntry> = log.drain();
+    assert_eq!(logged.len(), 1);
+    assert_eq!(logged[0].layer, Layer::Wiring);
+    assert_eq!(logged[0].level, LogLevel::Error);
+    assert_eq!(logged[0].message, "showing what is running failed: no tty");
 }

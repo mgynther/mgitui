@@ -59,34 +59,28 @@ impl Git {
 
 #[cfg(test)]
 mod tests {
-    use crate::runner::GitError;
-    use crate::test_repo::{Logged, TestRepo};
+    use crate::runner::{Git, GitError};
+    use crate::test_repo::{Logged, TempDir, TestRepo};
 
     #[test]
     fn commit_and_amend() {
         let repo: TestRepo = TestRepo::new();
         repo.write("a.txt", "a\n");
         repo.git_ok(&["add", "."]);
+        // A temp directory of its own: tests running in parallel commit with message files in
+        // the system temp directory, which would count as leftovers here.
+        let temp: TempDir = TempDir::new();
+        let git: Git = repo.git().with_temp_dir(temp.path());
         let logged: Logged = Logged::new();
-        repo.git()
-            .commit("First\n\nBody\n", false, &logged.log())
-            .unwrap();
+        git.commit("First\n\nBody\n", false, &logged.log()).unwrap();
         assert_eq!(
-            repo.git().last_commit_message(&logged.log()).unwrap(),
+            git.last_commit_message(&logged.log()).unwrap(),
             "First\n\nBody\n\n"
         );
-        repo.git().commit("Changed\n", true, &logged.log()).unwrap();
+        git.commit("Changed\n", true, &logged.log()).unwrap();
         assert_eq!(repo.git_ok(&["rev-list", "--count", "HEAD"]), "1\n");
         assert_eq!(repo.git_ok(&["log", "-1", "--format=%s"]), "Changed\n");
-        let leftovers: usize = std::fs::read_dir(std::env::temp_dir())
-            .unwrap()
-            .filter_map(Result::ok)
-            .filter(|e| {
-                e.file_name()
-                    .to_string_lossy()
-                    .starts_with(&format!("mgitui-commit-{}-", std::process::id()))
-            })
-            .count();
+        let leftovers: usize = std::fs::read_dir(temp.path()).unwrap().count();
         assert_eq!(leftovers, 0);
     }
 
